@@ -64,7 +64,6 @@ function MethodPanel() {
     <Panel
       icon="plug"
       title="Connection details"
-      summary="Where to connect and who to connect as"
       actions={
         <Segmented
           name="Connection method"
@@ -88,10 +87,6 @@ function MethodPanel() {
         {method === 'manual' ? (
           <div className="stack wide">
             <section className="subsection" aria-label="Server and database">
-              <h3>
-                <Codicon name="server" />
-                Server and database
-              </h3>
               <ServerSection />
             </section>
             <section className="subsection" aria-label="Authentication">

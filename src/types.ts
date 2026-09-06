@@ -187,7 +187,7 @@ export const ENVIRONMENTS: ReadonlyArray<EnvironmentMeta> = [
     label: 'Production',
     short: 'PROD',
     full: 'Production',
-    guard: 'Read-only by default. Connecting asks for confirmation.',
+    guard: 'Connecting asks for confirmation first.',
     hint: 'Sessions open read-only, connecting asks for confirmation, no credential is kept by default, and schema changes are refused until the session is switched to read-write.'
   }
 ];

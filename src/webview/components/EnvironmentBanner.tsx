@@ -1,5 +1,5 @@
 import { EnvironmentId, environmentMeta } from '../../types';
-import { useSelect } from '../state/editor';
+import { setField, useSelect, useUpdate } from '../state/editor';
 import { Codicon } from '../primitives/Codicon';
 
 /**
@@ -28,18 +28,47 @@ export function EnvironmentBanner({ environment }: { environment: EnvironmentId 
   );
 }
 
-/** The standing warning that a production connection is being written. */
+/**
+ * The standing warning on a production connection, and the one place that says
+ * whether this connection can write.
+ *
+ * The banner above states what the environment means, which never changes. What
+ * changes is this connection's own session mode, so it is stated here and
+ * changed here. It was previously only reachable through Advanced, Security,
+ * which is a poor place to keep the answer to "can this write to production".
+ */
 export function ProductionWarning() {
   const readOnly = useSelect((state) => state.draft?.readOnly ?? false);
+  const update = useUpdate();
+
   return (
     <div className="prod-warning" role="note">
       <Codicon name="warning" className="glyph" />
-      <div>
+      <div className="prod-body">
         <strong>Production environment</strong>
-        <p>
-          Changes here reach live systems. Sessions open {readOnly ? 'read-only' : 'read-write'}, and
-          connecting asks for confirmation first.
-        </p>
+        <p>Changes here reach live systems. Connecting asks for confirmation first.</p>
+
+        <div className={readOnly ? 'session-mode safe' : 'session-mode open'}>
+          <Codicon name={readOnly ? 'lock' : 'unlock'} />
+          <span className="mode-text">
+            {readOnly ? (
+              <>
+                <strong>Sessions open read-only.</strong> Nothing you run can change data.
+              </>
+            ) : (
+              <>
+                <strong>Sessions open read-write.</strong> Statements you run reach live data.
+              </>
+            )}
+          </span>
+          <button
+            type="button"
+            className={readOnly ? 'btn ghost weakening' : 'btn outline'}
+            onClick={() => update((state) => setField(state, 'readOnly', !readOnly))}
+          >
+            {readOnly ? 'Allow writes' : 'Make read-only'}
+          </button>
+        </div>
       </div>
     </div>
   );

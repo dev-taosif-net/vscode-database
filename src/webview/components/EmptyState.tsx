@@ -1,18 +1,10 @@
 import { DriverKind } from '../../types';
 import { post } from '../state/vscode';
-import { Codicon } from '../primitives/Codicon';
+import { EngineMark, engineName } from '../primitives/EngineMark';
 
-const ENGINES: { driver: DriverKind; name: string; blurb: string }[] = [
-  {
-    driver: 'mssql',
-    name: 'Microsoft SQL Server',
-    blurb: '2016 and newer, Azure SQL Database, Managed Instance, and Amazon RDS.'
-  },
-  {
-    driver: 'postgres',
-    name: 'PostgreSQL',
-    blurb: '12 and newer, plus Aurora, Cloud SQL, Neon, Supabase and Timescale.'
-  }
+const ENGINES: { driver: DriverKind; blurb: string }[] = [
+  { driver: 'mssql', blurb: '2016 and newer, Azure SQL Database, Managed Instance, and Amazon RDS.' },
+  { driver: 'postgres', blurb: '12 and newer, plus Aurora, Cloud SQL, Neon, Supabase and Timescale.' }
 ];
 
 export function EmptyState() {
@@ -32,10 +24,8 @@ export function EmptyState() {
               className="engine-card"
               onClick={() => post({ type: 'create', driver: engine.driver })}
             >
-              <span className={`engine-mark eng-${engine.driver}`}>
-                <Codicon name="database" />
-              </span>
-              <span className="engine-name">{engine.name}</span>
+              <EngineMark driver={engine.driver} size={22} plate={40} />
+              <span className="engine-name">{engineName(engine.driver)}</span>
               <span className="engine-blurb">{engine.blurb}</span>
             </button>
           ))}

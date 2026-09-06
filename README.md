@@ -46,6 +46,16 @@ not run queries yet.
 - Environment guards for DEV, QA, UAT and PROD.
 - Status bar showing the riskiest open connection.
 
+## Trademarks
+
+The Microsoft SQL Server and PostgreSQL marks in the connection editor identify
+the products this extension connects to. SQL Server and Azure SQL are
+trademarks of Microsoft; the elephant is a trademark of the PostgreSQL
+Community Association of Canada. Neither owner endorses or sponsors this
+extension. The artwork is bundled from Wikimedia Commons, published there as
+public domain and under the BSD licence respectively; see
+[src/webview/primitives/logos.tsx](src/webview/primitives/logos.tsx).
+
 ## Environments
 
 | Environment | Colour | Behaviour |

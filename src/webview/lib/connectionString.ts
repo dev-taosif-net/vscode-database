@@ -376,36 +376,6 @@ function finishPostgres(out: PgAccumulator): ParsedConnection {
   return { patch: out.patch, secret: out.secret, properties: out.properties, engine: 'PostgreSQL' };
 }
 
-/** The string this connection adds up to, with the secret masked. */
-export function connectionString(p: ConnectionProfile): string {
-  const port = p.port ? `${p.port}` : '';
-  if (p.driver === 'mssql') {
-    const user = p.user || 'user';
-    const auth =
-      p.mssqlAuth === 'entra-mfa'
-        ? 'Authentication=Active Directory Interactive'
-        : p.mssqlAuth === 'ntlm'
-          ? `Integrated Security=True${p.domain ? `;Domain=${p.domain}` : ''}`
-          : `User ID=${user};Password=********`;
-    const encrypt = p.encrypt === 'strict' ? 'Strict' : p.encrypt === 'optional' ? 'Optional' : 'Mandatory';
-    return [
-      `Server=${p.host}${port ? `,${port}` : ''}`,
-      `Database=${p.database}`,
-      auth,
-      `Encrypt=${encrypt}`,
-      `TrustServerCertificate=${p.trustServerCertificate ? 'True' : 'False'}`,
-      `Application Name=${p.applicationName}`,
-      `Connect Timeout=${p.connectTimeoutSeconds}`
-    ].join(';');
-  }
-  const credential = p.pgAuth === 'password' ? `${p.user || 'user'}:********@` : p.user ? `${p.user}@` : '';
-  return (
-    `postgresql://${credential}${p.host}${port ? `:${port}` : ''}/${p.database}` +
-    `?sslmode=${p.sslMode}&connect_timeout=${p.connectTimeoutSeconds}` +
-    `&application_name=${encodeURIComponent(p.applicationName)}`
-  );
-}
-
 export function defaultPortFor(driver: DriverKind): number {
   return driver === 'mssql' ? 1433 : 5432;
 }

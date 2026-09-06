@@ -9,12 +9,11 @@ interface Props {
   busy?: boolean;
   disabled?: boolean;
   title?: string;
-  hint?: string;
   onClick: () => void;
   children: ReactNode;
 }
 
-export function Button({ tone = 'secondary', icon, busy, disabled, title, hint, onClick, children }: Props) {
+export function Button({ tone = 'secondary', icon, busy, disabled, title, onClick, children }: Props) {
   return (
     <button
       type="button"
@@ -25,7 +24,6 @@ export function Button({ tone = 'secondary', icon, busy, disabled, title, hint, 
     >
       {busy ? <Codicon name="loading" spin /> : icon ? <Codicon name={icon} /> : null}
       <span>{children}</span>
-      {hint ? <kbd>{hint}</kbd> : null}
     </button>
   );
 }

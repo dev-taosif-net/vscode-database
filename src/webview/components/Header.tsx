@@ -1,6 +1,7 @@
 import { isDirty, isNew, useSelect, useStore } from '../state/editor';
 import { post } from '../state/vscode';
 import { Codicon } from '../primitives/Codicon';
+import { EngineMark, engineName } from '../primitives/EngineMark';
 
 export function Header() {
   const store = useStore();
@@ -13,14 +14,12 @@ export function Header() {
     return null;
   }
 
-  const engine = draft.driver === 'mssql' ? 'Microsoft SQL Server' : 'PostgreSQL';
+  const engine = engineName(draft.driver);
   const title = draft.name.trim() || (fresh ? `New ${engine} connection` : 'Untitled connection');
 
   return (
     <header className="page-head">
-      <span className={`page-mark eng-${draft.driver}`}>
-        <Codicon name="database" />
-      </span>
+      <EngineMark driver={draft.driver} size={20} plate={36} />
       <div className="page-title">
         <h1>{title}</h1>
         <p>{fresh ? `Create a connection to ${engine}` : engine}</p>

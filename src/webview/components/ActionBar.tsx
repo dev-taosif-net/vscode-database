@@ -44,7 +44,7 @@ export function ActionBar() {
 
       <span className="grow" />
 
-      <Button tone="outline" icon="beaker" hint="Alt+T" disabled={busy || !valid} onClick={() => send('test')}>
+      <Button tone="outline" icon="beaker" disabled={busy || !valid} onClick={() => send('test')}>
         Test connection
       </Button>
 
@@ -65,7 +65,6 @@ export function ActionBar() {
       <Button
         tone="primary"
         icon="save"
-        hint="Ctrl+S"
         disabled={(!dirty && !fresh) || !valid}
         onClick={() => send('save')}
       >
@@ -90,7 +89,6 @@ export function ActionBar() {
       <Button
         tone="success"
         icon="plug"
-        hint="Ctrl+Enter"
         busy={busy}
         disabled={!valid}
         title={fresh ? 'Saves the connection first, then opens a session' : undefined}

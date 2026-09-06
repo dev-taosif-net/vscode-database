@@ -1,5 +1,5 @@
 import { setMethod, useSelect, useUpdate } from '../state/editor';
-import { connectionString, defaultPortFor, parseConnectionString } from '../lib/connectionString';
+import { defaultPortFor, parseConnectionString } from '../lib/connectionString';
 import { Codicon } from '../primitives/Codicon';
 import { Button } from '../primitives/Button';
 
@@ -12,7 +12,6 @@ export function ConnectionStringPanel() {
   const update = useUpdate();
   const text = useSelect((state) => state.parseText);
   const report = useSelect((state) => state.parseReport);
-  const current = useSelect((state) => (state.draft ? connectionString(state.draft) : ''));
 
   const parse = () => {
     const parsed = parseConnectionString(text);
@@ -113,35 +112,6 @@ export function ConnectionStringPanel() {
           <span>{report.text}</span>
         </p>
       ) : null}
-
-      <p className="muted">
-        Nothing is sent anywhere. A password in the string goes to the password box and reaches the keychain
-        only when you save. ADO.NET, ODBC, libpq keyword and postgresql:// forms are all read.
-      </p>
-
-      <div className="current-string">
-        <div className="current-head">
-          <span>What this connection adds up to</span>
-          <button
-            type="button"
-            className="link-btn"
-            onClick={() => void navigator.clipboard.writeText(current).catch(() => undefined)}
-          >
-            <Codicon name="copy" />
-            Copy
-          </button>
-        </div>
-        <code className="mono">{current}</code>
-      </div>
-      <p className="muted">The secret is masked here and in every log line the extension writes.</p>
-      <button
-        type="button"
-        className="link-btn"
-        onClick={() => update((state) => setMethod(state, 'manual'))}
-      >
-        <Codicon name="arrow-left" />
-        Back to the fields
-      </button>
     </div>
   );
 }

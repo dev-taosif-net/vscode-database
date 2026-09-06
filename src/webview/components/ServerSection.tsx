@@ -26,12 +26,7 @@ export function ServerSection() {
     <div className="stack">
       <div className="row split">
         <Field label={isMssql ? 'Server' : 'Host'} htmlFor="f-host" required>
-          <TextInput
-            id="f-host"
-            field="host"
-            placeholder={isMssql ? 'sql-dev-01.company.local' : 'db.example.com'}
-            invalid={!host.trim()}
-          />
+          <TextInput id="f-host" field="host" invalid={!host.trim()} />
         </Field>
         <Field
           label="Port"
@@ -84,7 +79,7 @@ function ProbeStrip() {
   }, [id, host, port, driver, store]);
 
   if (!probe || probe.state === 'idle') {
-    return <p className="probe muted">The address is checked as you type. Nothing is sent to the server.</p>;
+    return null;
   }
 
   if (probe.state === 'checking') {
@@ -135,7 +130,7 @@ function DatabaseField() {
             options={databases.map((name) => [name, name] as [string, string])}
           />
         ) : (
-          <TextInput id="f-database" field="database" placeholder="The login's default" />
+          <TextInput id="f-database" field="database" />
         )}
         <button
           type="button"

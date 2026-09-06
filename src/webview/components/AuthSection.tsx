@@ -49,7 +49,7 @@ export function AuthSection() {
 
       {needsUser(draft) ? (
         <Field label="User name" htmlFor="f-user" required>
-          <TextInput id="f-user" field="user" placeholder={isMssql ? 'devuser' : 'app'} />
+          <TextInput id="f-user" field="user" />
         </Field>
       ) : null}
 
@@ -129,18 +129,12 @@ function PasswordField() {
   const stored = useSelect((state) => Boolean(state.draft && state.host.hasSecret[state.draft.id]));
 
   return (
-    <Field
-      label="Password"
-      htmlFor="f-password"
-      required
-      hint="Held by the operating system keychain through the VS Code secret store. It is never written to settings.json and never carried by Settings Sync."
-    >
+    <Field label="Password" htmlFor="f-password" required>
       <div className="row">
         <input
           id="f-password"
           type={reveal ? 'text' : 'password'}
           value={secret ?? ''}
-          placeholder={stored ? 'Kept in the keychain' : 'Not stored yet'}
           autoComplete="off"
           onChange={(event) => {
             const next = event.target.value;

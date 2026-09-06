@@ -33,18 +33,25 @@ the workbench theme, and what it does for people who do not use a mouse.
 └────────────────────────────────────────────────────────────────────────┘
 ```
 
-The header, banner, summary, result strip and action bar are pinned. The two
-columns together are the one thing that scrolls, so there is a single bar down
-the right edge of the form and the wheel works anywhere over it.
+Everything except the details column holds still: the header, the banner,
+identity, the summary, the result strip and the action bar. The details column
+is the only thing that scrolls, so identity stays readable however far down the
+form you are, and Connect is always where you left it.
 
-That row is sized `minmax(0, 1fr)` rather than `1fr`, and the details column is
-a flex column whose children are `flex: none`. Both matter. A grid track's
-automatic minimum is its content, so a plain `1fr` lets a long form push the
-track past the window instead of scrolling inside it. And a grid item whose
-overflow is not visible has an automatic minimum size of zero, so when the
-details column was a grid its tracks were free to shrink: every panel clips its
-own corners, so each one quietly cut off its body, the column never overflowed,
-and it never grew a scrollbar.
+Three rules make that work, and each one replaced a bug.
+
+- The columns row is `minmax(0, 1fr)`, not `1fr`. A grid track's automatic
+  minimum is its content, so a plain `1fr` lets a long form push the track past
+  the window instead of scrolling inside it.
+- The details column is a flex column whose children are `flex: none`. A grid
+  item whose overflow is not visible has an automatic minimum size of zero, and
+  every panel clips its own corners. As a grid, the tracks were free to shrink:
+  a panel needing 607 pixels was handed 84, cut off its own body, and the
+  column never overflowed, so it never grew a scrollbar.
+- Identity carries an `overflow-y` of its own purely as a safety valve. It
+  holds three fields and fits at any ordinary window height, so it never
+  scrolls; on a window too short for three fields it scrolls rather than
+  cutting the third one off.
 
 Below 940 pixels the two columns stack and identity becomes a responsive grid;
 below 720 the padding tightens and the footer wraps; below 520 pixels of height
@@ -78,9 +85,29 @@ index.tsx
             └── ProductionConfirm    modal, focus-trapped
 ```
 
-Primitives under `primitives/` are the vocabulary: `Codicon`, `Button`,
-`Field`, `TextInput`, `NumberInput`, `SelectInput`, `Checkbox`, `Segmented`,
-`Disclosure`, `Panel`.
+Primitives under `primitives/` are the vocabulary: `Codicon`, `EngineMark`,
+`Button`, `Field`, `TextInput`, `NumberInput`, `SelectInput`, `IconSelect`,
+`Checkbox`, `Segmented`, `Disclosure`, `Panel`.
+
+`IconSelect` exists because a native `<select>` cannot draw an icon beside a
+choice, and the server type is the one field where the engine's mark says more
+than its name. It is the select-only combobox from the ARIA practices: focus
+stays on the button, the open list is described through `aria-activedescendant`,
+and the arrows, Home, End, Enter, Escape and type-ahead behave the way they do
+in a native dropdown. The list is rendered into the body and positioned fixed,
+because the column it sits in clips its own overflow and a list opened near the
+bottom of it would otherwise be cut in half.
+
+`EngineMark` draws each engine's own mark, in `primitives/logos.tsx`.
+Microsoft's SQL Server product icon and the PostgreSQL elephant, both taken
+from Wikimedia Commons, the first published there as public domain and the
+second under the BSD licence the PostgreSQL project publishes it with. Two
+things were changed on the way in: the SQL Server icon lost a rounded-tile clip
+and a full-coverage mask, neither of which changed a pixel at these sizes, and
+its gradient ids are namespaced per instance with `useId`, because the mark is
+rendered five times on one page and an id may appear only once in a document.
+They are used to name the product being connected to, which is what they are
+for; neither vendor endorses this extension.
 
 ## State
 
