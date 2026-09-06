@@ -33,9 +33,23 @@ the workbench theme, and what it does for people who do not use a mouse.
 └────────────────────────────────────────────────────────────────────────┘
 ```
 
+The header, banner, summary, result strip and action bar are pinned. The two
+columns together are the one thing that scrolls, so there is a single bar down
+the right edge of the form and the wheel works anywhere over it.
+
+That row is sized `minmax(0, 1fr)` rather than `1fr`, and the details column is
+a flex column whose children are `flex: none`. Both matter. A grid track's
+automatic minimum is its content, so a plain `1fr` lets a long form push the
+track past the window instead of scrolling inside it. And a grid item whose
+overflow is not visible has an automatic minimum size of zero, so when the
+details column was a grid its tracks were free to shrink: every panel clips its
+own corners, so each one quietly cut off its body, the column never overflowed,
+and it never grew a scrollbar.
+
 Below 940 pixels the two columns stack and identity becomes a responsive grid;
-below 720 the padding tightens and the footer wraps. Nothing scrolls
-horizontally at any width.
+below 720 the padding tightens and the footer wraps; below 520 pixels of height
+the whole page scrolls rather than squeezing the form behind a pinned footer.
+Nothing scrolls horizontally at any width.
 
 ## Component hierarchy
 

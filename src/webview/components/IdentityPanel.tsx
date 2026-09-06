@@ -17,51 +17,54 @@ export function IdentityPanel() {
 
   return (
     <aside className="identity" aria-label="Identity">
-      <div className="identity-head">
-        <span className={`identity-mark eng-${driver}`}>
-          <Codicon name="database" />
-        </span>
-        <div>
-          <h2>Identity</h2>
-          <p>Name, environment and engine</p>
-        </div>
-      </div>
-
-      <div className="identity-body">
-        <Field label="Connection name" htmlFor="f-name" required>
-          <TextInput
-            id="f-name"
-            field="name"
-            placeholder="Billing, production"
-            invalid={!name.trim()}
-            autoFocus={fresh}
-          />
-        </Field>
-
-        <Field label="Environment" htmlFor="f-env" required hint={meta.guard}>
-          <div className="row">
-            <SelectInput
-              id="f-env"
-              field="environment"
-              options={ENVIRONMENTS.map((option) => [option.id, option.label] as [EnvironmentId, string])}
-            />
-            <span className={`env-pill env-${environment}`}>
-              <span className="dot" aria-hidden="true" />
-              {meta.short}
-            </span>
+      {/* The form scrolls past this; what is being edited should not go with it. */}
+      <div className="identity-sticky">
+        <div className="identity-head">
+          <span className={`identity-mark eng-${driver}`}>
+            <Codicon name="database" />
+          </span>
+          <div>
+            <h2>Identity</h2>
+            <p>Name, environment and engine</p>
           </div>
-        </Field>
+        </div>
 
-        <Field label="Server type" htmlFor="f-driver" required>
-          <SelectInput
-            id="f-driver"
-            field="driver"
-            options={[
-              ['mssql', 'Microsoft SQL Server'],
-              ['postgres', 'PostgreSQL']
-            ]}
-          />
-        </Field>
+        <div className="identity-body">
+          <Field label="Connection name" htmlFor="f-name" required>
+            <TextInput
+              id="f-name"
+              field="name"
+              placeholder="Billing, production"
+              invalid={!name.trim()}
+              autoFocus={fresh}
+            />
+          </Field>
+
+          <Field label="Environment" htmlFor="f-env" required>
+            <div className="row">
+              <SelectInput
+                id="f-env"
+                field="environment"
+                options={ENVIRONMENTS.map((option) => [option.id, option.label] as [EnvironmentId, string])}
+              />
+              <span className={`env-pill env-${environment}`}>
+                <span className="dot" aria-hidden="true" />
+                {meta.short}
+              </span>
+            </div>
+          </Field>
+
+          <Field label="Server type" htmlFor="f-driver" required>
+            <SelectInput
+              id="f-driver"
+              field="driver"
+              options={[
+                ['mssql', 'Microsoft SQL Server'],
+                ['postgres', 'PostgreSQL']
+              ]}
+            />
+          </Field>
+        </div>
       </div>
     </aside>
   );

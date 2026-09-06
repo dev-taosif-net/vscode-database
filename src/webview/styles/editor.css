@@ -123,25 +123,35 @@ body {
   min-width: 0;
 }
 
+/*
+ * The thumb is mixed from the theme foreground rather than taken from the
+ * slider token, which several themes leave almost fully transparent. Against a
+ * form that scrolls, a bar you cannot see is the same as no bar at all.
+ */
 ::-webkit-scrollbar {
-  width: 10px;
-  height: 10px;
+  width: 12px;
+  height: 12px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: var(--scroll);
+  background: color-mix(in srgb, var(--fg) 28%, transparent);
   border: 3px solid transparent;
   background-clip: content-box;
-  border-radius: 6px;
+  border-radius: 999px;
+  min-height: 34px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: var(--vscode-scrollbarSlider-hoverBackground, var(--scroll));
+  background: color-mix(in srgb, var(--fg) 45%, transparent);
   background-clip: content-box;
 }
 
 ::-webkit-scrollbar-thumb:active {
-  background: var(--vscode-scrollbarSlider-activeBackground, var(--scroll));
+  background: color-mix(in srgb, var(--fg) 60%, transparent);
   background-clip: content-box;
 }
 
@@ -370,29 +380,46 @@ body {
 
 /* ------------------------------------------------------------- columns */
 
-/* The single row is capped the same way, so each column scrolls on its own. */
+/*
+ * One scroller for the whole form, not one per column.
+ *
+ * Two independent inner scrollers is what makes a scrollbar easy to miss:
+ * the wheel does nothing until the pointer is over the right half, and each
+ * bar is short enough to overlook. Scrolling here instead gives the form a
+ * single bar down the right edge, while the header, banner, summary, result
+ * and action bar stay pinned around it.
+ */
 .columns {
   display: grid;
   grid-template-columns: 320px minmax(0, 1fr);
-  grid-template-rows: minmax(0, 1fr);
+  align-items: stretch;
   min-height: 0;
-  overflow: hidden;
+  overflow-y: auto;
+  scrollbar-gutter: stable;
+  overscroll-behavior: contain;
 }
 
 .identity {
   border-right: 1px solid var(--bd);
-  min-height: 0;
-  overflow-y: auto;
-  overscroll-behavior: contain;
   padding: 18px;
+}
+
+/*
+ * Not sticky. Identity is taller than the form area at ordinary window
+ * heights, and a sticky box taller than its scrollport has its own content cut
+ * off. An empty column while scrolled costs nothing; unreachable fields do.
+ * The environment stays readable throughout in the banner above.
+ */
+.identity-sticky {
+  position: static;
 }
 
 .identity-head {
   display: flex;
   align-items: flex-start;
   gap: 11px;
-  padding-bottom: 15px;
-  margin-bottom: 16px;
+  padding-bottom: 12px;
+  margin-bottom: 14px;
   border-bottom: 1px solid var(--bd);
 }
 
@@ -417,19 +444,30 @@ body {
 
 .identity-body {
   display: grid;
-  gap: 17px;
+  gap: 15px;
 }
 
+/*
+ * A column, not a grid.
+ *
+ * As a grid with a height this tall, the row tracks were free to shrink: a
+ * grid item whose overflow is not visible has an automatic minimum size of
+ * zero, and every panel here clips its own corners. The tracks collapsed to a
+ * fraction of the form, each panel quietly cut off what it could not fit, and
+ * the column never overflowed, so it never grew a scrollbar. Flex with
+ * `flex: none` on the children takes their height as given and lets the
+ * column overflow, which is the whole point of it.
+ */
 .details {
-  min-height: 0;
-  overflow-y: auto;
-  /* Reserved so the layout does not shift the moment the bar appears. */
-  scrollbar-gutter: stable;
-  overscroll-behavior: contain;
+  min-width: 0;
   padding: 18px 22px 26px;
-  display: grid;
+  display: flex;
+  flex-direction: column;
   gap: var(--gap);
-  align-content: start;
+}
+
+.details > * {
+  flex: none;
 }
 
 /* --------------------------------------------------------------- panels */
@@ -752,8 +790,13 @@ textarea::placeholder {
 /* --------------------------------------------------------------- groups */
 
 .groups {
-  display: grid;
+  display: flex;
+  flex-direction: column;
   gap: 8px;
+}
+
+.groups > * {
+  flex: none;
 }
 
 .group {
@@ -1474,24 +1517,17 @@ textarea::placeholder {
 @media (max-width: 940px) {
   .columns {
     grid-template-columns: minmax(0, 1fr);
-    grid-template-rows: auto;
-    overflow-y: auto;
-    scrollbar-gutter: stable;
   }
 
   .identity {
     border-right: 0;
     border-bottom: 1px solid var(--bd);
-    overflow: visible;
   }
+
 
   .identity-body {
     grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
     display: grid;
-  }
-
-  .details {
-    overflow: visible;
   }
 }
 
@@ -1512,12 +1548,6 @@ textarea::placeholder {
   }
 
   .columns {
-    grid-template-rows: auto;
-    overflow: visible;
-  }
-
-  .identity,
-  .details {
     overflow: visible;
   }
 }
