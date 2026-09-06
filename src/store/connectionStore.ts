@@ -145,7 +145,7 @@ export function blankProfile(seed: Partial<ConnectionProfile> = {}): ConnectionP
     driver,
     environment,
     host: seed.host ?? '',
-    port: seed.port ?? defaultPort(driver),
+    port: seed.port === undefined ? defaultPort(driver) : seed.port,
     database: seed.database ?? '',
     mssqlAuth: seed.mssqlAuth ?? 'entra-mfa',
     account: seed.account ?? '',

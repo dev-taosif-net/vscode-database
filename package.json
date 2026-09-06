@@ -35,6 +35,30 @@
         "icon": "$(add)"
       },
       {
+        "command": "databaseTools.filterConnections",
+        "title": "Filter Connections",
+        "category": "Database",
+        "icon": "$(search)"
+      },
+      {
+        "command": "databaseTools.clearFilter",
+        "title": "Clear the Connection Filter",
+        "category": "Database",
+        "icon": "$(clear-all)"
+      },
+      {
+        "command": "databaseTools.groupByEnvironment",
+        "title": "Group Connections by Environment",
+        "category": "Database",
+        "icon": "$(list-tree)"
+      },
+      {
+        "command": "databaseTools.showFlatList",
+        "title": "Show Connections as a Flat List",
+        "category": "Database",
+        "icon": "$(list-flat)"
+      },
+      {
         "command": "databaseTools.connect",
         "title": "Connect to a Database",
         "category": "Database",
@@ -104,6 +128,18 @@
         {
           "command": "databaseTools.disconnectAll",
           "when": "databaseTools.hasActiveConnection"
+        },
+        {
+          "command": "databaseTools.clearFilter",
+          "when": "databaseTools.filtered"
+        },
+        {
+          "command": "databaseTools.groupByEnvironment",
+          "when": "!databaseTools.grouped"
+        },
+        {
+          "command": "databaseTools.showFlatList",
+          "when": "databaseTools.grouped"
         }
       ],
       "view/title": [
@@ -113,9 +149,29 @@
           "group": "navigation@1"
         },
         {
+          "command": "databaseTools.filterConnections",
+          "when": "view == databaseTools.connections",
+          "group": "navigation@2"
+        },
+        {
+          "command": "databaseTools.clearFilter",
+          "when": "view == databaseTools.connections && databaseTools.filtered",
+          "group": "navigation@3"
+        },
+        {
           "command": "databaseTools.disconnectAll",
           "when": "view == databaseTools.connections && databaseTools.hasActiveConnection",
-          "group": "navigation@2"
+          "group": "navigation@4"
+        },
+        {
+          "command": "databaseTools.groupByEnvironment",
+          "when": "view == databaseTools.connections && !databaseTools.grouped",
+          "group": "1_view@1"
+        },
+        {
+          "command": "databaseTools.showFlatList",
+          "when": "view == databaseTools.connections && databaseTools.grouped",
+          "group": "1_view@1"
         }
       ],
       "view/item/context": [
@@ -141,7 +197,7 @@
         },
         {
           "command": "databaseTools.deleteConnection",
-          "when": "view == databaseTools.connections",
+          "when": "view == databaseTools.connections && viewItem =~ /^databaseConnection/",
           "group": "9_danger@1"
         }
       ]

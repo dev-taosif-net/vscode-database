@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import { AttemptResult, ConnectionManager } from '../connections/connectionManager';
-import { ConnectionStore } from '../store/connectionStore';
+import { ConnectionStore, blankProfile } from '../store/connectionStore';
 import { ConnectionProfile, DriverKind, FailureActionId, defaultPort } from '../types';
 
 const VIEW_TYPE = 'databaseTools.connections';
@@ -19,19 +19,38 @@ interface IncomingMessage {
   actionId?: FailureActionId;
   raw?: string;
   text?: string;
+  dirty?: boolean;
 }
 
 /**
  * The connection editor, hosted in its own editor tab. One panel per window:
  * opening it again reveals the existing tab rather than stacking copies.
+ *
+ * A new connection lives here as `pending` and nowhere else. It reaches the
+ * store, and so the sidebar, only when it is saved, so an abandoned draft
+ * leaves nothing behind.
  */
 export class ConnectionsPanel {
   private static current: ConnectionsPanel | undefined;
+
+  private static readonly selectionEmitter = new vscode.EventEmitter<string>();
+  /**
+   * Fires with the stored profile the editor moved to, so the sidebar can
+   * follow it. An unsaved draft is never announced, because the list does not
+   * hold one until it is saved.
+   */
+  static readonly onDidChangeSelection = ConnectionsPanel.selectionEmitter.event;
+
+  /** The last id announced, so a redraw does not re-announce the same one. */
+  private announced: string | undefined;
 
   private readonly disposables: vscode.Disposable[] = [];
   private readonly results = new Map<string, AttemptResult>();
   private selectedId: string | undefined;
   private busyId: string | undefined;
+  private pending: ConnectionProfile | undefined;
+  /** Whether the editor has typed changes the user would lose. */
+  private dirty = false;
 
   static show(
     context: vscode.ExtensionContext,
@@ -44,13 +63,12 @@ export class ConnectionsPanel {
     if (ConnectionsPanel.current) {
       ConnectionsPanel.current.panel.reveal(column);
       if (selectId) {
-        ConnectionsPanel.current.selectedId = selectId;
-        void ConnectionsPanel.current.postState();
+        void ConnectionsPanel.current.select(selectId);
       }
       return ConnectionsPanel.current;
     }
 
-    const panel = vscode.window.createWebviewPanel(VIEW_TYPE, 'Connections', column, {
+    const panel = vscode.window.createWebviewPanel(VIEW_TYPE, 'Connection', column, {
       enableScripts: true,
       // The editor holds a draft the user is typing into; throwing it away
       // because they glanced at another tab would be its own bug.
@@ -61,6 +79,18 @@ export class ConnectionsPanel {
 
     ConnectionsPanel.current = new ConnectionsPanel(panel, context, store, manager, selectId);
     return ConnectionsPanel.current;
+  }
+
+  /** Opens the editor straight onto a blank connection. */
+  static showNew(
+    context: vscode.ExtensionContext,
+    store: ConnectionStore,
+    manager: ConnectionManager,
+    driver: DriverKind = 'mssql'
+  ): ConnectionsPanel {
+    const panel = ConnectionsPanel.show(context, store, manager);
+    void panel.startDraft(driver);
+    return panel;
   }
 
   private constructor(
@@ -99,21 +129,13 @@ export class ConnectionsPanel {
         await this.postState();
         return;
 
-      case 'select':
-        this.selectedId = message.id;
-        await this.postState();
+      case 'create':
+        await this.startDraft(message.driver ?? 'mssql');
         return;
 
-      case 'create': {
-        const created = await this.store.create({
-          driver: message.driver ?? 'mssql',
-          name: this.nextName(message.driver ?? 'mssql'),
-          port: defaultPort(message.driver ?? 'mssql')
-        });
-        this.selectedId = created.id;
-        await this.postState(true);
+      case 'dirty':
+        this.dirty = Boolean(message.dirty);
         return;
-      }
 
       case 'menu':
         await this.showMenu(message.id);
@@ -125,6 +147,7 @@ export class ConnectionsPanel {
 
       case 'revert':
         this.results.delete(message.id ?? '');
+        this.dirty = false;
         await this.postState(true);
         return;
 
@@ -178,6 +201,55 @@ export class ConnectionsPanel {
     }
   }
 
+  /**
+   * Starts a blank connection in the editor. Nothing is written yet: the store
+   * hears about it on save, and the sidebar only then.
+   */
+  private async startDraft(driver: DriverKind): Promise<void> {
+    if (!(await this.mayLeaveDraft())) {
+      return;
+    }
+    this.pending = blankProfile({ driver, name: this.nextName(driver), port: defaultPort(driver) });
+    this.selectedId = this.pending.id;
+    this.dirty = false;
+    await this.postState(true);
+  }
+
+  /** Moves the editor to a stored connection, guarding an unsaved draft. */
+  private async select(id: string): Promise<void> {
+    if (id === this.selectedId) {
+      return;
+    }
+    if (!(await this.mayLeaveDraft())) {
+      return;
+    }
+    this.pending = undefined;
+    this.selectedId = id;
+    this.dirty = false;
+    await this.postState(true);
+  }
+
+  /** True when the draft can be thrown away, either because it is untouched
+   * or because the user said so. */
+  private async mayLeaveDraft(): Promise<boolean> {
+    if (!this.pending || !this.dirty) {
+      return true;
+    }
+    const choice = await vscode.window.showWarningMessage(
+      'Discard this new connection?',
+      {
+        modal: true,
+        detail: 'It has never been saved, so nothing is removed from the list. Save it first to keep it.'
+      },
+      'Discard'
+    );
+    return choice === 'Discard';
+  }
+
+  private isPending(id: string | undefined): boolean {
+    return id !== undefined && this.pending !== undefined && this.pending.id === id;
+  }
+
   private nextName(driver: DriverKind): string {
     const base = driver === 'mssql' ? 'New SQL Server connection' : 'New PostgreSQL connection';
     let candidate = base;
@@ -188,23 +260,30 @@ export class ConnectionsPanel {
     return candidate;
   }
 
-  private async save(message: IncomingMessage): Promise<void> {
+  /** Returns the stored id the draft ended up under, or undefined if it did not save. */
+  private async save(message: IncomingMessage): Promise<string | undefined> {
     if (!message.id || !message.patch) {
-      return;
+      return undefined;
     }
     const name = (message.patch.name ?? '').trim();
     if (!name) {
       void vscode.window.showErrorMessage('A connection needs a name.');
-      return;
+      return undefined;
     }
     if (!this.store.isNameFree(name, message.id)) {
       void vscode.window.showErrorMessage(
         `Another connection is already called ${name}. Names have to be unique so the status bar is never ambiguous.`
       );
-      return;
+      return undefined;
     }
 
-    const saved = await this.store.update(message.id, message.patch);
+    // The first save is what puts a new connection in the list. It arrives with
+    // the id of the draft, which no stored profile carries, so it creates
+    // rather than updates and the editor moves to the id the store handed back.
+    const saved = this.isPending(message.id)
+      ? await this.store.create({ ...this.pending, ...message.patch })
+      : await this.store.update(message.id, message.patch);
+
     if (message.secret !== undefined) {
       // An empty box means "forget it", which is different from "unchanged":
       // unchanged arrives as undefined and never reaches here.
@@ -213,10 +292,33 @@ export class ConnectionsPanel {
         saved.credentialStore === 'secret' && message.secret !== '' ? message.secret : undefined
       );
     }
+
+    // A draft that was tested before it was saved keeps its result, which is
+    // filed under the id it had at the time.
+    const draftResult = message.id !== saved.id ? this.results.get(message.id) : undefined;
+    if (draftResult) {
+      this.results.delete(message.id);
+      this.results.set(saved.id, draftResult);
+    }
+
+    this.pending = undefined;
+    this.selectedId = saved.id;
+    this.dirty = false;
     await this.postState(true);
+    return saved.id;
   }
 
   private async attempt(message: IncomingMessage, mode: 'test' | 'connect'): Promise<void> {
+    // A session is keyed by profile id, so an unsaved draft has to become a
+    // real connection before it can hold one. Testing needs no such thing.
+    if (mode === 'connect' && this.isPending(message.id)) {
+      const savedId = await this.save(message);
+      if (!savedId) {
+        return;
+      }
+      message = { ...message, id: savedId };
+    }
+
     const effective = this.effectiveProfile(message);
     if (!effective) {
       return;
@@ -261,7 +363,7 @@ export class ConnectionsPanel {
     if (!message.id) {
       return undefined;
     }
-    const stored = this.store.get(message.id);
+    const stored = this.isPending(message.id) ? this.pending : this.store.get(message.id);
     if (!stored) {
       return undefined;
     }
@@ -269,7 +371,7 @@ export class ConnectionsPanel {
   }
 
   private async runFailureAction(message: IncomingMessage): Promise<void> {
-    const profile = message.id ? this.store.get(message.id) : undefined;
+    const profile = this.effectiveProfile({ type: message.type, id: message.id });
     if (!profile || !message.actionId) {
       return;
     }
@@ -285,7 +387,9 @@ export class ConnectionsPanel {
         return;
 
       case 'clearCredential':
-        await this.store.writeSecret(profile.id, undefined);
+        if (!this.isPending(profile.id)) {
+          await this.store.writeSecret(profile.id, undefined);
+        }
         this.results.delete(profile.id);
         await this.postState();
         void vscode.window.showInformationMessage('The stored credential was removed. The next attempt will ask.');
@@ -335,6 +439,10 @@ export class ConnectionsPanel {
   }
 
   private async showMenu(id: string | undefined): Promise<void> {
+    if (this.isPending(id)) {
+      await this.discardDraft();
+      return;
+    }
     const profile = id ? this.store.get(id) : undefined;
     if (!profile) {
       return;
@@ -375,21 +483,43 @@ export class ConnectionsPanel {
     await this.postState(true);
   }
 
+  private async discardDraft(): Promise<void> {
+    const choice = await vscode.window.showWarningMessage(
+      'Discard this new connection?',
+      { modal: true, detail: 'It has never been saved, so nothing is removed from the list.' },
+      'Discard'
+    );
+    if (choice !== 'Discard') {
+      return;
+    }
+    this.results.delete(this.pending?.id ?? '');
+    this.pending = undefined;
+    this.dirty = false;
+    this.selectedId = this.store.all()[0]?.id;
+    await this.postState(true);
+  }
+
   /* --------------------------------------------------------------- state */
 
   reveal(selectId?: string): void {
-    if (selectId) {
-      this.selectedId = selectId;
-    }
     this.panel.reveal();
+    if (selectId) {
+      void this.select(selectId);
+      return;
+    }
     void this.postState(true);
   }
 
   private async postState(reload = false): Promise<void> {
     const profiles = this.store.all();
-    if (this.selectedId && !profiles.some((p) => p.id === this.selectedId)) {
-      this.selectedId = profiles[0]?.id;
+    if (this.selectedId && !this.isPending(this.selectedId) && !profiles.some((p) => p.id === this.selectedId)) {
+      this.selectedId = this.pending?.id ?? profiles[0]?.id;
     }
+
+    const selected = this.isPending(this.selectedId) ? undefined : this.store.get(this.selectedId ?? '');
+    this.panel.title = this.pending && this.isPending(this.selectedId)
+      ? 'New connection'
+      : selected?.name || 'Connection';
 
     const hasSecret: Record<string, boolean> = {};
     await Promise.all(
@@ -403,9 +533,18 @@ export class ConnectionsPanel {
       results[id] = result;
     }
 
+    const storedSelection = this.isPending(this.selectedId) ? undefined : this.selectedId;
+    if (storedSelection && storedSelection !== this.announced) {
+      this.announced = storedSelection;
+      ConnectionsPanel.selectionEmitter.fire(storedSelection);
+    }
+
     await this.panel.webview.postMessage({
       type: 'state',
       profiles,
+      // The draft travels beside the stored list rather than inside it, so
+      // nothing downstream mistakes it for a saved connection.
+      pending: this.isPending(this.selectedId) ? this.pending : null,
       selectedId: this.selectedId ?? null,
       connected: this.manager.activeIds(),
       busy: this.busyId ?? null,

@@ -19,22 +19,31 @@ export function activate(context: vscode.ExtensionContext): void {
   const store = new ConnectionStore(context);
   const manager = new ConnectionManager(store, output);
   const statusBar = new ConnectionStatusBar(store, manager);
-  const tree = new ConnectionsTree(store, manager);
+  const tree = new ConnectionsTree(store, manager, context.globalState);
 
   context.subscriptions.push(output, store, manager, statusBar, tree);
+
+  // The list follows the editor rather than the click that opened it, so it
+  // stays right when the editor declines to move or a first save renames the id.
+  context.subscriptions.push(ConnectionsPanel.onDidChangeSelection((id) => void tree.reveal(id)));
 
   context.subscriptions.push(
     vscode.commands.registerCommand('databaseTools.openConnections', (target?: CommandTarget) => {
       ConnectionsPanel.show(context, store, manager, targetId(target));
     }),
 
-    vscode.commands.registerCommand('databaseTools.newConnection', async () => {
-      const driver = await pickDriver();
-      if (!driver) {
-        return;
-      }
-      const created = await store.create({ driver, name: `New ${driver === 'mssql' ? 'SQL Server' : 'PostgreSQL'} connection` });
-      ConnectionsPanel.show(context, store, manager, created.id);
+    vscode.commands.registerCommand('databaseTools.filterConnections', () => tree.promptForFilter()),
+
+    vscode.commands.registerCommand('databaseTools.clearFilter', () => tree.clearFilter()),
+
+    vscode.commands.registerCommand('databaseTools.groupByEnvironment', () => tree.setGrouped(true)),
+
+    vscode.commands.registerCommand('databaseTools.showFlatList', () => tree.setGrouped(false)),
+
+    // Straight into the editor. The server type is a field on the form, and
+    // nothing reaches the list until the connection is saved.
+    vscode.commands.registerCommand('databaseTools.newConnection', () => {
+      ConnectionsPanel.showNew(context, store, manager);
     }),
 
     vscode.commands.registerCommand('databaseTools.connect', async (target?: CommandTarget) => {
@@ -110,25 +119,6 @@ function targetId(target: CommandTarget): string | undefined {
     return target;
   }
   return target instanceof ConnectionTreeItem ? target.profile.id : undefined;
-}
-
-async function pickDriver(): Promise<ConnectionProfile['driver'] | undefined> {
-  const pick = await vscode.window.showQuickPick(
-    [
-      {
-        label: '$(database) Microsoft SQL Server',
-        detail: '2016 and newer, Azure SQL Database, Managed Instance, and Amazon RDS',
-        driver: 'mssql' as const
-      },
-      {
-        label: '$(database) PostgreSQL',
-        detail: '12 and newer, plus Aurora, Cloud SQL, Neon, Supabase and Timescale',
-        driver: 'postgres' as const
-      }
-    ],
-    { title: 'New connection', placeHolder: 'Choose a server type' }
-  );
-  return pick?.driver;
 }
 
 async function pickProfile(store: ConnectionStore, verb: string): Promise<ConnectionProfile | undefined> {

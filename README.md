@@ -10,11 +10,18 @@ row-capped fetches, near-zero startup cost.
 This release covers everything up to and including an open connection. It does
 not run queries yet.
 
-- A connection editor in its own editor tab, with a section index rather than
-  tabs, matching the VS Code Settings editor.
+- A connection editor in its own editor tab, one field per row, with transport,
+  credentials, network, session and driver properties folded behind Advanced.
 - A Connections view in the activity bar, listing every saved profile with a
-  dot for its environment, filled when a session is open. Clicking one opens
-  the editor; the context menu connects, disconnects and deletes.
+  dot for its environment, filled when a session is open. It groups by
+  environment, filters by name, host or database, and counts what it is showing.
+  Clicking one opens the editor; the context menu connects, disconnects and
+  deletes.
+- A new connection opens straight into the editor and stays there. It reaches
+  the list only when it is saved, so an abandoned draft leaves nothing behind.
+- Paste an existing connection string and have it fill the form. ADO.NET, ODBC,
+  libpq keyword and postgresql:// forms are all read, and the engine is
+  recognised from the string itself.
 - SQL Server: Microsoft Entra ID (MFA, through the VS Code account provider),
   SQL Server logins, and Windows NTLM.
 - PostgreSQL: SCRAM password, client certificate, and no-credential
