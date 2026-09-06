@@ -37,6 +37,8 @@ export class ConnectionManager implements vscode.Disposable {
 
   private readonly active = new Map<string, ActiveConnection>();
   private readonly inFlight = new Map<string, AbortController>();
+  /** Profile id to the title of its last failure, cleared by a success. */
+  private readonly failures = new Map<string, string>();
 
   private readonly onDidChangeEmitter = new vscode.EventEmitter<void>();
   readonly onDidChange = this.onDidChangeEmitter.event;
@@ -49,6 +51,11 @@ export class ConnectionManager implements vscode.Disposable {
   dispose(): void {
     void this.disconnectAll();
     this.onDidChangeEmitter.dispose();
+  }
+
+  /** Why the last attempt failed, for as long as nothing has succeeded since. */
+  lastFailure(profileId: string): string | undefined {
+    return this.failures.get(profileId);
   }
 
   isConnected(profileId: string): boolean {
@@ -168,6 +175,8 @@ export class ConnectionManager implements vscode.Disposable {
         connectedAt: Date.now()
       };
 
+      this.failures.delete(profile.id);
+
       if (!keep) {
         // A test proves the round trip and then leaves nothing behind on the
         // server. That is the whole difference between Test and Connect.
@@ -190,6 +199,7 @@ export class ConnectionManager implements vscode.Disposable {
       const failure = describeFailure(profile, error);
       if (failure.kind !== 'cancelled') {
         this.output.error(`${profile.name}: ${failure.title} ${failure.raw}`);
+        this.failures.set(profile.id, failure.title);
       }
       return { ok: false, failure };
     } finally {
@@ -266,6 +276,19 @@ export class ConnectionManager implements vscode.Disposable {
       await this.store.writeSecret(profile.id, entered);
     }
     return { password: entered };
+  }
+
+  /**
+   * Picks the Microsoft account this connection signs in with, and hands back
+   * the label so the editor can show which one was chosen. Interactive by
+   * definition: it exists because the user pressed a button asking for it.
+   */
+  async signIn(profile: ConnectionProfile): Promise<string | undefined> {
+    const session = await vscode.authentication.getSession('microsoft', this.entraScopes(profile), {
+      createIfNone: true,
+      clearSessionPreference: true
+    });
+    return session?.account.label;
   }
 
   private entraScopes(profile: ConnectionProfile): string[] {

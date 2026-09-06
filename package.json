@@ -231,7 +231,7 @@
     "vscode:prepublish": "npm run build",
     "build": "node esbuild.mjs --production",
     "watch": "node esbuild.mjs --watch",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.webview.json",
     "lint": "eslint src --ext ts"
   },
   "dependencies": {
@@ -241,8 +241,13 @@
   "devDependencies": {
     "@types/node": "^20.14.0",
     "@types/pg": "^8.11.10",
+    "@types/react": "^18.3.12",
+    "@types/react-dom": "^18.3.1",
     "@types/vscode": "^1.85.0",
+    "@vscode/codicons": "^0.0.36",
     "esbuild": "^0.24.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
     "typescript": "^5.6.3"
   }
 }

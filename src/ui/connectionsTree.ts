@@ -64,7 +64,8 @@ export class ConnectionTreeItem extends vscode.TreeItem {
     readonly profile: ConnectionProfile,
     readonly connected: boolean,
     info?: ConnectionInfo,
-    grouped = false
+    grouped = false,
+    failure?: string
   ) {
     const label = profile.name || profile.host || 'Untitled connection';
     super(label, vscode.TreeItemCollapsibleState.None);
@@ -75,18 +76,24 @@ export class ConnectionTreeItem extends vscode.TreeItem {
     this.id = profile.id;
     // Under an environment heading the short label is already overhead.
     this.description = grouped ? target : `${SHORT[environment]} · ${target}`;
-    this.iconPath = new vscode.ThemeIcon(
-      connected ? 'circle-filled' : 'circle-outline',
-      new vscode.ThemeColor(TINT[environment])
-    );
+    // Three states, three shapes: a filled dot for a live session, a hollow
+    // one for a saved connection, a warning for one whose last attempt failed.
+    // The colour says which environment; the shape says what state it is in,
+    // so neither reading depends on the other.
+    this.iconPath = connected
+      ? new vscode.ThemeIcon('circle-filled', new vscode.ThemeColor(TINT[environment]))
+      : failure
+        ? new vscode.ThemeIcon('warning', new vscode.ThemeColor('problemsWarningIcon.foreground'))
+        : new vscode.ThemeIcon('circle-outline', new vscode.ThemeColor(TINT[environment]));
     this.contextValue = connected ? 'databaseConnection.open' : 'databaseConnection.closed';
     this.command = {
       command: 'databaseTools.openConnections',
       title: 'Open the connection',
       arguments: [profile.id]
     };
+    const state = connected ? 'connected' : failure ? `last attempt failed, ${failure}` : 'saved, not connected';
     this.accessibilityInformation = {
-      label: `${label}, ${environmentLabel(environment)}, ${connected ? 'connected' : 'not connected'}`
+      label: `${label}, ${environmentLabel(environment)}, ${state}`
     };
 
     const lines = [
@@ -98,7 +105,12 @@ export class ConnectionTreeItem extends vscode.TreeItem {
     if (info) {
       lines.push(`${info.serverVersion} · ${info.principal}`);
     }
-    this.tooltip = new vscode.MarkdownString(lines.join('\n\n'));
+    if (!connected && failure) {
+      lines.push(`$(warning) ${failure}`);
+    }
+    const tooltip = new vscode.MarkdownString(lines.join('\n\n'));
+    tooltip.supportThemeIcons = true;
+    this.tooltip = tooltip;
   }
 }
 
@@ -228,7 +240,8 @@ export class ConnectionsTree implements vscode.TreeDataProvider<ConnectionsNode>
       profile,
       this.manager.isConnected(profile.id),
       this.manager.infoFor(profile.id),
-      grouped
+      grouped,
+      this.manager.lastFailure(profile.id)
     );
   }
 

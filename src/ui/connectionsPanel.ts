@@ -1,6 +1,8 @@
 import * as vscode from 'vscode';
 import { AttemptResult, ConnectionManager } from '../connections/connectionManager';
 import { ConnectionStore, blankProfile } from '../store/connectionStore';
+import { probeServer } from '../connections/probe';
+import { DraftPayload, EditorState, HostMessage, WebviewMessage } from '../shared/protocol';
 import { ConnectionProfile, DriverKind, FailureActionId, defaultPort } from '../types';
 
 const VIEW_TYPE = 'databaseTools.connections';
@@ -9,18 +11,6 @@ const CERT_DOCS = {
   mssql: 'https://learn.microsoft.com/sql/database-engine/configure-windows/certificate-requirements',
   postgres: 'https://www.postgresql.org/docs/current/libpq-ssl.html'
 };
-
-interface IncomingMessage {
-  type: string;
-  id?: string;
-  driver?: DriverKind;
-  patch?: Partial<ConnectionProfile>;
-  secret?: string;
-  actionId?: FailureActionId;
-  raw?: string;
-  text?: string;
-  dirty?: boolean;
-}
 
 /**
  * The connection editor, hosted in its own editor tab. One panel per window:
@@ -73,7 +63,7 @@ export class ConnectionsPanel {
       // The editor holds a draft the user is typing into; throwing it away
       // because they glanced at another tab would be its own bug.
       retainContextWhenHidden: true,
-      localResourceRoots: [vscode.Uri.joinPath(context.extensionUri, 'media')]
+      localResourceRoots: [vscode.Uri.joinPath(context.extensionUri, 'dist', 'webview')]
     });
     panel.iconPath = new vscode.ThemeIcon('database');
 
@@ -105,7 +95,7 @@ export class ConnectionsPanel {
 
     this.disposables.push(
       this.panel.onDidDispose(() => this.dispose()),
-      this.panel.webview.onDidReceiveMessage((message: IncomingMessage) => {
+      this.panel.webview.onDidReceiveMessage((message: WebviewMessage) => {
         void this.onMessage(message);
       }),
       this.store.onDidChange(() => void this.postState()),
@@ -123,7 +113,7 @@ export class ConnectionsPanel {
 
   /* ------------------------------------------------------------ messages */
 
-  private async onMessage(message: IncomingMessage): Promise<void> {
+  private async onMessage(message: WebviewMessage): Promise<void> {
     switch (message.type) {
       case 'ready':
         await this.postState();
@@ -185,20 +175,62 @@ export class ConnectionsPanel {
         }
         return;
 
-      case 'copyConnectionString':
-        if (message.text) {
-          await vscode.env.clipboard.writeText(message.text);
-          void vscode.window.showInformationMessage('Connection string copied. The secret stays masked.');
-        }
-        return;
-
       case 'action':
         await this.runFailureAction(message);
+        return;
+
+      case 'probe':
+        await this.probe(message.id, message.host, message.port);
+        return;
+
+      case 'signIn':
+        await this.signIn(message.id);
+        return;
+
+      case 'close':
+        if (await this.mayLeaveDraft()) {
+          this.dispose();
+        }
         return;
 
       default:
         return;
     }
+  }
+
+  /**
+   * Answers the editor's live check of the server address. Stale answers are
+   * possible, so the reply carries the target it belongs to and the editor
+   * throws away anything that is no longer what is in the box.
+   */
+  private async probe(id: string, host: string, port: number | null): Promise<void> {
+    const profile = this.effectiveProfile({ id });
+    if (!profile) {
+      return;
+    }
+    const result = await probeServer(host, port, profile.driver);
+    await this.send({ type: 'probe', profileId: id, result });
+  }
+
+  private async signIn(id: string): Promise<void> {
+    const profile = this.effectiveProfile({ id });
+    if (!profile) {
+      return;
+    }
+    try {
+      const account = await this.manager.signIn(profile);
+      if (account) {
+        await this.send({ type: 'patch', profileId: id, patch: { account } });
+      }
+    } catch (error) {
+      void vscode.window.showErrorMessage(
+        `Signing in failed: ${error instanceof Error ? error.message : String(error)}`
+      );
+    }
+  }
+
+  private async send(message: HostMessage): Promise<void> {
+    await this.panel.webview.postMessage(message);
   }
 
   /**
@@ -261,7 +293,7 @@ export class ConnectionsPanel {
   }
 
   /** Returns the stored id the draft ended up under, or undefined if it did not save. */
-  private async save(message: IncomingMessage): Promise<string | undefined> {
+  private async save(message: DraftPayload): Promise<string | undefined> {
     if (!message.id || !message.patch) {
       return undefined;
     }
@@ -308,7 +340,7 @@ export class ConnectionsPanel {
     return saved.id;
   }
 
-  private async attempt(message: IncomingMessage, mode: 'test' | 'connect'): Promise<void> {
+  private async attempt(message: DraftPayload, mode: 'test' | 'connect'): Promise<void> {
     // A session is keyed by profile id, so an unsaved draft has to become a
     // real connection before it can hold one. Testing needs no such thing.
     if (mode === 'connect' && this.isPending(message.id)) {
@@ -338,7 +370,7 @@ export class ConnectionsPanel {
     }
   }
 
-  private async reloadDatabases(message: IncomingMessage): Promise<void> {
+  private async reloadDatabases(message: DraftPayload): Promise<void> {
     const effective = this.effectiveProfile(message);
     if (!effective) {
       return;
@@ -359,7 +391,7 @@ export class ConnectionsPanel {
   }
 
   /** The stored profile with the unsaved draft laid over it. Never persisted. */
-  private effectiveProfile(message: IncomingMessage): ConnectionProfile | undefined {
+  private effectiveProfile(message: { id: string; patch?: Partial<ConnectionProfile> }): ConnectionProfile | undefined {
     if (!message.id) {
       return undefined;
     }
@@ -370,8 +402,8 @@ export class ConnectionsPanel {
     return message.patch ? { ...stored, ...message.patch, id: stored.id } : stored;
   }
 
-  private async runFailureAction(message: IncomingMessage): Promise<void> {
-    const profile = this.effectiveProfile({ type: message.type, id: message.id });
+  private async runFailureAction(message: { id: string; actionId: FailureActionId; raw: string }): Promise<void> {
+    const profile = this.effectiveProfile({ id: message.id });
     if (!profile || !message.actionId) {
       return;
     }
@@ -539,39 +571,51 @@ export class ConnectionsPanel {
       ConnectionsPanel.selectionEmitter.fire(storedSelection);
     }
 
-    await this.panel.webview.postMessage({
-      type: 'state',
+    const state: EditorState = {
       profiles,
       // The draft travels beside the stored list rather than inside it, so
       // nothing downstream mistakes it for a saved connection.
-      pending: this.isPending(this.selectedId) ? this.pending : null,
+      pending: this.isPending(this.selectedId) ? this.pending ?? null : null,
       selectedId: this.selectedId ?? null,
       connected: this.manager.activeIds(),
       busy: this.busyId ?? null,
       hasSecret,
       results,
       reload
-    });
+    };
+    await this.send({ type: 'state', ...state });
   }
 
   private html(): string {
     const webview = this.panel.webview;
     const nonce = makeNonce();
-    const styleUri = webview.asWebviewUri(vscode.Uri.joinPath(this.context.extensionUri, 'media', 'connections.css'));
-    const scriptUri = webview.asWebviewUri(vscode.Uri.joinPath(this.context.extensionUri, 'media', 'connections.js'));
+    const asset = (...parts: string[]) =>
+      webview.asWebviewUri(vscode.Uri.joinPath(this.context.extensionUri, 'dist', 'webview', ...parts));
+
+    // Everything the page needs ships with the extension. The policy allows no
+    // network at all: no remote script, no remote style, no remote font, and
+    // no connections of any kind from inside the page.
+    const csp = [
+      "default-src 'none'",
+      `img-src ${webview.cspSource} data:`,
+      `style-src ${webview.cspSource}`,
+      `font-src ${webview.cspSource}`,
+      `script-src 'nonce-${nonce}'`
+    ].join('; ');
 
     return `<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src ${webview.cspSource} data:; style-src ${webview.cspSource} 'unsafe-inline'; font-src ${webview.cspSource}; script-src 'nonce-${nonce}';">
+<meta http-equiv="Content-Security-Policy" content="${csp}">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<link href="${styleUri}" rel="stylesheet">
-<title>Connections</title>
+<link href="${asset('codicon.css')}" rel="stylesheet">
+<link href="${asset('editor.css')}" rel="stylesheet">
+<title>Connection</title>
 </head>
 <body>
 <div id="root"></div>
-<script nonce="${nonce}" src="${scriptUri}"></script>
+<script nonce="${nonce}" src="${asset('editor.js')}"></script>
 </body>
 </html>`;
   }

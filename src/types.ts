@@ -143,37 +143,58 @@ export interface FailureAction {
   weakening?: boolean;
 }
 
-export const ENVIRONMENTS: ReadonlyArray<{
+export interface EnvironmentMeta {
   id: EnvironmentId;
+  /** The name used in a sentence. */
   label: string;
+  /** The badge, and the only form short enough for a list row. */
   short: string;
+  /** The name spelled out, for the banner. */
+  full: string;
+  /** One line naming the guard, so the banner never relies on its colour. */
+  guard: string;
+  /** The long form, for a tooltip or a note. */
   hint: string;
-}> = [
+}
+
+export const ENVIRONMENTS: ReadonlyArray<EnvironmentMeta> = [
   {
     id: 'dev',
     label: 'Development',
     short: 'DEV',
+    full: 'Development',
+    guard: 'Safe to experiment. No extra guards.',
     hint: 'No extra guards. Metadata is cached for the whole session so the object tree opens instantly.'
   },
   {
     id: 'qa',
     label: 'QA',
     short: 'QA',
+    full: 'Quality Assurance',
+    guard: 'Confirmation required for destructive statements.',
     hint: 'An UPDATE or DELETE with no WHERE clause asks for confirmation before it runs.'
   },
   {
     id: 'uat',
     label: 'UAT',
     short: 'UAT',
+    full: 'User Acceptance Testing',
+    guard: 'The same guard as QA, and query history is tracked.',
     hint: 'The same guard as QA, and the environment name goes into the query history.'
   },
   {
     id: 'prod',
     label: 'Production',
     short: 'PROD',
+    full: 'Production',
+    guard: 'Read-only by default. Connecting asks for confirmation.',
     hint: 'Sessions open read-only, connecting asks for confirmation, no credential is kept by default, and schema changes are refused until the session is switched to read-write.'
   }
 ];
+
+export function environmentMeta(id: EnvironmentId): EnvironmentMeta {
+  return ENVIRONMENTS.find((e) => e.id === id) ?? ENVIRONMENTS[0];
+}
 
 export function environmentLabel(id: EnvironmentId): string {
   return ENVIRONMENTS.find((e) => e.id === id)?.label ?? 'Development';

@@ -4,7 +4,7 @@ src/**
 out/**
 node_modules/.bin/**
 esbuild.mjs
-tsconfig.json
+tsconfig*.json
 **/*.map
 **/*.ts
 .gitignore

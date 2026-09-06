@@ -10,8 +10,10 @@ row-capped fetches, near-zero startup cost.
 This release covers everything up to and including an open connection. It does
 not run queries yet.
 
-- A connection editor in its own editor tab, one field per row, with transport,
-  credentials, network, session and driver properties folded behind Advanced.
+- A connection editor in its own editor tab: identity down the left, the
+  connection details beside it, a summary that never scrolls away, and a sticky
+  action bar. Built in React against the workbench theme. See
+  [docs/ui-architecture.md](docs/ui-architecture.md).
 - A Connections view in the activity bar, listing every saved profile with a
   dot for its environment, filled when a session is open. It groups by
   environment, filters by name, host or database, and counts what it is showing.
@@ -19,9 +21,19 @@ not run queries yet.
   deletes.
 - A new connection opens straight into the editor and stays there. It reaches
   the list only when it is saved, so an abandoned draft leaves nothing behind.
-- Paste an existing connection string and have it fill the form. ADO.NET, ODBC,
-  libpq keyword and postgresql:// forms are all read, and the engine is
-  recognised from the string itself.
+- Paste a connection string, press Parse, and the server and sign-in fields
+  fill in and open in front of you. ADO.NET, ODBC, libpq keyword and
+  postgresql:// forms are all read, and the engine is recognised from the
+  string itself.
+- Transport, network, security, session and driver settings sit in five named
+  groups, each closed until it is opened and each building nothing until then.
+- The server address is checked as it is typed. The name is resolved and a
+  socket is opened and closed without a word on it, so a typo is caught in a
+  moment rather than thirty seconds into a driver timeout.
+- Production asks before it connects, naming the server, the database and
+  whether the session can write.
+- Environments carry a colour everywhere they appear: the editor, the header,
+  the status bar and the sidebar.
 - SQL Server: Microsoft Entra ID (MFA, through the VS Code account provider),
   SQL Server logins, and Windows NTLM.
 - PostgreSQL: SCRAM password, client certificate, and no-credential
