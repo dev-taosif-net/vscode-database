@@ -1,0 +1,196 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>
+* { box-sizing: border-box; }
+body { margin: 0; }
+a { color: #4daafc; text-decoration: none; }
+a:hover { color: #4daafc; text-decoration: underline; }
+.cp {
+  font-family: "Segoe WPF", "Segoe UI", system-ui, -apple-system, sans-serif;
+  font-size: 13px; line-height: 1.4; -webkit-font-smoothing: antialiased;
+}
+.cp ::-webkit-scrollbar { width: 10px; }
+.cp ::-webkit-scrollbar-thumb { background: #4f4f4f; border: 3px solid transparent; background-clip: content-box; border-radius: 6px; }
+.lbl { font-size: 12px; color: #cccccc; display: block; margin-bottom: 6px; }
+.hint { font-size: 11px; color: #9d9d9d; margin-top: 5px; line-height: 1.5; }
+.in { height: 28px; width: 100%; background: #313131; color: #cccccc; border: 1px solid #3c3c3c; border-radius: 2px; padding: 0 8px; font: inherit; font-size: 13px; }
+.sel { height: 28px; width: 100%; background: #313131; color: #cccccc; border: 1px solid #3c3c3c; border-radius: 2px; padding: 0 26px 0 8px; font: inherit; font-size: 13px; appearance: none; cursor: pointer; }
+.selw { position: relative; }
+.selc { position: absolute; right: 8px; top: 50%; transform: translateY(-50%); pointer-events: none; color: #9d9d9d; display: flex; }
+.btn { height: 30px; padding: 0 13px; border-radius: 2px; border: 1px solid transparent; font: inherit; font-size: 13px; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; gap: 6px; white-space: nowrap; }
+.btn-p { background: #0078d4; color: #ffffff; }
+.btn-s { background: #313131; color: #cccccc; border-color: #3c3c3c; }
+.btn-g { background: transparent; color: #9d9d9d; }
+.tab { height: 33px; padding: 0 12px; background: transparent; border: 0; border-bottom: 1px solid transparent; color: #9d9d9d; font: inherit; font-size: 13px; cursor: pointer; }
+.tab-on { color: #e7e7e7; border-bottom-color: #0078d4; }
+.sec { display: flex; align-items: center; gap: 10px; margin: 22px 0 12px; }
+.sec-t { font-size: 11px; font-weight: 600; letter-spacing: .09em; text-transform: uppercase; color: #9d9d9d; white-space: nowrap; }
+.sec-r { flex: 1; height: 1px; background: #2b2b2b; }
+.seg { display: flex; border: 1px solid #3c3c3c; border-radius: 3px; overflow: hidden; background: #313131; }
+.seg button { flex: 1; height: 30px; border: 0; background: transparent; color: #9d9d9d; font: inherit; font-size: 12px; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; gap: 6px; }
+.seg .on { background: #04395e; color: #ffffff; }
+.ck { width: 15px; height: 15px; accent-color: #0078d4; margin: 0; }
+.ckrow { display: flex; align-items: center; gap: 8px; min-height: 26px; }
+.pill { display: inline-flex; align-items: center; gap: 5px; height: 19px; padding: 0 8px; border-radius: 10px; font-size: 10px; font-weight: 600; letter-spacing: .05em; }
+</style>
+</helmet>
+
+<div class="cp" style="width:620px;height:840px;display:flex;flex-direction:column;background:#1f1f1f;color:#cccccc;overflow:hidden">
+
+  <div style="height:35px;flex-shrink:0;display:flex;align-items:stretch;background:#181818;border-bottom:1px solid #2b2b2b">
+    <div style="display:flex;align-items:center;gap:7px;padding:0 12px;background:#1f1f1f;color:#e7e7e7;border-top:1px solid #0078d4;border-right:1px solid #2b2b2b">
+      <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.2"><ellipse cx="8" cy="3.7" rx="5.2" ry="2.1"></ellipse><path d="M2.8 3.7v8.6c0 1.16 2.33 2.1 5.2 2.1s5.2-.94 5.2-2.1V3.7"></path><path d="M2.8 8c0 1.16 2.33 2.1 5.2 2.1s5.2-.94 5.2-2.1"></path></svg>
+      <span>Connections</span>
+      <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" style="opacity:.7;margin-left:4px"><path d="M4.2 4.2l7.6 7.6M11.8 4.2l-7.6 7.6"></path></svg>
+    </div>
+  </div>
+
+  <div style="flex-shrink:0;display:flex;align-items:center;gap:8px;padding:8px 14px;border-bottom:1px solid #2b2b2b;background:#181818">
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="#9d9d9d" stroke-width="1.3" style="flex-shrink:0"><path d="M2.6 4.2h10.8M2.6 8h10.8M2.6 11.8h10.8"></path></svg>
+    <div class="selw" style="flex:1">
+      <select class="sel">
+        <option>Billing-DB — Production</option>
+        <option>Ledger-Core — Production</option>
+        <option>Billing-UAT — UAT</option>
+        <option>Orders-QA — QA</option>
+        <option>local-postgres — Development</option>
+      </select>
+      <span class="selc"><svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M4.5 6.5L8 10l3.5-3.5"></path></svg></span>
+    </div>
+    <button class="btn btn-s" style="width:30px;padding:0" title="New connection">
+      <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><path d="M8 3.4v9.2M3.4 8h9.2"></path></svg>
+    </button>
+  </div>
+
+  <div style="flex-shrink:0;display:flex;align-items:center;gap:10px;padding:11px 14px;border-bottom:1px solid #2b2b2b">
+    <div style="width:3px;height:32px;border-radius:2px;flex-shrink:0;background:#f0563f"></div>
+    <div style="min-width:0;flex:1">
+      <div style="font-size:14px;font-weight:600;color:#e7e7e7">Billing-DB</div>
+      <div style="font-size:11px;color:#9d9d9d;margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">SQL Server · sql01.northwind.corp:1433</div>
+    </div>
+    <span class="pill" style="background:rgba(240,86,63,.15);color:#f0563f">
+      <span style="width:6px;height:6px;border-radius:50%;background:#f0563f"></span>PROD
+    </span>
+  </div>
+
+  <div style="flex-shrink:0;display:flex;padding:0 14px;border-bottom:1px solid #2b2b2b">
+    <button class="tab tab-on">General</button>
+    <button class="tab">Security</button>
+    <button class="tab">Advanced</button>
+  </div>
+
+  <div style="flex:1;overflow-y:auto;padding:16px 16px 22px">
+
+    <div class="seg" style="margin-bottom:20px">
+      <button class="on">
+        <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.2"><ellipse cx="8" cy="3.7" rx="5.2" ry="2.1"></ellipse><path d="M2.8 3.7v8.6c0 1.16 2.33 2.1 5.2 2.1s5.2-.94 5.2-2.1V3.7"></path><path d="M2.8 8c0 1.16 2.33 2.1 5.2 2.1s5.2-.94 5.2-2.1"></path></svg>
+        SQL Server
+      </button>
+      <button>
+        <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.2"><path d="M8 1.7c3 0 5.2 1.5 5.2 4.4 0 3-1.2 5.2-2.3 6.9-.5.8-1.7.7-1.9-.3l-.4-2"></path><path d="M8 1.7C5 1.7 2.8 3.2 2.8 6.1c0 3 1.2 5.2 2.3 6.9.5.8 1.7.7 1.9-.3l.4-2"></path></svg>
+        PostgreSQL
+      </button>
+    </div>
+
+    <div style="display:flex;flex-direction:column;gap:16px">
+      <div>
+        <label class="lbl">Connection name</label>
+        <input class="in" value="Billing-DB" readonly />
+      </div>
+
+      <div>
+        <label class="lbl">Environment</label>
+        <div style="display:flex;align-items:center;gap:9px">
+          <div class="selw" style="flex:1">
+            <select class="sel"><option>Production</option><option>UAT</option><option>QA</option><option>Development</option></select>
+            <span class="selc"><svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M4.5 6.5L8 10l3.5-3.5"></path></svg></span>
+          </div>
+          <span class="pill" style="background:rgba(240,86,63,.15);color:#f0563f">
+            <span style="width:6px;height:6px;border-radius:50%;background:#f0563f"></span>PROD
+          </span>
+        </div>
+        <div class="hint">Sessions open read-only, connecting asks for confirmation, and schema changes are refused until the session is switched to read-write.</div>
+      </div>
+
+      <div>
+        <label class="lbl">Saved in</label>
+        <div class="selw">
+          <select class="sel"><option>Team file, .vscode/connections.json</option><option>User settings</option><option>This workspace only</option></select>
+          <span class="selc"><svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M4.5 6.5L8 10l3.5-3.5"></path></svg></span>
+        </div>
+      </div>
+    </div>
+
+    <div class="sec"><span class="sec-t">Server</span><span class="sec-r"></span></div>
+
+    <div style="display:flex;flex-direction:column;gap:16px">
+      <div>
+        <label class="lbl">Server</label>
+        <div style="display:flex;gap:8px">
+          <input class="in" style="flex:1" value="sql01.northwind.corp" readonly />
+          <input class="in" style="width:78px" value="1433" readonly />
+        </div>
+      </div>
+      <div>
+        <label class="lbl">Database</label>
+        <div class="selw">
+          <select class="sel"><option>Billing</option></select>
+          <span class="selc"><svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M4.5 6.5L8 10l3.5-3.5"></path></svg></span>
+        </div>
+      </div>
+    </div>
+
+    <div class="sec"><span class="sec-t">Authentication</span><span class="sec-r"></span></div>
+
+    <div style="display:flex;flex-direction:column;gap:16px">
+      <div>
+        <label class="lbl">Method</label>
+        <div class="selw">
+          <select class="sel"><option>Microsoft Entra ID, MFA</option><option>Windows authentication</option><option>SQL Server login</option></select>
+          <span class="selc"><svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M4.5 6.5L8 10l3.5-3.5"></path></svg></span>
+        </div>
+      </div>
+      <div>
+        <label class="lbl">Account</label>
+        <div class="selw">
+          <select class="sel"><option>t.rahman@northwind.corp</option><option>Add an account</option></select>
+          <span class="selc"><svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M4.5 6.5L8 10l3.5-3.5"></path></svg></span>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <div style="flex-shrink:0;display:flex;align-items:center;gap:10px;padding:9px 14px;border-top:1px solid #2b2b2b;background:rgba(137,209,133,.10)">
+    <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="#89d185" stroke-width="1.3" style="flex-shrink:0"><circle cx="8" cy="8" r="6.3"></circle><path d="M5.3 8.2l2 2 3.5-4.3"></path></svg>
+    <span style="font-size:12px;color:#cccccc;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"><span style="font-weight:600">Connected in 42 ms.</span> <span style="color:#9d9d9d">SQL Server 2022</span></span>
+  </div>
+
+  <div style="flex-shrink:0;padding:10px 14px;border-top:1px solid #2b2b2b;display:flex;flex-direction:column;gap:9px">
+    <div class="ckrow">
+      <input class="ck" type="checkbox" checked />
+      <span style="font-size:12px;color:#9d9d9d">Read-only session</span>
+      <span style="flex:1"></span>
+      <button class="btn btn-g" style="height:26px;font-size:12px">Test connection</button>
+    </div>
+    <div style="display:flex;gap:8px">
+      <button class="btn btn-s" style="flex:1">Save</button>
+      <button class="btn btn-p" style="flex:1.4">Connect</button>
+    </div>
+  </div>
+
+</div>
+</x-dc>
+
+<script data-dc-script data-props='{"$preview":{"width":620,"height":840}}'>
+class Component extends DCLogic {}
+</script>
+</body>
+</html>

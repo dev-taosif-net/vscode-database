@@ -1,0 +1,192 @@
+{
+  "name": "vscode-database-tools",
+  "displayName": "Database Tools",
+  "description": "Fast, lightweight SQL Server and PostgreSQL tooling inside VS Code.",
+  "version": "0.1.0",
+  "license": "MIT",
+  "publisher": "dev-taosif-net",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "keywords": [
+    "sql server",
+    "mssql",
+    "postgresql",
+    "postgres",
+    "database"
+  ],
+  "main": "./dist/extension.js",
+  "activationEvents": [],
+  "contributes": {
+    "commands": [
+      {
+        "command": "databaseTools.openConnections",
+        "title": "Connections: Open",
+        "category": "Database",
+        "icon": "$(database)"
+      },
+      {
+        "command": "databaseTools.newConnection",
+        "title": "Connections: New",
+        "category": "Database",
+        "icon": "$(add)"
+      },
+      {
+        "command": "databaseTools.connect",
+        "title": "Connect to a Database",
+        "category": "Database",
+        "icon": "$(plug)"
+      },
+      {
+        "command": "databaseTools.disconnect",
+        "title": "Disconnect",
+        "category": "Database",
+        "icon": "$(debug-disconnect)"
+      },
+      {
+        "command": "databaseTools.disconnectAll",
+        "title": "Disconnect All",
+        "category": "Database",
+        "icon": "$(close-all)"
+      },
+      {
+        "command": "databaseTools.deleteConnection",
+        "title": "Delete Connection",
+        "category": "Database",
+        "icon": "$(trash)"
+      }
+    ],
+    "configuration": {
+      "title": "Database Tools",
+      "properties": {
+        "databaseTools.connectTimeout": {
+          "type": "number",
+          "default": 15,
+          "minimum": 1,
+          "maximum": 600,
+          "description": "Seconds to wait for a new connection before giving up. Used as the default for new connection profiles."
+        },
+        "databaseTools.rowsPerFetch": {
+          "type": "number",
+          "default": 1000,
+          "minimum": 50,
+          "maximum": 100000,
+          "description": "Rows fetched per page. Used as the default for new connection profiles."
+        },
+        "databaseTools.confirmProductionConnect": {
+          "type": "boolean",
+          "default": true,
+          "description": "Ask for confirmation before opening a session against a connection marked as Production."
+        },
+        "databaseTools.statusBar": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show the active connection in the status bar, tinted by its environment."
+        }
+      }
+    },
+    "keybindings": [
+      {
+        "command": "databaseTools.openConnections",
+        "key": "ctrl+alt+d",
+        "mac": "cmd+alt+d"
+      }
+    ],
+    "menus": {
+      "commandPalette": [
+        {
+          "command": "databaseTools.disconnect",
+          "when": "databaseTools.hasActiveConnection"
+        },
+        {
+          "command": "databaseTools.disconnectAll",
+          "when": "databaseTools.hasActiveConnection"
+        }
+      ],
+      "view/title": [
+        {
+          "command": "databaseTools.newConnection",
+          "when": "view == databaseTools.connections",
+          "group": "navigation@1"
+        },
+        {
+          "command": "databaseTools.disconnectAll",
+          "when": "view == databaseTools.connections && databaseTools.hasActiveConnection",
+          "group": "navigation@2"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "databaseTools.connect",
+          "when": "view == databaseTools.connections && viewItem == databaseConnection.closed",
+          "group": "inline@1"
+        },
+        {
+          "command": "databaseTools.disconnect",
+          "when": "view == databaseTools.connections && viewItem == databaseConnection.open",
+          "group": "inline@1"
+        },
+        {
+          "command": "databaseTools.connect",
+          "when": "view == databaseTools.connections && viewItem == databaseConnection.closed",
+          "group": "1_session@1"
+        },
+        {
+          "command": "databaseTools.disconnect",
+          "when": "view == databaseTools.connections && viewItem == databaseConnection.open",
+          "group": "1_session@1"
+        },
+        {
+          "command": "databaseTools.deleteConnection",
+          "when": "view == databaseTools.connections",
+          "group": "9_danger@1"
+        }
+      ]
+    },
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "databaseTools",
+          "title": "Database Tools",
+          "icon": "media/database.svg"
+        }
+      ]
+    },
+    "views": {
+      "databaseTools": [
+        {
+          "id": "databaseTools.connections",
+          "name": "Connections",
+          "icon": "media/database.svg"
+        }
+      ]
+    },
+    "viewsWelcome": [
+      {
+        "view": "databaseTools.connections",
+        "contents": "No connections yet.\n[New connection](command:databaseTools.newConnection)\nSQL Server and PostgreSQL. Profiles are kept per user, and credentials go to the operating system keychain."
+      }
+    ]
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run build",
+    "build": "node esbuild.mjs --production",
+    "watch": "node esbuild.mjs --watch",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint src --ext ts"
+  },
+  "dependencies": {
+    "pg": "^8.13.1",
+    "tedious": "^18.6.1"
+  },
+  "devDependencies": {
+    "@types/node": "^20.14.0",
+    "@types/pg": "^8.11.10",
+    "@types/vscode": "^1.85.0",
+    "esbuild": "^0.24.0",
+    "typescript": "^5.6.3"
+  }
+}

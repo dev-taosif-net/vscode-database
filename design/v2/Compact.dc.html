@@ -1,0 +1,218 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>
+* { box-sizing: border-box; }
+body { margin: 0; }
+a { color: #4daafc; text-decoration: none; }
+a:hover { color: #4daafc; text-decoration: underline; }
+.cp {
+  font-family: "Segoe WPC", "Segoe UI", system-ui, -apple-system, sans-serif;
+  font-size: 13px; line-height: 1.4; -webkit-font-smoothing: antialiased;
+}
+.cp ::-webkit-scrollbar { width: 10px; height: 8px; }
+.cp ::-webkit-scrollbar-thumb { background: #4f4f4f; border: 3px solid transparent; background-clip: content-box; border-radius: 6px; }
+.flabel { display: block; font-size: 13px; color: #cccccc; margin-bottom: 6px; }
+.hint { font-size: 11px; color: #9d9d9d; margin-top: 6px; line-height: 1.5; }
+.in { height: 26px; width: 100%; background: #313131; color: #cccccc; border: 1px solid #3c3c3c; border-radius: 2px; padding: 0 8px; font: inherit; font-size: 13px; }
+.sel { height: 26px; width: 100%; background: #313131; color: #cccccc; border: 1px solid #3c3c3c; border-radius: 2px; padding: 0 26px 0 8px; font: inherit; font-size: 13px; appearance: none; cursor: pointer; }
+.selw { position: relative; }
+.selc { position: absolute; right: 8px; top: 50%; transform: translateY(-50%); pointer-events: none; color: #9d9d9d; display: flex; }
+.btn { height: 26px; padding: 0 13px; border-radius: 2px; border: 1px solid transparent; font: inherit; font-size: 13px; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; gap: 6px; white-space: nowrap; }
+.btn-p { background: #0078d4; color: #ffffff; }
+.btn-p:hover { background: #026ec1; }
+.btn-s { background: #313131; color: #cccccc; border-color: #3c3c3c; }
+.btn-s:hover { background: #3c3c3c; }
+.btn-g { background: transparent; color: #9d9d9d; }
+.jump { height: 24px; padding: 0 10px; border-radius: 12px; border: 1px solid #3c3c3c; background: transparent; color: #9d9d9d; font: inherit; font-size: 12px; cursor: pointer; white-space: nowrap; display: inline-flex; align-items: center; gap: 6px; }
+.jump-on { background: rgba(0,120,212,.16); border-color: rgba(0,120,212,.5); color: #4daafc; }
+.sechead { display: flex; align-items: center; gap: 9px; margin: 0 0 13px; }
+.sec-t { font-size: 11px; font-weight: 600; letter-spacing: .09em; text-transform: uppercase; color: #9d9d9d; white-space: nowrap; }
+.sec-r { flex: 1; height: 1px; background: #2b2b2b; margin-left: 3px; }
+.ck { width: 15px; height: 15px; accent-color: #0078d4; margin: 0; }
+.ckrow { display: flex; align-items: center; gap: 8px; min-height: 24px; }
+.pill { display: inline-flex; align-items: center; gap: 5px; height: 19px; padding: 0 8px; border-radius: 10px; font-size: 10px; font-weight: 600; letter-spacing: .05em; }
+.chip { display: inline-flex; align-items: center; height: 18px; padding: 0 7px; border-radius: 3px; border: 1px solid; font-size: 10px; font-weight: 600; white-space: nowrap; }
+.plate { display: inline-flex; align-items: center; justify-content: center; border-radius: 5px; flex-shrink: 0; }
+</style>
+</helmet>
+
+<div class="cp" style="width:620px;height:840px;display:flex;flex-direction:column;background:#1f1f1f;color:#cccccc;overflow:hidden">
+
+  <div style="height:35px;flex-shrink:0;display:flex;align-items:stretch;background:#181818;border-bottom:1px solid #2b2b2b">
+    <div style="display:flex;align-items:center;gap:7px;padding:0 12px;background:#1f1f1f;color:#e7e7e7;border-top:1px solid #0078d4;border-right:1px solid #2b2b2b">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="#0078d4"><ellipse cx="12" cy="5.4" rx="7.6" ry="2.9"></ellipse><path d="M4.4 8.6v3.2c0 1.6 3.4 2.9 7.6 2.9s7.6-1.3 7.6-2.9V8.6c-1.5 1.2-4.3 1.9-7.6 1.9s-6.1-.7-7.6-1.9z"></path><path d="M4.4 14.6v3.2c0 1.6 3.4 2.9 7.6 2.9s7.6-1.3 7.6-2.9v-3.2c-1.5 1.2-4.3 1.9-7.6 1.9s-6.1-.7-7.6-1.9z"></path></svg>
+      <span>Connections</span>
+      <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" style="opacity:.7;margin-left:4px"><path d="M4.2 4.2l7.6 7.6M11.8 4.2l-7.6 7.6"></path></svg>
+    </div>
+  </div>
+
+  <div style="flex-shrink:0;display:flex;align-items:center;gap:8px;padding:8px 14px;border-bottom:1px solid #2b2b2b;background:#181818">
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="#9d9d9d" stroke-width="1.3" style="flex-shrink:0"><path d="M2.6 4.2h10.8M2.6 8h10.8M2.6 11.8h10.8"></path></svg>
+    <div class="selw" style="flex:1">
+      <select class="sel">
+        <option>Billing-DB · Production</option>
+        <option>Ledger-Core · Production</option>
+        <option>Billing-UAT · UAT</option>
+        <option>Orders-QA · QA</option>
+        <option>local-postgres · Development</option>
+      </select>
+      <span class="selc"><svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M4.5 6.5L8 10l3.5-3.5"></path></svg></span>
+    </div>
+    <button class="btn btn-s" style="width:26px;padding:0" title="New connection">
+      <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><path d="M8 3.4v9.2M3.4 8h9.2"></path></svg>
+    </button>
+  </div>
+
+  <div style="flex-shrink:0;display:flex;align-items:center;gap:10px;padding:11px 14px;border-bottom:1px solid #2b2b2b;background:linear-gradient(90deg, rgba(240,86,63,.12) 0%, rgba(240,86,63,0) 55%)">
+    <div style="width:3px;height:38px;border-radius:2px;flex-shrink:0;background:#f0563f"></div>
+    <span class="plate" style="width:30px;height:30px;background:rgba(224,70,63,.13)">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="#e0463f"><ellipse cx="12" cy="5.4" rx="7.6" ry="2.9"></ellipse><path d="M4.4 8.6v3.2c0 1.6 3.4 2.9 7.6 2.9s7.6-1.3 7.6-2.9V8.6c-1.5 1.2-4.3 1.9-7.6 1.9s-6.1-.7-7.6-1.9z"></path><path d="M4.4 14.6v3.2c0 1.6 3.4 2.9 7.6 2.9s7.6-1.3 7.6-2.9v-3.2c-1.5 1.2-4.3 1.9-7.6 1.9s-6.1-.7-7.6-1.9z"></path></svg>
+    </span>
+    <div style="min-width:0;flex:1">
+      <div style="font-size:14px;font-weight:600;color:#e7e7e7">Billing-DB</div>
+      <div style="display:flex;align-items:center;gap:5px;margin-top:4px">
+        <span class="chip" style="color:#3ebfa3;background:rgba(62,191,163,.12);border-color:rgba(62,191,163,.38)">TLS strict</span>
+        <span class="chip" style="color:#8b93ec;background:rgba(139,147,236,.14);border-color:rgba(139,147,236,.40)">Entra MFA</span>
+        <span class="chip" style="color:#3ebfa3;background:rgba(62,191,163,.12);border-color:rgba(62,191,163,.38)">Read-only</span>
+      </div>
+    </div>
+    <span class="pill" style="background:rgba(240,86,63,.16);color:#f0563f">
+      <span style="width:6px;height:6px;border-radius:50%;background:#f0563f"></span>PROD
+    </span>
+  </div>
+
+  <div style="flex-shrink:0;display:flex;gap:6px;padding:9px 14px;border-bottom:1px solid #2b2b2b;overflow-x:auto">
+    <button class="jump jump-on">Identity</button>
+    <button class="jump">Server</button>
+    <button class="jump">Authentication</button>
+    <button class="jump">
+      Transport
+      <span style="width:6px;height:6px;border-radius:50%;background:#3ebfa3"></span>
+    </button>
+    <button class="jump">Credentials</button>
+    <button class="jump">Network</button>
+  </div>
+
+  <div style="flex:1;overflow-y:auto;padding:16px 14px 22px">
+
+    <div class="sechead">
+      <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="#0078d4" stroke-width="1.3"><path d="M8 1.9l5.4 2.1v4.3c0 3.3-2.2 5.8-5.4 6.8-3.2-1-5.4-3.5-5.4-6.8V4z"></path></svg>
+      <span class="sec-t">Identity</span><span class="sec-r"></span>
+    </div>
+
+    <div style="display:flex;flex-direction:column;gap:16px">
+      <div>
+        <label class="flabel" for="cprov">Server type</label>
+        <div style="display:flex;align-items:center;gap:9px">
+          <span class="plate" style="width:26px;height:26px;background:rgba(224,70,63,.13)">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="#e0463f"><ellipse cx="12" cy="5.4" rx="7.6" ry="2.9"></ellipse><path d="M4.4 8.6v3.2c0 1.6 3.4 2.9 7.6 2.9s7.6-1.3 7.6-2.9V8.6c-1.5 1.2-4.3 1.9-7.6 1.9s-6.1-.7-7.6-1.9z"></path><path d="M4.4 14.6v3.2c0 1.6 3.4 2.9 7.6 2.9s7.6-1.3 7.6-2.9v-3.2c-1.5 1.2-4.3 1.9-7.6 1.9s-6.1-.7-7.6-1.9z"></path></svg>
+          </span>
+          <div class="selw" style="flex:1">
+            <select class="sel" id="cprov"><option>Microsoft SQL Server</option><option>PostgreSQL</option></select>
+            <span class="selc"><svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M4.5 6.5L8 10l3.5-3.5"></path></svg></span>
+          </div>
+        </div>
+      </div>
+
+      <div>
+        <label class="flabel" for="cname">Connection name</label>
+        <input class="in" id="cname" value="Billing-DB" readonly />
+      </div>
+
+      <div>
+        <label class="flabel" for="cenv">Environment</label>
+        <div style="display:flex;align-items:center;gap:9px">
+          <div class="selw" style="flex:1">
+            <select class="sel" id="cenv"><option>Production</option><option>UAT</option><option>QA</option><option>Development</option></select>
+            <span class="selc"><svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M4.5 6.5L8 10l3.5-3.5"></path></svg></span>
+          </div>
+          <span class="pill" style="background:rgba(240,86,63,.16);color:#f0563f">
+            <span style="width:6px;height:6px;border-radius:50%;background:#f0563f"></span>PROD
+          </span>
+        </div>
+        <div class="hint">Sessions open read-only, connecting asks for confirmation, no credential is kept by default, and schema changes are refused until the session is switched to read-write.</div>
+      </div>
+    </div>
+
+    <div class="sechead" style="margin-top:28px">
+      <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="#0078d4" stroke-width="1.3"><rect x="2" y="2.6" width="12" height="4.4" rx="1.1"></rect><rect x="2" y="9" width="12" height="4.4" rx="1.1"></rect><path d="M4.4 4.8h.01M4.4 11.2h.01"></path></svg>
+      <span class="sec-t">Server</span><span class="sec-r"></span>
+    </div>
+
+    <div style="display:flex;flex-direction:column;gap:16px">
+      <div>
+        <label class="flabel" for="chost">Server</label>
+        <div style="display:flex;gap:8px">
+          <input class="in" id="chost" style="flex:1" value="sql01.northwind.corp" readonly />
+          <input class="in" style="width:78px" value="1433" readonly />
+        </div>
+      </div>
+      <div>
+        <label class="flabel" for="cdb">Database</label>
+        <div class="selw">
+          <select class="sel" id="cdb"><option>Billing</option><option>BillingAudit</option><option>master</option></select>
+          <span class="selc"><svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M4.5 6.5L8 10l3.5-3.5"></path></svg></span>
+        </div>
+      </div>
+    </div>
+
+    <div class="sechead" style="margin-top:28px">
+      <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="#8b93ec" stroke-width="1.3"><circle cx="5.4" cy="9.6" r="2.7"></circle><path d="M7.3 7.7L13 2M11 4l1.5 1.5M12.4 2.6l1.5 1.5"></path></svg>
+      <span class="sec-t">Authentication</span><span class="sec-r"></span>
+    </div>
+
+    <div style="display:flex;flex-direction:column;gap:16px">
+      <div>
+        <label class="flabel" for="cauth">Method</label>
+        <div class="selw">
+          <select class="sel" id="cauth"><option>Microsoft Entra ID, MFA</option><option>Windows authentication, integrated</option><option>SQL Server login</option></select>
+          <span class="selc"><svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M4.5 6.5L8 10l3.5-3.5"></path></svg></span>
+        </div>
+      </div>
+      <div>
+        <label class="flabel" for="cacct">Account</label>
+        <div class="selw">
+          <select class="sel" id="cacct"><option>t.rahman@northwind.corp</option><option>svc-reporting@northwind.corp</option></select>
+          <span class="selc"><svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M4.5 6.5L8 10l3.5-3.5"></path></svg></span>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <div style="flex-shrink:0;display:flex;align-items:center;gap:10px;padding:10px 14px;border-top:1px solid #2b2b2b;border-left:3px solid #89d185;background:rgba(137,209,133,.10)">
+    <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="#89d185" stroke-width="1.3" style="flex-shrink:0"><circle cx="8" cy="8" r="6.3"></circle><path d="M5.3 8.2l2 2 3.5-4.3"></path></svg>
+    <span style="font-size:12px;color:#cccccc;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"><span style="font-weight:600;color:#89d185">Connected in 42 ms.</span> <span style="color:#9d9d9d">SQL Server 2022</span></span>
+  </div>
+
+  <div style="flex-shrink:0;padding:10px 14px;border-top:1px solid #2b2b2b;display:flex;flex-direction:column;gap:10px">
+    <div class="ckrow">
+      <input class="ck" type="checkbox" id="cro" defaultChecked="{{true}}" />
+      <label for="cro" style="font-size:12px;color:#9d9d9d">Read-only session</label>
+      <span style="flex:1"></span>
+      <button class="btn btn-g" style="font-size:12px;gap:6px">
+        <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="#3ebfa3" stroke-width="1.2"><path d="M6.4 2.2h3.2M8 2.2v4.1L12 12a1.4 1.4 0 0 1-1.2 2.1H5.2A1.4 1.4 0 0 1 4 12l4-5.7"></path></svg>
+        Test connection
+      </button>
+    </div>
+    <div style="display:flex;gap:8px">
+      <button class="btn btn-s" style="flex:1">Save</button>
+      <button class="btn btn-p" style="flex:1.4">Connect</button>
+    </div>
+  </div>
+
+</div>
+</x-dc>
+
+<script data-dc-script data-props='{"$preview":{"width":620,"height":840}}'>
+class Component extends DCLogic {}
+</script>
+</body>
+</html>

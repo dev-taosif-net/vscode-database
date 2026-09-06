@@ -1,0 +1,32 @@
+{
+  "artboards": [
+    { "file": "Main.dc.html", "x": 0, "y": 0, "w": 1180, "h": 800, "title": "Connection page", "is_interactive": true },
+    { "file": "FirstRun.dc.html", "x": 1300, "y": 0, "w": 1180, "h": 800, "title": "First run, nothing saved yet" },
+    { "file": "Compact.dc.html", "x": 0, "y": 960, "w": 620, "h": 840, "title": "Split editor, 620px" },
+    { "file": "Spec.dc.html", "x": 740, "y": 960, "w": 1480, "h": 1080, "title": "Build sheet" }
+  ],
+  "annotations": [
+    {
+      "id": "note-main",
+      "x": -330,
+      "y": 20,
+      "w": 270,
+      "text": "Tabs are gone. The form is one scroll with a section index down the left, the way the VS Code Settings editor works, and fields sit in two columns instead of one.\n\nClick a section to jump. The dot beside Transport is the live security reading: tick trust the certificate and watch it fall from teal to amber.\n\nTest connection: Billing-DB succeeds, Ledger-Core fails on the certificate, Warehouse-QA is refused at login. Connect runs the same test.\n\nThe theme chip flips the page to light."
+    },
+    {
+      "id": "note-compact",
+      "x": -330,
+      "y": 980,
+      "w": 250,
+      "text": "Below 760px the connections rail becomes a picker and the section index becomes a scrolling chip strip. Fields drop to one column.\n\nThis is the width people actually get when the page opens beside a query editor."
+    },
+    {
+      "id": "note-spec",
+      "x": 2280,
+      "y": 980,
+      "w": 260,
+      "text": "Five colour systems, each with its own shape so they never compete: engine mark, environment bar, transport chip, result strip, product accent.\n\nEverything neutral comes from a VS Code theme token. The engine marks are placeholders. Drop the vendor artwork in at build time."
+    }
+  ],
+  "launch": { "view": "canvas" }
+}

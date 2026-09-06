@@ -1,0 +1,40 @@
+{
+  "artboards": [
+    { "file": "Main.dc.html", "x": 0, "y": 0, "w": 1180, "h": 800, "title": "Connection page", "is_interactive": true },
+    { "file": "FirstRun.dc.html", "x": 1300, "y": 0, "w": 1180, "h": 840, "title": "First run, nothing saved yet" },
+    { "file": "States.dc.html", "x": 0, "y": 1000, "w": 1180, "h": 1000, "title": "Result states" },
+    { "file": "Compact.dc.html", "x": 1300, "y": 1000, "w": 620, "h": 840, "title": "Split editor, 620px" },
+    { "file": "Spec.dc.html", "x": 0, "y": 2140, "w": 1180, "h": 1040, "title": "Build sheet" }
+  ],
+  "annotations": [
+    {
+      "id": "note-main",
+      "x": -330,
+      "y": 20,
+      "w": 270,
+      "text": "This one works.\n\nSwitch the server type, change the authentication method, and the fields underneath change with it.\n\nRun Test connection on Billing-DB, then on Ledger-Core, to see success and a real failure.\n\nPress Connect on either production connection to meet the guard.\n\nThe theme chip above the frame flips the whole page to light."
+    },
+    {
+      "id": "note-states",
+      "x": -330,
+      "y": 1020,
+      "w": 270,
+      "text": "A failure is the most valuable screen in a database tool, so it gets the most design.\n\nEach one says what the server actually returned, what that usually means here, and offers the safe fix as the first button. Trusting a certificate blindly is never the first button."
+    },
+    {
+      "id": "note-compact",
+      "x": 1990,
+      "y": 1020,
+      "w": 250,
+      "text": "Below 760px the list rail becomes a picker at the top, labels move above their fields, and the action bar splits into two rows.\n\nThis is the width people actually get when the page is opened beside a query editor."
+    },
+    {
+      "id": "note-spec",
+      "x": -330,
+      "y": 2160,
+      "w": 270,
+      "text": "The numbers an implementer needs, and the reason the page will look right in themes nobody here has installed.\n\nEvery surface reads a VS Code theme token. The four environment colours are the only literal values in the design."
+    }
+  ],
+  "launch": { "view": "canvas" }
+}

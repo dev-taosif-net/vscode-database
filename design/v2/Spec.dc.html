@@ -1,0 +1,246 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>
+* { box-sizing: border-box; }
+body { margin: 0; }
+a { color: #4daafc; text-decoration: none; }
+a:hover { color: #4daafc; text-decoration: underline; }
+.sp {
+  font-family: "Segoe WPC", "Segoe UI", system-ui, -apple-system, sans-serif;
+  font-size: 13px; line-height: 1.4; -webkit-font-smoothing: antialiased;
+}
+.h { font-size: 12px; font-weight: 600; letter-spacing: .1em; text-transform: uppercase; color: #9d9d9d; margin-bottom: 14px; }
+.mono { font-family: Consolas, "Cascadia Mono", "Courier New", monospace; font-size: 11.5px; }
+.tr { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; padding: 5px 0; border-bottom: 1px solid #232323; }
+.k { color: #9d9d9d; font-size: 12px; }
+.v { color: #cccccc; font-size: 12px; }
+.rule { display: flex; gap: 10px; padding: 8px 0; border-bottom: 1px solid #232323; }
+.sys { display: flex; gap: 12px; padding: 10px 0; border-bottom: 1px solid #232323; }
+.plate { display: inline-flex; align-items: center; justify-content: center; border-radius: 5px; flex-shrink: 0; }
+.chip { display: inline-flex; align-items: center; height: 18px; padding: 0 7px; border-radius: 3px; border: 1px solid; font-size: 10px; font-weight: 600; }
+.pill { display: inline-flex; align-items: center; gap: 5px; height: 18px; padding: 0 8px; border-radius: 9px; font-size: 10px; font-weight: 600; letter-spacing: .05em; }
+</style>
+</helmet>
+
+<div class="sp" style="width:1480px;height:1080px;background:#1f1f1f;color:#cccccc;padding:32px 40px;overflow:hidden">
+
+  <div style="margin-bottom:26px">
+    <div style="font-size:19px;font-weight:600;color:#e7e7e7">Build sheet</div>
+    <div style="font-size:12px;color:#9d9d9d;margin-top:6px;max-width:1000px;line-height:1.55">Every neutral surface reads a VS Code theme token, so the page follows the user's theme, high contrast ones included, with no theme code of its own. Colour is added on top of that, and only where it carries meaning: which engine, which environment, how safe the transport is, and how the last attempt ended.</div>
+  </div>
+
+  <div style="display:grid;grid-template-columns:repeat(3, minmax(0, 1fr));gap:40px">
+
+    <div>
+      <div class="h">Colour systems</div>
+
+      <div class="sys">
+        <span class="plate" style="width:30px;height:30px;background:rgba(224,70,63,.13);margin-top:1px">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="#e0463f"><ellipse cx="12" cy="5.4" rx="7.6" ry="2.9"></ellipse><path d="M4.4 8.6v3.2c0 1.6 3.4 2.9 7.6 2.9s7.6-1.3 7.6-2.9V8.6c-1.5 1.2-4.3 1.9-7.6 1.9s-6.1-.7-7.6-1.9z"></path><path d="M4.4 14.6v3.2c0 1.6 3.4 2.9 7.6 2.9s7.6-1.3 7.6-2.9v-3.2c-1.5 1.2-4.3 1.9-7.6 1.9s-6.1-.7-7.6-1.9z"></path></svg>
+        </span>
+        <div style="min-width:0">
+          <div style="font-size:13px;font-weight:600;color:#e7e7e7">Engine identity</div>
+          <div style="font-size:11.5px;color:#9d9d9d;margin-top:3px;line-height:1.5">A filled mark on a tinted plate, never a bar or a pill. SQL Server <span class="mono" style="color:#e0463f">#E0463F</span>, light <span class="mono" style="color:#7a7a7a">#B02420</span>.</div>
+        </div>
+      </div>
+
+      <div class="sys">
+        <span class="plate" style="width:30px;height:30px;background:rgba(90,160,208,.15);margin-top:1px">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="#5aa0d0"><path d="M12 1.8l8.4 4.9v9.8L12 21.4 3.6 16.5V6.7z"></path><circle cx="12" cy="11.6" r="3.1" fill="#1f1f1f"></circle></svg>
+        </span>
+        <div style="min-width:0">
+          <div style="font-size:13px;font-weight:600;color:#e7e7e7">Engine identity, PostgreSQL</div>
+          <div style="font-size:11.5px;color:#9d9d9d;margin-top:3px;line-height:1.5"><span class="mono" style="color:#5aa0d0">#5AA0D0</span>, light <span class="mono" style="color:#7a7a7a">#336791</span>. Both marks are placeholders. Drop the vendor artwork in at build time.</div>
+        </div>
+      </div>
+
+      <div class="sys">
+        <span style="display:flex;gap:4px;margin-top:4px">
+          <span style="width:3px;height:26px;border-radius:2px;background:#3fb84f"></span>
+          <span style="width:3px;height:26px;border-radius:2px;background:#4a93f0"></span>
+          <span style="width:3px;height:26px;border-radius:2px;background:#e08a3c"></span>
+          <span style="width:3px;height:26px;border-radius:2px;background:#f0563f"></span>
+        </span>
+        <div style="min-width:0">
+          <div style="font-size:13px;font-weight:600;color:#e7e7e7">Environment</div>
+          <div style="font-size:11.5px;color:#9d9d9d;margin-top:3px;line-height:1.5">A bar, a dot or a pill, plus a wash behind the header at ten per cent. Never a solid fill.</div>
+        </div>
+      </div>
+
+      <div class="sys">
+        <span style="display:flex;flex-direction:column;gap:3px;margin-top:2px">
+          <span class="chip" style="color:#3ebfa3;background:rgba(62,191,163,.12);border-color:rgba(62,191,163,.38)">TLS strict</span>
+          <span class="chip" style="color:#e0b341;background:rgba(224,179,65,.13);border-color:rgba(224,179,65,.38)">SSL prefer</span>
+        </span>
+        <div style="min-width:0">
+          <div style="font-size:13px;font-weight:600;color:#e7e7e7">Transport strength</div>
+          <div style="font-size:11.5px;color:#9d9d9d;margin-top:3px;line-height:1.5">A chip in the header. Teal verified, amber weakened, red off. It changes the moment a setting weakens the connection.</div>
+        </div>
+      </div>
+
+      <div class="sys">
+        <span style="display:flex;flex-direction:column;gap:4px;margin-top:3px">
+          <span style="width:26px;height:8px;border-radius:2px;background:rgba(137,209,133,.35);border-left:3px solid #89d185"></span>
+          <span style="width:26px;height:8px;border-radius:2px;background:rgba(204,167,0,.35);border-left:3px solid #cca700"></span>
+          <span style="width:26px;height:8px;border-radius:2px;background:rgba(241,76,76,.35);border-left:3px solid #f14c4c"></span>
+        </span>
+        <div style="min-width:0">
+          <div style="font-size:13px;font-weight:600;color:#e7e7e7">Result</div>
+          <div style="font-size:11.5px;color:#9d9d9d;margin-top:3px;line-height:1.5">The strip above the action bar, with a 3px left edge. Reuses the theme's own testing colours.</div>
+        </div>
+      </div>
+
+      <div class="sys" style="border-bottom:0">
+        <span style="display:flex;gap:5px;margin-top:3px;align-items:center">
+          <span style="width:26px;height:16px;border-radius:2px;background:#0078d4"></span>
+        </span>
+        <div style="min-width:0">
+          <div style="font-size:13px;font-weight:600;color:#e7e7e7">Product accent</div>
+          <div style="font-size:11.5px;color:#9d9d9d;margin-top:3px;line-height:1.5">The primary button, the focus ring and the active section bar. Taken from the theme, never chosen here.</div>
+        </div>
+      </div>
+
+      <div style="font-size:11.5px;color:#9d9d9d;line-height:1.6;padding:11px 13px;border-left:2px solid #3c3c3c;background:#181818;margin-top:18px">
+        Each system owns a shape, so two of them never compete for the same pixel. Colour is never the only carrier of meaning either: the environment pill spells out PROD, the transport chip spells out its mode, and every result strip has an icon and a sentence. Around one in twelve men and one in two hundred women have some colour vision deficiency, and the page has to work for all of them in grayscale.
+      </div>
+    </div>
+
+    <div>
+      <div class="h">Environment behaviour</div>
+      <div style="display:flex;flex-direction:column;gap:11px;margin-bottom:30px">
+
+        <div style="display:flex;gap:12px;align-items:flex-start">
+          <span style="width:3px;height:38px;border-radius:2px;background:#3fb84f;flex-shrink:0;margin-top:2px"></span>
+          <div style="flex:1;min-width:0">
+            <div style="display:flex;align-items:center;gap:9px">
+              <span class="pill" style="background:rgba(63,184,79,.15);color:#3fb84f"><span style="width:5px;height:5px;border-radius:50%;background:#3fb84f"></span>DEV</span>
+              <span class="mono" style="color:#3fb84f">#3FB84F</span>
+              <span class="mono" style="color:#7a7a7a">light #1A7F37</span>
+            </div>
+            <div style="font-size:11.5px;color:#9d9d9d;margin-top:4px;line-height:1.5">No guards. Metadata is cached for the whole session so the object tree opens instantly.</div>
+          </div>
+        </div>
+
+        <div style="display:flex;gap:12px;align-items:flex-start">
+          <span style="width:3px;height:38px;border-radius:2px;background:#4a93f0;flex-shrink:0;margin-top:2px"></span>
+          <div style="flex:1;min-width:0">
+            <div style="display:flex;align-items:center;gap:9px">
+              <span class="pill" style="background:rgba(74,147,240,.15);color:#4a93f0"><span style="width:5px;height:5px;border-radius:50%;background:#4a93f0"></span>QA</span>
+              <span class="mono" style="color:#4a93f0">#4A93F0</span>
+              <span class="mono" style="color:#7a7a7a">light #0B62CE</span>
+            </div>
+            <div style="font-size:11.5px;color:#9d9d9d;margin-top:4px;line-height:1.5">An UPDATE or DELETE with no WHERE clause asks for confirmation before it runs.</div>
+          </div>
+        </div>
+
+        <div style="display:flex;gap:12px;align-items:flex-start">
+          <span style="width:3px;height:38px;border-radius:2px;background:#e08a3c;flex-shrink:0;margin-top:2px"></span>
+          <div style="flex:1;min-width:0">
+            <div style="display:flex;align-items:center;gap:9px">
+              <span class="pill" style="background:rgba(224,138,60,.16);color:#e08a3c"><span style="width:5px;height:5px;border-radius:50%;background:#e08a3c"></span>UAT</span>
+              <span class="mono" style="color:#e08a3c">#E08A3C</span>
+              <span class="mono" style="color:#7a7a7a">light #B45309</span>
+            </div>
+            <div style="font-size:11.5px;color:#9d9d9d;margin-top:4px;line-height:1.5">The same guard as QA, and the environment name goes into the query history.</div>
+          </div>
+        </div>
+
+        <div style="display:flex;gap:12px;align-items:flex-start">
+          <span style="width:3px;height:52px;border-radius:2px;background:#f0563f;flex-shrink:0;margin-top:2px"></span>
+          <div style="flex:1;min-width:0">
+            <div style="display:flex;align-items:center;gap:9px">
+              <span class="pill" style="background:rgba(240,86,63,.16);color:#f0563f"><span style="width:5px;height:5px;border-radius:50%;background:#f0563f"></span>PROD</span>
+              <span class="mono" style="color:#f0563f">#F0563F</span>
+              <span class="mono" style="color:#7a7a7a">light #C6362A</span>
+            </div>
+            <div style="font-size:11.5px;color:#9d9d9d;margin-top:4px;line-height:1.5">Read-only sessions, a confirmation before connecting, no stored credential by default, and schema changes refused until the session is switched to read-write.</div>
+          </div>
+        </div>
+
+      </div>
+
+      <div class="h">Control metrics</div>
+      <div>
+        <div class="tr"><span class="k">Text input, dropdown</span><span class="v">26px tall, 2px radius, 13px</span></div>
+        <div class="tr"><span class="k">Button</span><span class="v">26px tall, 2px radius</span></div>
+        <div class="tr"><span class="k">Checkbox</span><span class="v">15px, accent from the theme</span></div>
+        <div class="tr"><span class="k">Connection row</span><span class="v">26px tall, 13px</span></div>
+        <div class="tr"><span class="k">Group header</span><span class="v">24px tall, 11px, 600 weight</span></div>
+        <div class="tr"><span class="k">Section index item</span><span class="v">26px tall, 2px active left bar</span></div>
+        <div class="tr"><span class="k">Engine plate</span><span class="v">34px, 5px radius, 20px mark</span></div>
+        <div class="tr"><span class="k">Environment bar</span><span class="v">3px wide beside the name, 2px in a row</span></div>
+        <div class="tr"><span class="k">Chip</span><span class="v">19px tall, 3px radius, 10.5px</span></div>
+        <div class="tr"><span class="k">Section header</span><span class="v">11px, 600 weight, .09em tracking</span></div>
+        <div class="tr"><span class="k">Hint under a field</span><span class="v">11px, muted, 520px measure</span></div>
+        <div class="tr"><span class="k">Label</span><span class="v">above its control, 6px below</span></div>
+        <div class="tr"><span class="k">Row rhythm</span><span class="v">18px between fields, 30px between sections</span></div>
+        <div class="tr"><span class="k">Pane padding</span><span class="v">18px vertical, 22px horizontal</span></div>
+        <div class="tr"><span class="k">Connections rail</span><span class="v">260px, becomes a picker below 760px</span></div>
+        <div class="tr"><span class="k">Section index rail</span><span class="v">156px, becomes a chip strip below 760px</span></div>
+        <div class="tr"><span class="k">Field columns</span><span class="v">two, 24px gutter, labels above</span></div>
+      </div>
+    </div>
+
+    <div>
+      <div class="h">Theme tokens</div>
+      <div style="margin-bottom:30px">
+        <div class="tr"><span class="k">Page background</span><span class="v mono">editor.background</span></div>
+        <div class="tr"><span class="k">List rail background</span><span class="v mono">sideBar.background</span></div>
+        <div class="tr"><span class="k">Body text</span><span class="v mono">foreground</span></div>
+        <div class="tr"><span class="k">Hints and captions</span><span class="v mono">descriptionForeground</span></div>
+        <div class="tr"><span class="k">Rules and borders</span><span class="v mono">panel.border</span></div>
+        <div class="tr"><span class="k">Input</span><span class="v mono">input.background, input.border</span></div>
+        <div class="tr"><span class="k">Placeholder</span><span class="v mono">input.placeholderForeground</span></div>
+        <div class="tr"><span class="k">Dropdown</span><span class="v mono">dropdown.background, dropdown.border</span></div>
+        <div class="tr"><span class="k">Primary button</span><span class="v mono">button.background, button.foreground</span></div>
+        <div class="tr"><span class="k">Secondary button</span><span class="v mono">button.secondaryBackground</span></div>
+        <div class="tr"><span class="k">Hovered row</span><span class="v mono">list.hoverBackground</span></div>
+        <div class="tr"><span class="k">Focus ring</span><span class="v mono">focusBorder</span></div>
+        <div class="tr"><span class="k">Active section bar</span><span class="v mono">panelTitle.activeBorder</span></div>
+        <div class="tr"><span class="k">Success</span><span class="v mono">testing.iconPassed</span></div>
+        <div class="tr"><span class="k">Warning</span><span class="v mono">editorWarning.foreground</span></div>
+        <div class="tr"><span class="k">Error</span><span class="v mono">errorForeground</span></div>
+        <div class="tr"><span class="k">Connection string block</span><span class="v mono">textCodeBlock.background</span></div>
+        <div class="tr"><span class="k">Type face</span><span class="v mono">font-family</span></div>
+        <div class="tr"><span class="k">Type size</span><span class="v mono">font-size</span></div>
+        <div class="tr"><span class="k">Selected row</span><span class="v">environment tint at 13 per cent</span></div>
+      </div>
+
+      <div class="h">Credential rules</div>
+      <div>
+        <div class="rule"><b style="flex-shrink:0;width:18px;color:#8b93ec">1</b><span style="font-size:11.5px;color:#9d9d9d;line-height:1.5">Secrets live in the VS Code secret store, which is the operating system keychain. Nothing secret is written to settings.json or to any file in the workspace.</span></div>
+        <div class="rule"><b style="flex-shrink:0;width:18px;color:#8b93ec">2</b><span style="font-size:11.5px;color:#9d9d9d;line-height:1.5">Settings Sync carries connection shapes between machines, never credentials.</span></div>
+        <div class="rule"><b style="flex-shrink:0;width:18px;color:#8b93ec">3</b><span style="font-size:11.5px;color:#9d9d9d;line-height:1.5">The connection string preview and every log line the extension writes mask the secret.</span></div>
+        <div class="rule"><b style="flex-shrink:0;width:18px;color:#8b93ec">4</b><span style="font-size:11.5px;color:#9d9d9d;line-height:1.5">Production connections default to asking for the credential on every connect.</span></div>
+        <div class="rule"><b style="flex-shrink:0;width:18px;color:#8b93ec">5</b><span style="font-size:11.5px;color:#9d9d9d;line-height:1.5">Deleting a connection deletes its secret in the same step, with no orphan left behind.</span></div>
+      </div>
+
+      <div class="h" style="margin-top:28px">Keyboard and assistive technology</div>
+      <div>
+        <div class="tr"><span class="k mono">Ctrl+Enter</span><span class="v">Connect</span></div>
+        <div class="tr"><span class="k mono">Ctrl+S</span><span class="v">Save without connecting</span></div>
+        <div class="tr"><span class="k mono">Alt+T</span><span class="v">Test connection</span></div>
+        <div class="tr"><span class="k mono">Ctrl+F</span><span class="v">Focus the filter</span></div>
+        <div class="tr"><span class="k mono">Up, Down</span><span class="v">Move through the list, one tab stop</span></div>
+        <div class="tr"><span class="k mono">Escape</span><span class="v">Cancel a test, or dismiss the confirmation</span></div>
+        <div class="tr"><span class="k">Result strip</span><span class="v">Announced politely, focus never moves</span></div>
+        <div class="tr"><span class="k">Every hint</span><span class="v">Tied to its field, read with the label</span></div>
+      </div>
+    </div>
+
+  </div>
+</div>
+</x-dc>
+
+<script data-dc-script data-props='{"$preview":{"width":1480,"height":1080}}'>
+class Component extends DCLogic {}
+</script>
+</body>
+</html>

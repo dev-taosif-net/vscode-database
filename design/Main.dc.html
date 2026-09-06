@@ -1,0 +1,899 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>
+* { box-sizing: border-box; }
+body { margin: 0; }
+a { color: var(--link); text-decoration: none; }
+a:hover { color: var(--link); text-decoration: underline; }
+
+.thm-dark {
+  --bg-editor:#1f1f1f; --bg-side:#181818; --bg-input:#313131; --bd-input:#3c3c3c; --bd:#2b2b2b;
+  --fg:#cccccc; --fg-strong:#e7e7e7; --fg-dim:#9d9d9d;
+  --accent:#0078d4; --accent-h:#026ec1; --accent-fg:#ffffff;
+  --sel-bg:#04395e; --sel-fg:#ffffff; --hover:#2a2d2e;
+  --btn2-bg:#313131; --btn2-h:#3c3c3c;
+  --ok:#89d185; --warn:#cca700; --err:#f14c4c; --info:#3794ff;
+  --ok-bg:rgba(137,209,133,.10); --warn-bg:rgba(204,167,0,.10); --err-bg:rgba(241,76,76,.10);
+  --code-bg:#181818; --link:#4daafc; --scroll:#4f4f4f;
+}
+.thm-light {
+  --bg-editor:#ffffff; --bg-side:#f8f8f8; --bg-input:#ffffff; --bd-input:#cecece; --bd:#e5e5e5;
+  --fg:#3b3b3b; --fg-strong:#1f1f1f; --fg-dim:#616161;
+  --accent:#005fb8; --accent-h:#0258a8; --accent-fg:#ffffff;
+  --sel-bg:#e4e6f1; --sel-fg:#000000; --hover:#f2f2f2;
+  --btn2-bg:#e9e9e9; --btn2-h:#dcdcdc;
+  --ok:#1a7f37; --warn:#a17c00; --err:#c6362a; --info:#005fb8;
+  --ok-bg:rgba(26,127,55,.08); --warn-bg:rgba(161,124,0,.10); --err-bg:rgba(198,54,42,.07);
+  --code-bg:#f3f3f3; --link:#005fb8; --scroll:#c1c1c1;
+}
+
+.dbx { font-family: "Segoe WPF", "Segoe UI", system-ui, -apple-system, sans-serif; font-size: 13px; line-height: 1.4; -webkit-font-smoothing: antialiased; }
+.dbx ::-webkit-scrollbar { width: 10px; height: 10px; }
+.dbx ::-webkit-scrollbar-thumb { background: var(--scroll); border: 3px solid transparent; background-clip: content-box; border-radius: 6px; }
+.dbx ::-webkit-scrollbar-track { background: transparent; }
+
+.lbl { font-size: 13px; color: var(--fg); padding-top: 5px; }
+.hint { font-size: 11px; color: var(--fg-dim); margin-top: 5px; line-height: 1.5; max-width: 520px; }
+.grid { display: grid; grid-template-columns: 168px minmax(0, 1fr); column-gap: 16px; row-gap: 14px; align-items: start; }
+.ctl { max-width: 460px; }
+
+.in { height: 26px; width: 100%; background: var(--bg-input); color: var(--fg); border: 1px solid var(--bd-input); border-radius: 2px; padding: 0 8px; font: inherit; font-size: 13px; outline: none; }
+.in:focus { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+.in::placeholder { color: var(--fg-dim); opacity: .75; }
+.sel { height: 26px; width: 100%; background: var(--bg-input); color: var(--fg); border: 1px solid var(--bd-input); border-radius: 2px; padding: 0 26px 0 7px; font: inherit; font-size: 13px; outline: none; appearance: none; cursor: pointer; }
+.sel:focus { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+.selw { position: relative; }
+.selc { position: absolute; right: 7px; top: 50%; transform: translateY(-50%); pointer-events: none; color: var(--fg-dim); display: flex; }
+
+.btn { height: 26px; padding: 0 13px; border-radius: 2px; border: 1px solid transparent; font: inherit; font-size: 13px; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; gap: 6px; white-space: nowrap; }
+.btn-p { background: var(--accent); color: var(--accent-fg); }
+.btn-p:hover { background: var(--accent-h); }
+.btn-s { background: var(--btn2-bg); color: var(--fg); border-color: var(--bd-input); }
+.btn-s:hover { background: var(--btn2-h); }
+.btn-g { background: transparent; color: var(--fg); border-color: transparent; padding: 0 8px; }
+.btn-g:hover { background: var(--hover); }
+.btn:disabled { opacity: .45; cursor: default; }
+.ibtn { width: 24px; height: 24px; display: inline-flex; align-items: center; justify-content: center; border-radius: 3px; border: 0; background: transparent; color: var(--fg); cursor: pointer; padding: 0; }
+.ibtn:hover { background: var(--hover); }
+
+.tab { height: 33px; padding: 0 13px; background: transparent; border: 0; border-bottom: 1px solid transparent; color: var(--fg-dim); font: inherit; font-size: 13px; cursor: pointer; }
+.tab:hover { color: var(--fg); }
+.tab-on { color: var(--fg-strong); border-bottom-color: var(--accent); }
+
+.sec { display: flex; align-items: center; gap: 12px; margin: 26px 0 14px; }
+.sec-t { font-size: 11px; font-weight: 600; letter-spacing: .09em; text-transform: uppercase; color: var(--fg-dim); white-space: nowrap; }
+.sec-r { flex: 1; height: 1px; background: var(--bd); }
+
+.ck { width: 15px; height: 15px; accent-color: var(--accent); margin: 0; cursor: pointer; flex-shrink: 0; }
+.ckrow { display: flex; align-items: center; gap: 8px; min-height: 26px; }
+.ckrow label { cursor: pointer; }
+
+.seg { display: inline-flex; border: 1px solid var(--bd-input); border-radius: 3px; overflow: hidden; background: var(--bg-input); }
+.seg button { height: 28px; padding: 0 14px; border: 0; background: transparent; color: var(--fg-dim); font: inherit; font-size: 13px; cursor: pointer; display: inline-flex; align-items: center; gap: 7px; }
+.seg button:hover { color: var(--fg); }
+.seg .on { background: var(--sel-bg); color: var(--sel-fg); }
+
+.crow { display: flex; align-items: center; gap: 8px; height: 24px; padding: 0 10px 0 0; border: 0; background: transparent; width: 100%; text-align: left; font: inherit; font-size: 13px; cursor: pointer; color: var(--fg); }
+.crow:hover { background: var(--hover); }
+.crow-on { background: var(--sel-bg); color: var(--sel-fg); }
+.crow-on:hover { background: var(--sel-bg); }
+
+.pill { display: inline-flex; align-items: center; gap: 6px; height: 20px; padding: 0 9px; border-radius: 10px; font-size: 11px; font-weight: 600; letter-spacing: .05em; }
+.mono { font-family: Consolas, "Cascadia Mono", "Courier New", monospace; font-size: 12px; }
+.note { display: flex; gap: 9px; padding: 9px 11px; border-radius: 3px; font-size: 12px; line-height: 1.5; }
+@keyframes dbspin { to { transform: rotate(360deg); } }
+.sp { animation: dbspin 1s linear infinite; }
+</style>
+</helmet>
+
+<div class="dbx thm-{{theme}}" style="width:1180px;height:800px;display:flex;flex-direction:column;background:var(--bg-editor);color:var(--fg);overflow:hidden">
+
+  <div style="height:35px;flex-shrink:0;display:flex;align-items:stretch;background:var(--bg-side);border-bottom:1px solid var(--bd)">
+    <div style="display:flex;align-items:center;gap:7px;padding:0 12px;background:var(--bg-editor);color:var(--fg-strong);border-top:1px solid var(--accent);border-right:1px solid var(--bd)">
+      <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.2"><ellipse cx="8" cy="3.7" rx="5.2" ry="2.1"></ellipse><path d="M2.8 3.7v8.6c0 1.16 2.33 2.1 5.2 2.1s5.2-.94 5.2-2.1V3.7"></path><path d="M2.8 8c0 1.16 2.33 2.1 5.2 2.1s5.2-.94 5.2-2.1"></path></svg>
+      <span>Connections</span>
+      <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" style="opacity:.7;margin-left:4px"><path d="M4.2 4.2l7.6 7.6M11.8 4.2l-7.6 7.6"></path></svg>
+    </div>
+    <div style="display:flex;align-items:center;gap:7px;padding:0 12px;color:var(--fg-dim);border-right:1px solid var(--bd)">
+      <span class="mono" style="font-size:11px;color:var(--info)">SQL</span><span>daily_revenue.sql</span>
+    </div>
+    <div style="display:flex;align-items:center;gap:7px;padding:0 12px;color:var(--fg-dim)">
+      <span class="mono" style="font-size:11px;color:var(--warn)">TS</span><span>extension.ts</span>
+    </div>
+  </div>
+
+  <div style="flex:1;display:flex;min-height:0">
+
+    <aside style="width:284px;flex-shrink:0;display:flex;flex-direction:column;background:var(--bg-side);border-right:1px solid var(--bd)">
+      <div style="height:40px;flex-shrink:0;display:flex;align-items:center;gap:4px;padding:0 6px 0 10px;border-bottom:1px solid var(--bd)">
+        <div style="position:relative;flex:1">
+          <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" style="position:absolute;left:6px;top:50%;transform:translateY(-50%);color:var(--fg-dim)"><circle cx="7" cy="7" r="4.2"></circle><path d="M10.2 10.2L14 14"></path></svg>
+          <input class="in" style="height:24px;padding-left:24px;font-size:12px" placeholder="Filter connections" value="{{q}}" onChange="{{onQuery}}" />
+        </div>
+        <button class="ibtn" title="New connection">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><path d="M8 3.4v9.2M3.4 8h9.2"></path></svg>
+        </button>
+        <button class="ibtn" title="More actions">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><circle cx="3.4" cy="8" r="1"></circle><circle cx="8" cy="8" r="1"></circle><circle cx="12.6" cy="8" r="1"></circle></svg>
+        </button>
+      </div>
+
+      <div style="flex:1;overflow-y:auto;overflow-x:hidden;padding:4px 0">
+        <sc-for list="{{groups}}" as="g" hint-placeholder-count="4">
+          <div>
+            <div style="display:flex;align-items:center;gap:5px;height:22px;padding:0 10px 0 6px">
+              <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" style="color:var(--fg-dim)"><path d="M4.5 6.5L8 10l3.5-3.5"></path></svg>
+              <span style="font-size:11px;font-weight:600;letter-spacing:.08em;color:var(--fg-dim)">{{g.label}}</span>
+              <span style="flex:1"></span>
+              <span style="font-size:11px;color:var(--fg-dim);opacity:.8">{{g.count}}</span>
+            </div>
+            <sc-for list="{{g.items}}" as="c" hint-placeholder-count="3">
+              <button class="{{c.cls}}" onClick="{{c.onClick}}">
+                <span style="width:2px;height:15px;border-radius:1px;flex-shrink:0;margin-left:8px;background:{{c.bar}}"></span>
+                <span style="width:6px;height:6px;border-radius:50%;flex-shrink:0;background:{{c.dot}}"></span>
+                <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{c.name}}</span>
+                <span style="font-size:11px;opacity:.65;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:92px">{{c.host}}</span>
+              </button>
+            </sc-for>
+          </div>
+        </sc-for>
+      </div>
+
+      <div style="height:34px;flex-shrink:0;display:flex;align-items:center;gap:12px;padding:0 10px;border-top:1px solid var(--bd);font-size:11px;color:var(--fg-dim)">
+        <button class="btn btn-g" style="height:22px;font-size:11px;color:var(--fg-dim);gap:5px">
+          <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><path d="M8 2.6v7M5.4 7l2.6 2.6L10.6 7"></path><path d="M2.8 11.4v1.2a.9.9 0 0 0 .9.9h8.6a.9.9 0 0 0 .9-.9v-1.2"></path></svg>
+          Import
+        </button>
+        <span style="flex:1"></span>
+        <span>{{countLabel}}</span>
+      </div>
+    </aside>
+
+    <main style="flex:1;min-width:0;display:flex;flex-direction:column">
+
+      <div style="flex-shrink:0;display:flex;align-items:center;gap:12px;padding:11px 20px;border-bottom:1px solid var(--bd)">
+        <div style="width:3px;height:34px;border-radius:2px;flex-shrink:0;background:{{env.color}}"></div>
+        <div style="min-width:0">
+          <div style="font-size:15px;font-weight:600;color:var(--fg-strong);line-height:1.25">{{f.name}}</div>
+          <div style="font-size:11px;color:var(--fg-dim);margin-top:2px">{{subtitle}}</div>
+        </div>
+        <span style="flex:1"></span>
+        <span class="pill" style="background:{{env.tint}};color:{{env.color}}">
+          <span style="width:6px;height:6px;border-radius:50%;background:{{env.color}}"></span>{{env.short}}
+        </span>
+        <button class="ibtn" title="Duplicate, export, delete">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><circle cx="3.4" cy="8" r="1"></circle><circle cx="8" cy="8" r="1"></circle><circle cx="12.6" cy="8" r="1"></circle></svg>
+        </button>
+      </div>
+
+      <div style="flex-shrink:0;display:flex;align-items:stretch;padding:0 20px;border-bottom:1px solid var(--bd)">
+        <sc-for list="{{tabs}}" as="t" hint-placeholder-count="3">
+          <button class="{{t.cls}}" onClick="{{t.onClick}}">{{t.label}}</button>
+        </sc-for>
+        <span style="flex:1"></span>
+        <div style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--fg-dim)">{{dirtyLabel}}</div>
+      </div>
+
+      <div style="flex:1;overflow-y:auto;padding:20px 24px 28px">
+
+        <sc-if value="{{isGeneral}}" hint-placeholder-val="{{true}}">
+        <div>
+          <div class="seg" style="margin-bottom:22px">
+            <button class="{{segMs}}" onClick="{{onMssql}}">
+              <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.2"><ellipse cx="8" cy="3.7" rx="5.2" ry="2.1"></ellipse><path d="M2.8 3.7v8.6c0 1.16 2.33 2.1 5.2 2.1s5.2-.94 5.2-2.1V3.7"></path><path d="M2.8 8c0 1.16 2.33 2.1 5.2 2.1s5.2-.94 5.2-2.1"></path></svg>
+              Microsoft SQL Server
+            </button>
+            <button class="{{segPg}}" onClick="{{onPg}}">
+              <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.2"><path d="M8 1.7c3 0 5.2 1.5 5.2 4.4 0 3-1.2 5.2-2.3 6.9-.5.8-1.7.7-1.9-.3l-.4-2"></path><path d="M8 1.7C5 1.7 2.8 3.2 2.8 6.1c0 3 1.2 5.2 2.3 6.9.5.8 1.7.7 1.9-.3l.4-2"></path><path d="M6.2 5.7h.01M9.8 5.7h.01"></path></svg>
+              PostgreSQL
+            </button>
+          </div>
+
+          <div class="grid">
+            <div class="lbl">Connection name</div>
+            <div class="ctl">
+              <input class="in" value="{{f.name}}" onChange="{{on.name}}" placeholder="Billing-DB" />
+              <div class="hint">Shown in the connections list, the status bar and every editor opened against this server.</div>
+            </div>
+
+            <div class="lbl">Environment</div>
+            <div class="ctl">
+              <div style="display:flex;align-items:center;gap:9px">
+                <div class="selw" style="width:230px">
+                  <select class="sel" value="{{f.env}}" onChange="{{on.env}}">
+                    <option value="dev">Development</option>
+                    <option value="qa">QA</option>
+                    <option value="uat">UAT</option>
+                    <option value="prod">Production</option>
+                  </select>
+                  <span class="selc"><svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M4.5 6.5L8 10l3.5-3.5"></path></svg></span>
+                </div>
+                <span class="pill" style="background:{{env.tint}};color:{{env.color}}">
+                  <span style="width:6px;height:6px;border-radius:50%;background:{{env.color}}"></span>{{env.short}}
+                </span>
+              </div>
+              <div class="hint">{{env.hint}}</div>
+            </div>
+
+            <div class="lbl">Saved in</div>
+            <div class="ctl">
+              <div class="selw" style="width:330px">
+                <select class="sel" value="{{f.scope}}" onChange="{{on.scope}}">
+                  <option value="user">User settings, available in every window</option>
+                  <option value="ws">This workspace only</option>
+                  <option value="team">Team file, .vscode/connections.json</option>
+                </select>
+                <span class="selc"><svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M4.5 6.5L8 10l3.5-3.5"></path></svg></span>
+              </div>
+              <div class="hint">The team file holds the server, database and options so it can be committed. Credentials are never written to it.</div>
+            </div>
+          </div>
+
+          <div class="sec"><span class="sec-t">Server</span><span class="sec-r"></span></div>
+          <div class="grid">
+            <div class="lbl">{{hostLabel}}</div>
+            <div class="ctl">
+              <div style="display:flex;gap:8px">
+                <input class="in" style="flex:1" value="{{f.host}}" onChange="{{on.host}}" />
+                <input class="in" style="width:82px" value="{{f.port}}" onChange="{{on.port}}" />
+              </div>
+              <div class="hint">{{hostHint}}</div>
+            </div>
+
+            <div class="lbl">Database</div>
+            <div class="ctl">
+              <div style="display:flex;gap:6px;align-items:center">
+                <div class="selw" style="flex:1">
+                  <select class="sel" value="{{f.database}}" onChange="{{on.database}}">
+                    <option value="{{f.database}}">{{f.database}}</option>
+                  </select>
+                  <span class="selc"><svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M4.5 6.5L8 10l3.5-3.5"></path></svg></span>
+                </div>
+                <button class="ibtn" title="Reload the database list">
+                  <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><path d="M13.1 7.4A5.2 5.2 0 1 0 12 11.5"></path><path d="M13.5 3.9v3.6H9.9"></path></svg>
+                </button>
+              </div>
+              <div class="hint">The list loads after the first successful connection. Leave it blank to use the login's default database.</div>
+            </div>
+          </div>
+
+          <div class="sec"><span class="sec-t">Authentication</span><span class="sec-r"></span></div>
+
+          <sc-if value="{{isMssql}}" hint-placeholder-val="{{true}}">
+          <div class="grid">
+            <div class="lbl">Method</div>
+            <div class="ctl">
+              <div class="selw" style="width:330px">
+                <select class="sel" value="{{f.auth}}" onChange="{{on.auth}}">
+                  <option value="win">Windows authentication, integrated</option>
+                  <option value="sql">SQL Server login</option>
+                  <option value="entra-mfa">Microsoft Entra ID, MFA</option>
+                  <option value="entra-pwd">Microsoft Entra ID, password</option>
+                  <option value="entra-int">Microsoft Entra ID, integrated</option>
+                  <option value="entra-sp">Microsoft Entra ID, service principal</option>
+                </select>
+                <span class="selc"><svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M4.5 6.5L8 10l3.5-3.5"></path></svg></span>
+              </div>
+            </div>
+          </div>
+          </sc-if>
+
+          <sc-if value="{{isPg}}" hint-placeholder-val="{{false}}">
+          <div class="grid">
+            <div class="lbl">Method</div>
+            <div class="ctl">
+              <div class="selw" style="width:330px">
+                <select class="sel" value="{{f.pgauth}}" onChange="{{on.pgauth}}">
+                  <option value="pwd">Password, SCRAM-SHA-256</option>
+                  <option value="pgpass">Password file, ~/.pgpass</option>
+                  <option value="cert">Client certificate</option>
+                  <option value="iam">AWS IAM authentication token</option>
+                  <option value="entra">Microsoft Entra ID token</option>
+                </select>
+                <span class="selc"><svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M4.5 6.5L8 10l3.5-3.5"></path></svg></span>
+              </div>
+            </div>
+          </div>
+          </sc-if>
+
+          <sc-if value="{{showUserPass}}" hint-placeholder-val="{{false}}">
+          <div class="grid" style="margin-top:14px">
+            <div class="lbl">User name</div>
+            <div class="ctl"><input class="in" style="max-width:330px" value="{{f.user}}" onChange="{{on.user}}" /></div>
+
+            <div class="lbl">Password</div>
+            <div class="ctl">
+              <div style="display:flex;gap:6px;align-items:center;max-width:366px">
+                <input class="in" style="flex:1" type="{{pwType}}" value="{{f.password}}" onChange="{{on.password}}" />
+                <button class="ibtn" onClick="{{onTogglePw}}" title="Show or hide the password">
+                  <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.2"><path d="M1.4 8S3.9 3.7 8 3.7 14.6 8 14.6 8 12.1 12.3 8 12.3 1.4 8 1.4 8z"></path><circle cx="8" cy="8" r="2.1"></circle></svg>
+                </button>
+              </div>
+              <div class="ckrow" style="margin-top:9px">
+                <input class="ck" type="checkbox" id="savepw" checked="{{f.savePw}}" onChange="{{on.savePw}}" />
+                <label for="savepw" style="font-size:12px;color:var(--fg)">Remember this password</label>
+              </div>
+              <div class="hint">Held by the operating system keychain through the VS Code secret store. It is never written to settings.json and never carried by Settings Sync.</div>
+            </div>
+          </div>
+          </sc-if>
+
+          <sc-if value="{{showAccount}}" hint-placeholder-val="{{true}}">
+          <div class="grid" style="margin-top:14px">
+            <div class="lbl">Account</div>
+            <div class="ctl">
+              <div class="selw" style="width:330px">
+                <select class="sel" value="{{f.account}}" onChange="{{on.account}}">
+                  <option value="t.rahman@northwind.corp">t.rahman@northwind.corp</option>
+                  <option value="svc-reporting@northwind.corp">svc-reporting@northwind.corp</option>
+                  <option value="__add">Add an account</option>
+                </select>
+                <span class="selc"><svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M4.5 6.5L8 10l3.5-3.5"></path></svg></span>
+              </div>
+              <div class="hint">Signed in through the VS Code Microsoft account provider. The refresh token stays with that provider, not with this extension.</div>
+            </div>
+
+            <div class="lbl">Tenant</div>
+            <div class="ctl">
+              <input class="in" style="max-width:330px" value="{{f.tenant}}" onChange="{{on.tenant}}" placeholder="Leave blank for the home tenant" />
+            </div>
+          </div>
+          </sc-if>
+
+          <sc-if value="{{showWinNote}}" hint-placeholder-val="{{false}}">
+          <div class="note" style="background:var(--code-bg);border:1px solid var(--bd);color:var(--fg-dim);max-width:520px;margin-top:4px">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.2" style="flex-shrink:0;color:var(--info);margin-top:1px"><circle cx="8" cy="8" r="6.3"></circle><path d="M8 7.3v3.7M8 5v.8"></path></svg>
+            <span>Connects as the signed-in Windows account, <span class="mono" style="color:var(--fg)">NORTHWIND&#92;t.rahman</span>. Nothing needs to be stored, so this connection carries no secret at all.</span>
+          </div>
+          </sc-if>
+        </div>
+        </sc-if>
+
+        <sc-if value="{{isSecurity}}" hint-placeholder-val="{{false}}">
+        <div>
+          <div class="sec" style="margin-top:0"><span class="sec-t">Transport</span><span class="sec-r"></span></div>
+
+          <sc-if value="{{isMssql}}" hint-placeholder-val="{{true}}">
+          <div class="grid">
+            <div class="lbl">Encrypt</div>
+            <div class="ctl">
+              <div class="selw" style="width:378px">
+                <select class="sel" value="{{f.encrypt}}" onChange="{{on.encrypt}}">
+                  <option value="strict">Strict, TDS 8.0, always encrypted</option>
+                  <option value="mandatory">Mandatory, encrypt or fail</option>
+                  <option value="optional">Optional, encrypt only if the server offers it</option>
+                </select>
+                <span class="selc"><svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M4.5 6.5L8 10l3.5-3.5"></path></svg></span>
+              </div>
+              <div class="hint">{{encryptHint}}</div>
+            </div>
+
+            <div class="lbl">Certificate</div>
+            <div class="ctl">
+              <div class="ckrow">
+                <input class="ck" type="checkbox" id="trustcert" checked="{{f.trust}}" onChange="{{on.trust}}" />
+                <label for="trustcert" style="font-size:13px">Trust the server certificate without validating it</label>
+              </div>
+              <sc-if value="{{f.trust}}" hint-placeholder-val="{{true}}">
+              <div class="note" style="background:var(--warn-bg);color:var(--fg);border-left:2px solid var(--warn);margin-top:10px;max-width:520px">
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.2" style="flex-shrink:0;color:var(--warn);margin-top:1px"><path d="M8 2.3l6.2 10.9H1.8z"></path><path d="M8 6.5v3.1M8 11.2v.6"></path></svg>
+                <span>Traffic stays encrypted, but the server's identity is no longer checked, so the connection is open to interception on the way. Add the issuing authority to the machine trust store instead wherever you can.</span>
+              </div>
+              </sc-if>
+            </div>
+
+            <div class="lbl">Name in certificate</div>
+            <div class="ctl">
+              <input class="in" style="max-width:330px" value="{{f.certHost}}" onChange="{{on.certHost}}" placeholder="Same as the server address" />
+              <div class="hint">Set this when the certificate was issued for a name other than the address you connect to, such as a listener or an alias.</div>
+            </div>
+          </div>
+          </sc-if>
+
+          <sc-if value="{{isPg}}" hint-placeholder-val="{{false}}">
+          <div class="grid">
+            <div class="lbl">SSL mode</div>
+            <div class="ctl">
+              <div class="selw" style="width:230px">
+                <select class="sel" value="{{f.sslmode}}" onChange="{{on.sslmode}}">
+                  <option value="disable">disable</option>
+                  <option value="allow">allow</option>
+                  <option value="prefer">prefer</option>
+                  <option value="require">require</option>
+                  <option value="verify-ca">verify-ca</option>
+                  <option value="verify-full">verify-full</option>
+                </select>
+                <span class="selc"><svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M4.5 6.5L8 10l3.5-3.5"></path></svg></span>
+              </div>
+              <div class="hint">{{sslHint}}</div>
+            </div>
+
+            <div class="lbl">Root certificate</div>
+            <div class="ctl">
+              <div style="display:flex;gap:6px">
+                <input class="in mono" style="flex:1" value="{{f.rootcert}}" onChange="{{on.rootcert}}" placeholder="~/.postgresql/root.crt" />
+                <button class="btn btn-s">Browse</button>
+              </div>
+              <div class="hint">Verifies the server under verify-ca and verify-full. Leave it blank to fall back to the machine trust store.</div>
+            </div>
+
+            <div class="lbl">Channel binding</div>
+            <div class="ctl">
+              <div class="selw" style="width:230px">
+                <select class="sel" value="{{f.chanbind}}" onChange="{{on.chanbind}}">
+                  <option value="prefer">prefer</option>
+                  <option value="require">require</option>
+                  <option value="disable">disable</option>
+                </select>
+                <span class="selc"><svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M4.5 6.5L8 10l3.5-3.5"></path></svg></span>
+              </div>
+            </div>
+          </div>
+          </sc-if>
+
+          <div class="sec"><span class="sec-t">Credentials</span><span class="sec-r"></span></div>
+          <div class="grid">
+            <div class="lbl">Store</div>
+            <div class="ctl">
+              <div class="selw" style="width:378px">
+                <select class="sel" value="{{f.credStore}}" onChange="{{on.credStore}}">
+                  <option value="secret">VS Code secret store, Windows Credential Manager</option>
+                  <option value="prompt">Ask me every time I connect</option>
+                  <option value="none">Do not keep a credential</option>
+                </select>
+                <span class="selc"><svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M4.5 6.5L8 10l3.5-3.5"></path></svg></span>
+              </div>
+              <div class="hint">Production connections default to asking every time, so an unattended laptop cannot open a live session on its own.</div>
+            </div>
+            <div class="lbl"></div>
+            <div class="ctl">
+              <div class="ckrow">
+                <input class="ck" type="checkbox" id="reprompt" checked="{{f.reprompt}}" onChange="{{on.reprompt}}" />
+                <label for="reprompt" style="font-size:13px">Ask again when a stored credential is rejected</label>
+              </div>
+            </div>
+          </div>
+
+          <div class="sec"><span class="sec-t">SSH tunnel</span><span class="sec-r"></span></div>
+          <div class="grid">
+            <div class="lbl"></div>
+            <div class="ctl">
+              <div class="ckrow">
+                <input class="ck" type="checkbox" id="sshon" checked="{{f.sshOn}}" onChange="{{on.sshOn}}" />
+                <label for="sshon" style="font-size:13px">Reach the server through an SSH tunnel</label>
+              </div>
+            </div>
+            <sc-if value="{{f.sshOn}}" hint-placeholder-val="{{true}}">
+            <div class="lbl">Jump host</div>
+            </sc-if>
+            <sc-if value="{{f.sshOn}}" hint-placeholder-val="{{true}}">
+            <div class="ctl">
+              <div style="display:flex;gap:8px">
+                <input class="in" style="flex:1" value="{{f.sshHost}}" onChange="{{on.sshHost}}" placeholder="bastion.northwind.corp" />
+                <input class="in" style="width:82px" value="{{f.sshPort}}" onChange="{{on.sshPort}}" />
+              </div>
+              <div style="display:flex;gap:8px;margin-top:10px">
+                <input class="in" style="flex:1" value="{{f.sshUser}}" onChange="{{on.sshUser}}" placeholder="User name" />
+                <input class="in mono" style="flex:1.4" value="{{f.sshKey}}" onChange="{{on.sshKey}}" placeholder="~/.ssh/id_ed25519" />
+              </div>
+            </div>
+            </sc-if>
+          </div>
+        </div>
+        </sc-if>
+
+        <sc-if value="{{isAdvanced}}" hint-placeholder-val="{{false}}">
+        <div>
+          <div class="sec" style="margin-top:0"><span class="sec-t">Session</span><span class="sec-r"></span></div>
+          <div class="grid">
+            <div class="lbl">Connect timeout</div>
+            <div class="ctl">
+              <div style="display:flex;align-items:center;gap:8px">
+                <input class="in" style="width:82px" value="{{f.connTimeout}}" onChange="{{on.connTimeout}}" />
+                <span style="font-size:12px;color:var(--fg-dim)">seconds</span>
+              </div>
+            </div>
+
+            <div class="lbl">Query timeout</div>
+            <div class="ctl">
+              <div style="display:flex;align-items:center;gap:8px">
+                <input class="in" style="width:82px" value="{{f.cmdTimeout}}" onChange="{{on.cmdTimeout}}" />
+                <span style="font-size:12px;color:var(--fg-dim)">seconds, 0 removes the limit</span>
+              </div>
+            </div>
+
+            <div class="lbl">Application name</div>
+            <div class="ctl">
+              <input class="in" style="max-width:330px" value="{{f.appName}}" onChange="{{on.appName}}" />
+              <div class="hint">Sent to the server so a database administrator can tell these sessions apart in the activity views.</div>
+            </div>
+
+            <div class="lbl">Rows per fetch</div>
+            <div class="ctl">
+              <div style="display:flex;align-items:center;gap:8px">
+                <input class="in" style="width:96px" value="{{f.pageSize}}" onChange="{{on.pageSize}}" />
+                <span style="font-size:12px;color:var(--fg-dim)">rows</span>
+              </div>
+              <div class="hint">Results stream in pages of this size. Raising it costs memory on wide tables and delays the first row on screen.</div>
+            </div>
+
+            <div class="lbl"></div>
+            <div class="ctl">
+              <div class="ckrow">
+                <input class="ck" type="checkbox" id="ro" checked="{{f.readonly}}" onChange="{{on.readonly}}" />
+                <label for="ro" style="font-size:13px">Open new sessions read-only</label>
+              </div>
+              <sc-if value="{{isMssql}}" hint-placeholder-val="{{true}}">
+              <div class="ckrow">
+                <input class="ck" type="checkbox" id="mars" checked="{{f.mars}}" onChange="{{on.mars}}" />
+                <label for="mars" style="font-size:13px">Allow multiple active result sets</label>
+              </div>
+              </sc-if>
+              <sc-if value="{{isMssql}}" hint-placeholder-val="{{true}}">
+              <div class="ckrow">
+                <input class="ck" type="checkbox" id="msf" checked="{{f.msf}}" onChange="{{on.msf}}" />
+                <label for="msf" style="font-size:13px">Multi-subnet failover</label>
+              </div>
+              </sc-if>
+            </div>
+
+            <sc-if value="{{isPg}}" hint-placeholder-val="{{false}}">
+            <div class="lbl">Schema search path</div>
+            </sc-if>
+            <sc-if value="{{isPg}}" hint-placeholder-val="{{false}}">
+            <div class="ctl"><input class="in mono" style="max-width:330px" value="{{f.searchPath}}" onChange="{{on.searchPath}}" /></div>
+            </sc-if>
+          </div>
+
+          <div class="sec"><span class="sec-t">Driver properties</span><span class="sec-r"></span></div>
+          <div style="border:1px solid var(--bd);border-radius:3px;overflow:hidden;max-width:640px">
+            <div style="display:grid;grid-template-columns:repeat(2, minmax(0, 1fr));background:var(--code-bg);border-bottom:1px solid var(--bd)">
+              <div style="padding:6px 10px;font-size:11px;font-weight:600;letter-spacing:.06em;color:var(--fg-dim)">NAME</div>
+              <div style="padding:6px 10px;font-size:11px;font-weight:600;letter-spacing:.06em;color:var(--fg-dim);border-left:1px solid var(--bd)">VALUE</div>
+            </div>
+            <sc-for list="{{props}}" as="p" hint-placeholder-count="2">
+              <div style="display:grid;grid-template-columns:repeat(2, minmax(0, 1fr));border-bottom:1px solid var(--bd)">
+                <div class="mono" style="padding:6px 10px;color:var(--fg)">{{p.k}}</div>
+                <div class="mono" style="padding:6px 10px;color:var(--fg);border-left:1px solid var(--bd)">{{p.v}}</div>
+              </div>
+            </sc-for>
+            <button class="btn btn-g" style="width:100%;height:30px;justify-content:flex-start;padding-left:10px;color:var(--fg-dim);font-size:12px;gap:6px">
+              <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><path d="M8 3.4v9.2M3.4 8h9.2"></path></svg>
+              Add a property
+            </button>
+          </div>
+
+          <div class="sec"><span class="sec-t">Connection string</span><span class="sec-r"></span></div>
+          <div style="max-width:640px">
+            <div class="mono" style="background:var(--code-bg);border:1px solid var(--bd);border-radius:3px;padding:10px 12px;color:var(--fg);line-height:1.65;word-break:break-all">{{connString}}</div>
+            <div style="display:flex;gap:8px;margin-top:10px">
+              <button class="btn btn-s">
+                <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.2"><rect x="5.6" y="5.6" width="8.2" height="8.8" rx="1.2"></rect><path d="M10.6 5.6V3a1 1 0 0 0-1-1H3.2a1 1 0 0 0-1 1v7.6a1 1 0 0 0 1 1h1.2"></path></svg>
+                Copy
+              </button>
+              <button class="btn btn-s">Build from a connection string</button>
+            </div>
+            <div class="hint">The secret is masked here and in every log line the extension writes.</div>
+          </div>
+        </div>
+        </sc-if>
+
+      </div>
+
+      <sc-if value="{{t.busy}}" hint-placeholder-val="{{false}}">
+      <div style="flex-shrink:0;display:flex;align-items:center;gap:10px;padding:9px 20px;border-top:1px solid var(--bd);background:var(--code-bg)">
+        <svg class="sp" width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="var(--accent)" stroke-width="1.6" style="flex-shrink:0"><circle cx="8" cy="8" r="6" stroke-dasharray="28 12" stroke-linecap="round"></circle></svg>
+        <span style="font-size:12px;color:var(--fg)">Opening a socket to {{f.host}}</span>
+        <span style="flex:1"></span>
+        <button class="btn btn-g" style="font-size:12px;color:var(--fg-dim)">Cancel</button>
+      </div>
+      </sc-if>
+
+      <sc-if value="{{t.ok}}" hint-placeholder-val="{{true}}">
+      <div style="flex-shrink:0;display:flex;align-items:center;gap:10px;padding:9px 20px;border-top:1px solid var(--bd);background:var(--ok-bg)">
+        <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="var(--ok)" stroke-width="1.3" style="flex-shrink:0"><circle cx="8" cy="8" r="6.3"></circle><path d="M5.3 8.2l2 2 3.5-4.3"></path></svg>
+        <span style="font-size:12px;color:var(--fg)"><span style="font-weight:600">Connected in {{okLatency}}.</span> <span style="color:var(--fg-dim)">{{okVersion}} · signed in as {{okUser}}</span></span>
+      </div>
+      </sc-if>
+
+      <sc-if value="{{t.err}}" hint-placeholder-val="{{false}}">
+      <div style="flex-shrink:0;padding:11px 20px;border-top:1px solid var(--bd);background:var(--err-bg)">
+        <div style="display:flex;gap:10px">
+          <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="var(--err)" stroke-width="1.3" style="flex-shrink:0;margin-top:2px"><circle cx="8" cy="8" r="6.3"></circle><path d="M5.9 5.9l4.2 4.2M10.1 5.9l-4.2 4.2"></path></svg>
+          <div style="min-width:0">
+            <div style="font-size:12px;font-weight:600;color:var(--fg)">{{errTitle}}</div>
+            <div style="font-size:12px;color:var(--fg-dim);margin-top:3px;line-height:1.5;max-width:660px">{{errBody}}</div>
+            <div style="display:flex;gap:8px;margin-top:10px">
+              <button class="btn btn-s" style="height:24px;font-size:12px">{{errFix}}</button>
+              <button class="btn btn-g" style="height:24px;font-size:12px;color:var(--fg-dim)">Show the certificate</button>
+              <button class="btn btn-g" style="height:24px;font-size:12px;color:var(--fg-dim)">Copy the driver error</button>
+            </div>
+          </div>
+        </div>
+      </div>
+      </sc-if>
+
+      <sc-if value="{{confirm}}" hint-placeholder-val="{{false}}">
+      <div style="flex-shrink:0;display:flex;align-items:center;gap:11px;padding:10px 20px;border-top:1px solid var(--bd);background:{{env.tint}};border-left:3px solid {{env.color}}">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="{{env.color}}" stroke-width="1.3" style="flex-shrink:0"><path d="M8 1.8l5 1.9v4c0 3.2-2.1 5.5-5 6.5-2.9-1-5-3.3-5-6.5v-4z"></path><path d="M8 5.9v2.8M8 10.6v.6"></path></svg>
+        <div style="min-width:0">
+          <div style="font-size:12px;font-weight:600;color:var(--fg)">Open a production session against {{f.name}}?</div>
+          <div style="font-size:11px;color:var(--fg-dim);margin-top:2px">{{f.host}} · {{f.database}} · the session opens read-only and every write asks again.</div>
+        </div>
+        <span style="flex:1"></span>
+        <button class="btn btn-g" style="font-size:12px" onClick="{{onCancelConfirm}}">Cancel</button>
+        <button class="btn" style="background:{{env.color}};color:#ffffff" onClick="{{onDoConnect}}">Connect to production</button>
+      </div>
+      </sc-if>
+
+      <div style="flex-shrink:0;height:52px;display:flex;align-items:center;gap:8px;padding:0 20px;border-top:1px solid var(--bd)">
+        <button class="btn btn-s" onClick="{{onTest}}" disabled="{{t.busy}}">
+          <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.2"><path d="M6.4 2.2h3.2M8 2.2v4.1L12 12a1.4 1.4 0 0 1-1.2 2.1H5.2A1.4 1.4 0 0 1 4 12l4-5.7"></path></svg>
+          Test connection
+        </button>
+        <span style="flex:1"></span>
+        <div class="ckrow" style="margin-right:6px">
+          <input class="ck" type="checkbox" id="rosession" checked="{{f.readonly}}" onChange="{{on.readonly}}" />
+          <label for="rosession" style="font-size:12px;color:var(--fg-dim)">Read-only session</label>
+        </div>
+        <button class="btn btn-g" style="color:var(--fg-dim)" onClick="{{onRevert}}">Revert</button>
+        <button class="btn btn-s" onClick="{{onSave}}">Save</button>
+        <button class="btn btn-p" onClick="{{onConnect}}">
+          Connect
+          <span style="font-size:11px;opacity:.75;margin-left:2px">Ctrl+Enter</span>
+        </button>
+      </div>
+
+    </main>
+  </div>
+</div>
+</x-dc>
+
+<script data-dc-script data-props='{"theme":{"editor":"enum","options":["dark","light"],"default":"dark","section":"Theme"},"$preview":{"width":1180,"height":800}}'>
+var ENV_DARK = { dev: "#3fb84f", qa: "#4a93f0", uat: "#e08a3c", prod: "#f0563f" };
+var ENV_LIGHT = { dev: "#1a7f37", qa: "#0b62ce", uat: "#b45309", prod: "#c6362a" };
+var ENV_TINT = {
+  dev: "rgba(63,184,79,.14)", qa: "rgba(74,147,240,.14)",
+  uat: "rgba(224,138,60,.15)", prod: "rgba(240,86,63,.15)"
+};
+var ENV_META = {
+  dev: { short: "DEV", label: "Development", hint: "No extra guards. Metadata is cached for the session so the object tree opens instantly." },
+  qa: { short: "QA", label: "QA", hint: "Standard guards. An UPDATE or DELETE with no WHERE clause asks for confirmation first." },
+  uat: { short: "UAT", label: "UAT", hint: "Standard guards. An UPDATE or DELETE with no WHERE clause asks for confirmation first." },
+  prod: { short: "PROD", label: "Production", hint: "Sessions open read-only, connecting asks for confirmation, and schema changes are refused until the session is switched to read-write." }
+};
+
+var CONNS = [
+  { id: "local-pg", name: "local-postgres", env: "dev", provider: "pg", host: "localhost", port: "5432", database: "postgres", pgauth: "pwd", user: "postgres", sslmode: "disable", live: true, scope: "user", credStore: "secret" },
+  { id: "sandbox", name: "Sandbox-DB", env: "dev", provider: "mssql", host: "sql-dev01.northwind.corp", port: "1433", database: "Sandbox", auth: "win", scope: "user", encrypt: "optional" },
+  { id: "northwind", name: "Northwind-Demo", env: "dev", provider: "pg", host: "localhost", port: "5433", database: "northwind", pgauth: "pwd", user: "demo", sslmode: "disable", scope: "ws" },
+  { id: "orders-qa", name: "Orders-QA", env: "qa", provider: "pg", host: "pg-qa.northwind.corp", port: "5432", database: "orders", pgauth: "pwd", user: "app_ro", sslmode: "verify-full", scope: "team", live: true },
+  { id: "analytics-qa", name: "Analytics-QA", env: "qa", provider: "pg", host: "pg-qa.northwind.corp", port: "5432", database: "analytics", pgauth: "pwd", user: "app_ro", sslmode: "verify-full", scope: "team" },
+  { id: "warehouse-qa", name: "Warehouse-QA", env: "qa", provider: "mssql", host: "sql-qa01.northwind.corp", port: "1433", database: "Warehouse", auth: "sql", user: "reporting", scope: "team" },
+  { id: "billing-uat", name: "Billing-UAT", env: "uat", provider: "mssql", host: "sql-uat01.northwind.corp", port: "1433", database: "Billing", auth: "entra-mfa", scope: "team" },
+  { id: "billing", name: "Billing-DB", env: "prod", provider: "mssql", host: "sql01.northwind.corp", port: "1433", database: "Billing", auth: "entra-mfa", scope: "team", encrypt: "strict", credStore: "prompt", readonly: true, latency: "42 ms", version: "SQL Server 2022 · 16.0.4145.4" },
+  { id: "ledger", name: "Ledger-Core", env: "prod", provider: "mssql", host: "sql02.northwind.corp", port: "1433", database: "Ledger", auth: "entra-mfa", scope: "team", encrypt: "mandatory", credStore: "prompt", readonly: true, fail: "cert" }
+];
+
+var DEFAULTS = {
+  name: "", env: "dev", scope: "user", provider: "mssql", host: "", port: "", database: "",
+  auth: "entra-mfa", pgauth: "pwd", user: "", password: "••••••••••",
+  savePw: true, account: "t.rahman@northwind.corp", tenant: "",
+  encrypt: "strict", trust: false, certHost: "", sslmode: "verify-full", rootcert: "", chanbind: "prefer",
+  credStore: "secret", reprompt: true,
+  sshOn: false, sshHost: "", sshPort: "22", sshUser: "", sshKey: "",
+  connTimeout: "15", cmdTimeout: "30", appName: "VS Code · Database Tools", pageSize: "1000",
+  readonly: false, mars: true, msf: false, searchPath: "public"
+};
+
+var ENC_HINT = {
+  strict: "TDS 8.0. The channel is encrypted before the login packet leaves the machine and the certificate must validate. Needs SQL Server 2022 or Azure SQL.",
+  mandatory: "The connection is refused when the server cannot encrypt. This is the driver default and the right choice almost everywhere.",
+  optional: "Falls back to an unencrypted channel when the server does not offer encryption. Reasonable only on a loopback or an isolated development host."
+};
+var SSL_HINT = {
+  disable: "No encryption at all. Reasonable only on a loopback host.",
+  allow: "Encrypts only after the server refuses a plain connection. Offers no real protection.",
+  prefer: "Encrypts when it can and silently falls back when it cannot. The libpq default, and weaker than it looks.",
+  require: "Always encrypts, but never checks who the server is. Stops passive sniffing, not interception.",
+  "verify-ca": "Encrypts and checks that the certificate came from a trusted authority.",
+  "verify-full": "Encrypts, checks the issuer, and checks that the host name matches the certificate. Use this anywhere but a development machine."
+};
+var ERRORS = {
+  cert: {
+    title: "The server certificate could not be validated.",
+    body: "sql02.northwind.corp presented a certificate issued by Northwind Internal CA, which is not in this machine's trust store. Encrypt is set to Mandatory, so the driver refused the connection rather than falling back.",
+    fix: "Add Northwind Internal CA to the trust store"
+  }
+};
+
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = { sel: "billing", tab: "general", test: { kind: "idle" }, edits: {}, q: "", pw: false, confirm: false };
+  }
+
+  componentWillUnmount() { if (this._t) { clearTimeout(this._t); } }
+
+  conn() {
+    var id = this.state.sel;
+    for (var i = 0; i < CONNS.length; i++) { if (CONNS[i].id === id) { return CONNS[i]; } }
+    return CONNS[0];
+  }
+
+  form() {
+    var out = {};
+    var base = this.conn();
+    for (var k in DEFAULTS) { out[k] = DEFAULTS[k]; }
+    for (var j in base) { if (base[j] !== undefined && base[j] !== null && base[j] !== "") { out[j] = base[j]; } }
+    if (base.readonly === undefined) { out.readonly = base.env === "prod"; }
+    var e = this.state.edits;
+    for (var m in e) { out[m] = e[m]; }
+    return out;
+  }
+
+  put(key, value) {
+    var e = {};
+    var cur = this.state.edits;
+    for (var k in cur) { e[k] = cur[k]; }
+    e[key] = value;
+    this.setState({ edits: e, test: { kind: "idle" }, confirm: false });
+  }
+
+  pick(id) {
+    if (this._t) { clearTimeout(this._t); }
+    this.setState({ sel: id, edits: {}, test: { kind: "idle" }, confirm: false, pw: false });
+  }
+
+  runTest() {
+    var self = this;
+    if (this._t) { clearTimeout(this._t); }
+    this.setState({ test: { kind: "busy" }, confirm: false });
+    this._t = setTimeout(function () {
+      var c = self.conn();
+      var f = self.form();
+      var failing = c.fail && !f.trust;
+      self.setState({ test: failing ? { kind: "err", code: c.fail } : { kind: "ok" } });
+    }, 1200);
+  }
+
+  renderVals() {
+    var self = this;
+    var theme = this.props.theme === "light" ? "light" : "dark";
+    var palette = theme === "light" ? ENV_LIGHT : ENV_DARK;
+    var f = this.form();
+    var c = this.conn();
+    var meta = ENV_META[f.env] || ENV_META.dev;
+    var env = { color: palette[f.env], tint: ENV_TINT[f.env], short: meta.short, hint: meta.hint };
+
+    var on = {};
+    var keys = ["name", "env", "scope", "host", "port", "database", "auth", "pgauth", "user", "password",
+      "savePw", "account", "tenant", "encrypt", "trust", "certHost", "sslmode", "rootcert", "chanbind",
+      "credStore", "reprompt", "sshOn", "sshHost", "sshPort", "sshUser", "sshKey",
+      "connTimeout", "cmdTimeout", "appName", "pageSize", "readonly", "mars", "msf", "searchPath"];
+    keys.forEach(function (k) {
+      on[k] = function (ev) {
+        var el = ev.target;
+        self.put(k, el.type === "checkbox" ? el.checked : el.value);
+      };
+    });
+
+    var order = ["dev", "qa", "uat", "prod"];
+    var q = (this.state.q || "").toLowerCase();
+    var shown = CONNS.filter(function (x) {
+      return !q || x.name.toLowerCase().indexOf(q) >= 0 || x.host.toLowerCase().indexOf(q) >= 0;
+    });
+    var groups = [];
+    order.forEach(function (e) {
+      var items = shown.filter(function (x) { return x.env === e; });
+      if (!items.length) { return; }
+      groups.push({
+        label: ENV_META[e].label.toUpperCase(),
+        count: String(items.length),
+        items: items.map(function (x) {
+          var isSel = x.id === self.state.sel;
+          return {
+            name: x.name,
+            host: x.host.replace(".northwind.corp", ""),
+            bar: palette[x.env],
+            dot: x.live ? (theme === "light" ? "#1a7f37" : "#89d185") : "transparent",
+            cls: isSel ? "crow crow-on" : "crow",
+            onClick: function () { self.pick(x.id); }
+          };
+        })
+      });
+    });
+
+    var isMssql = f.provider === "mssql";
+    var tabs = [
+      { key: "general", label: "General" },
+      { key: "security", label: "Security" },
+      { key: "advanced", label: "Advanced" }
+    ].map(function (t) {
+      return {
+        label: t.label,
+        cls: self.state.tab === t.key ? "tab tab-on" : "tab",
+        onClick: function () { self.setState({ tab: t.key }); }
+      };
+    });
+
+    var t = this.state.test;
+    var err = ERRORS[t.code] || ERRORS.cert;
+    var dirty = Object.keys(this.state.edits).length > 0;
+
+    var cs = isMssql
+      ? "Server=" + f.host + (f.port ? "," + f.port : "") + ";Database=" + f.database +
+        ";Authentication=Active Directory Interactive;Encrypt=" + (f.encrypt === "strict" ? "Strict" : f.encrypt === "optional" ? "Optional" : "Mandatory") +
+        ";TrustServerCertificate=" + (f.trust ? "True" : "False") + ";Application Name=" + f.appName + ";Connect Timeout=" + f.connTimeout
+      : "postgresql://" + (f.user || "user") + ":********@" + f.host + ":" + f.port + "/" + f.database +
+        "?sslmode=" + f.sslmode + "&channel_binding=" + f.chanbind + "&connect_timeout=" + f.connTimeout;
+
+    var providerLabel = isMssql ? "Microsoft SQL Server" : "PostgreSQL 16";
+    var scopeLabel = f.scope === "team" ? "team file" : f.scope === "ws" ? "workspace" : "user settings";
+
+    return {
+      theme: theme,
+      q: this.state.q,
+      onQuery: function (ev) { self.setState({ q: ev.target.value }); },
+      countLabel: shown.length + " of " + CONNS.length + " connections",
+      groups: groups,
+      f: f,
+      on: on,
+      env: env,
+      subtitle: providerLabel + "  ·  " + f.host + (f.port ? ":" + f.port : "") + "  ·  " + f.database + "  ·  saved in " + scopeLabel,
+      tabs: tabs,
+      dirtyLabel: dirty ? "Unsaved changes" : "",
+      isGeneral: this.state.tab === "general",
+      isSecurity: this.state.tab === "security",
+      isAdvanced: this.state.tab === "advanced",
+      isMssql: isMssql,
+      isPg: !isMssql,
+      segMs: isMssql ? "on" : "",
+      segPg: isMssql ? "" : "on",
+      onMssql: function () { self.put("provider", "mssql"); },
+      onPg: function () { self.put("provider", "pg"); },
+      hostLabel: isMssql ? "Server" : "Host",
+      hostHint: isMssql
+        ? "Host name, or the instance name for a named instance. Leave the port blank to use 1433 or whatever the SQL Browser reports."
+        : "Host name or address. Leave the port blank to use 5432.",
+      showUserPass: (isMssql && f.auth === "sql") || (!isMssql && (f.pgauth === "pwd" || f.pgauth === "cert")),
+      showAccount: isMssql && (f.auth === "entra-mfa" || f.auth === "entra-pwd" || f.auth === "entra-sp"),
+      showWinNote: isMssql && (f.auth === "win" || f.auth === "entra-int"),
+      pwType: this.state.pw ? "text" : "password",
+      onTogglePw: function () { self.setState({ pw: !self.state.pw }); },
+      encryptHint: ENC_HINT[f.encrypt] || "",
+      sslHint: SSL_HINT[f.sslmode] || "",
+      props: isMssql
+        ? [{ k: "Pooling", v: "true" }, { k: "Max Pool Size", v: "10" }]
+        : [{ k: "statement_timeout", v: "30000" }, { k: "options", v: "-c timezone=UTC" }],
+      connString: cs,
+      t: { idle: t.kind === "idle", busy: t.kind === "busy", ok: t.kind === "ok", err: t.kind === "err" },
+      okLatency: c.latency || "38 ms",
+      okVersion: c.version || (isMssql ? "SQL Server 2022 · 16.0.4145.4" : "PostgreSQL 16.3"),
+      okUser: isMssql && f.auth !== "sql" ? f.account : f.user,
+      errTitle: err.title,
+      errBody: err.body,
+      errFix: err.fix,
+      onTest: function () { self.runTest(); },
+      onRevert: function () { self.setState({ edits: {}, test: { kind: "idle" }, confirm: false }); },
+      onSave: function () { self.setState({ edits: {} }); },
+      confirm: this.state.confirm,
+      onConnect: function () {
+        if (f.env === "prod") { self.setState({ confirm: true }); return; }
+        self.setState({ test: { kind: "ok" }, confirm: false });
+      },
+      onCancelConfirm: function () { self.setState({ confirm: false }); },
+      onDoConnect: function () { self.setState({ confirm: false, test: { kind: "ok" } }); }
+    };
+  }
+}
+</script>
+</body>
+</html>

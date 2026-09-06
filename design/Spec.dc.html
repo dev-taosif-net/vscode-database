@@ -1,0 +1,169 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>
+* { box-sizing: border-box; }
+body { margin: 0; }
+a { color: #4daafc; text-decoration: none; }
+a:hover { color: #4daafc; text-decoration: underline; }
+.sp {
+  font-family: "Segoe WPF", "Segoe UI", system-ui, -apple-system, sans-serif;
+  font-size: 13px; line-height: 1.4; -webkit-font-smoothing: antialiased;
+}
+.h { font-size: 12px; font-weight: 600; letter-spacing: .1em; text-transform: uppercase; color: #9d9d9d; margin-bottom: 14px; }
+.mono { font-family: Consolas, "Cascadia Mono", "Courier New", monospace; font-size: 11.5px; }
+.tr { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; padding: 5px 0; border-bottom: 1px solid #232323; }
+.k { color: #9d9d9d; font-size: 12px; }
+.v { color: #cccccc; }
+.rule { display: flex; gap: 10px; padding: 9px 0; border-bottom: 1px solid #232323; }
+.rule b { color: #e7e7e7; font-weight: 600; }
+</style>
+</helmet>
+
+<div class="sp" style="width:1180px;height:1040px;background:#1f1f1f;color:#cccccc;padding:34px 40px;overflow:hidden">
+
+  <div style="margin-bottom:28px">
+    <div style="font-size:19px;font-weight:600;color:#e7e7e7">Build sheet</div>
+    <div style="font-size:12px;color:#9d9d9d;margin-top:6px;max-width:860px">Nothing on this page invents a colour, a size or a font. Every surface reads a VS Code theme token, so the page follows the user's theme, including the high contrast ones, with no theme code of its own. The four environment colours are the only literals, and they are always paired with a text label.</div>
+  </div>
+
+  <div style="display:grid;grid-template-columns:repeat(2, minmax(0, 1fr));gap:44px">
+
+    <div>
+      <div class="h">Environment system</div>
+
+      <div style="display:flex;flex-direction:column;gap:12px;margin-bottom:32px">
+
+        <div style="display:flex;gap:13px;align-items:flex-start">
+          <span style="width:3px;height:40px;border-radius:2px;background:#3fb84f;flex-shrink:0;margin-top:2px"></span>
+          <div style="flex:1;min-width:0">
+            <div style="display:flex;align-items:center;gap:10px">
+              <span style="font-size:13px;font-weight:600;color:#e7e7e7">Development</span>
+              <span class="mono" style="color:#3fb84f">#3FB84F</span>
+              <span class="mono" style="color:#7a7a7a">light #1A7F37</span>
+            </div>
+            <div style="font-size:11.5px;color:#9d9d9d;margin-top:3px;line-height:1.5">No guards. Metadata is cached for the whole session so the object tree opens instantly.</div>
+          </div>
+        </div>
+
+        <div style="display:flex;gap:13px;align-items:flex-start">
+          <span style="width:3px;height:40px;border-radius:2px;background:#4a93f0;flex-shrink:0;margin-top:2px"></span>
+          <div style="flex:1;min-width:0">
+            <div style="display:flex;align-items:center;gap:10px">
+              <span style="font-size:13px;font-weight:600;color:#e7e7e7">QA</span>
+              <span class="mono" style="color:#4a93f0">#4A93F0</span>
+              <span class="mono" style="color:#7a7a7a">light #0B62CE</span>
+            </div>
+            <div style="font-size:11.5px;color:#9d9d9d;margin-top:3px;line-height:1.5">An UPDATE or DELETE with no WHERE clause asks for confirmation before it runs.</div>
+          </div>
+        </div>
+
+        <div style="display:flex;gap:13px;align-items:flex-start">
+          <span style="width:3px;height:40px;border-radius:2px;background:#e08a3c;flex-shrink:0;margin-top:2px"></span>
+          <div style="flex:1;min-width:0">
+            <div style="display:flex;align-items:center;gap:10px">
+              <span style="font-size:13px;font-weight:600;color:#e7e7e7">UAT</span>
+              <span class="mono" style="color:#e08a3c">#E08A3C</span>
+              <span class="mono" style="color:#7a7a7a">light #B45309</span>
+            </div>
+            <div style="font-size:11.5px;color:#9d9d9d;margin-top:3px;line-height:1.5">Same guards as QA, and the environment name is written into the query history.</div>
+          </div>
+        </div>
+
+        <div style="display:flex;gap:13px;align-items:flex-start">
+          <span style="width:3px;height:40px;border-radius:2px;background:#f0563f;flex-shrink:0;margin-top:2px"></span>
+          <div style="flex:1;min-width:0">
+            <div style="display:flex;align-items:center;gap:10px">
+              <span style="font-size:13px;font-weight:600;color:#e7e7e7">Production</span>
+              <span class="mono" style="color:#f0563f">#F0563F</span>
+              <span class="mono" style="color:#7a7a7a">light #C6362A</span>
+            </div>
+            <div style="font-size:11.5px;color:#9d9d9d;margin-top:3px;line-height:1.5">Read-only sessions, a confirmation before connecting, no stored credential by default, and schema changes refused until the session is switched.</div>
+          </div>
+        </div>
+
+      </div>
+
+      <div style="font-size:11.5px;color:#9d9d9d;line-height:1.6;padding:11px 13px;border-left:2px solid #3c3c3c;background:#181818;margin-bottom:32px">
+        Colour appears in four places only: a 2px bar on each list row, a 3px bar beside the connection name, the environment pill, and the production confirmation. It never fills a surface and never carries meaning on its own, because roughly one man in twelve cannot separate the green from the red.
+      </div>
+
+      <div class="h">Control metrics</div>
+      <div>
+        <div class="tr"><span class="k">Text input, dropdown</span><span class="v">26px tall, 2px radius, 13px</span></div>
+        <div class="tr"><span class="k">Button</span><span class="v">26px tall, 2px radius, 13px</span></div>
+        <div class="tr"><span class="k">Checkbox</span><span class="v">15px, accent colour from the theme</span></div>
+        <div class="tr"><span class="k">Connection row</span><span class="v">24px tall, 13px</span></div>
+        <div class="tr"><span class="k">Group header</span><span class="v">22px tall, 11px, 600 weight</span></div>
+        <div class="tr"><span class="k">Tab</span><span class="v">33px tall, 1px active underline</span></div>
+        <div class="tr"><span class="k">Section header</span><span class="v">11px, 600 weight, 0.09em tracking</span></div>
+        <div class="tr"><span class="k">Hint under a field</span><span class="v">11px, muted, 520px measure</span></div>
+        <div class="tr"><span class="k">Label column</span><span class="v">168px, 16px gutter</span></div>
+        <div class="tr"><span class="k">Row rhythm</span><span class="v">14px between fields, 26px between sections</span></div>
+        <div class="tr"><span class="k">Pane padding</span><span class="v">20px vertical, 24px horizontal</span></div>
+        <div class="tr"><span class="k">List rail</span><span class="v">284px, collapses below 760px</span></div>
+      </div>
+    </div>
+
+    <div>
+      <div class="h">Theme tokens</div>
+      <div style="margin-bottom:32px">
+        <div class="tr"><span class="k">Page background</span><span class="v mono">editor.background</span></div>
+        <div class="tr"><span class="k">List rail background</span><span class="v mono">sideBar.background</span></div>
+        <div class="tr"><span class="k">Body text</span><span class="v mono">foreground</span></div>
+        <div class="tr"><span class="k">Hints and captions</span><span class="v mono">descriptionForeground</span></div>
+        <div class="tr"><span class="k">Rules and borders</span><span class="v mono">panel.border</span></div>
+        <div class="tr"><span class="k">Input</span><span class="v mono">input.background, input.border</span></div>
+        <div class="tr"><span class="k">Placeholder</span><span class="v mono">input.placeholderForeground</span></div>
+        <div class="tr"><span class="k">Dropdown</span><span class="v mono">dropdown.background, dropdown.border</span></div>
+        <div class="tr"><span class="k">Primary button</span><span class="v mono">button.background, button.foreground</span></div>
+        <div class="tr"><span class="k">Secondary button</span><span class="v mono">button.secondaryBackground</span></div>
+        <div class="tr"><span class="k">Selected row</span><span class="v mono">list.activeSelectionBackground</span></div>
+        <div class="tr"><span class="k">Hovered row</span><span class="v mono">list.hoverBackground</span></div>
+        <div class="tr"><span class="k">Focus ring</span><span class="v mono">focusBorder</span></div>
+        <div class="tr"><span class="k">Active tab underline</span><span class="v mono">panelTitle.activeBorder</span></div>
+        <div class="tr"><span class="k">Success</span><span class="v mono">testing.iconPassed</span></div>
+        <div class="tr"><span class="k">Warning</span><span class="v mono">editorWarning.foreground</span></div>
+        <div class="tr"><span class="k">Error</span><span class="v mono">errorForeground</span></div>
+        <div class="tr"><span class="k">Connection string block</span><span class="v mono">textCodeBlock.background</span></div>
+        <div class="tr"><span class="k">Type</span><span class="v mono">font-family, font-size</span></div>
+      </div>
+
+      <div class="h">Credential rules</div>
+      <div style="margin-bottom:32px">
+        <div class="rule"><b style="flex-shrink:0;width:20px">1</b><span style="font-size:12px;color:#9d9d9d;line-height:1.55">Secrets live in the VS Code secret store, which is the OS keychain. Nothing secret reaches settings.json, the workspace file or the team file.</span></div>
+        <div class="rule"><b style="flex-shrink:0;width:20px">2</b><span style="font-size:12px;color:#9d9d9d;line-height:1.55">Settings Sync carries connection shapes between machines, never credentials.</span></div>
+        <div class="rule"><b style="flex-shrink:0;width:20px">3</b><span style="font-size:12px;color:#9d9d9d;line-height:1.55">The connection string preview and every log line the extension writes mask the secret.</span></div>
+        <div class="rule"><b style="flex-shrink:0;width:20px">4</b><span style="font-size:12px;color:#9d9d9d;line-height:1.55">Production connections default to asking for the credential on every connect, so an unattended laptop cannot open a live session on its own.</span></div>
+        <div class="rule"><b style="flex-shrink:0;width:20px">5</b><span style="font-size:12px;color:#9d9d9d;line-height:1.55">Deleting a connection deletes its secret in the same step, with no orphan left in the keychain.</span></div>
+      </div>
+
+      <div class="h">Keyboard and assistive technology</div>
+      <div>
+        <div class="tr"><span class="k mono">Ctrl+Enter</span><span class="v">Connect</span></div>
+        <div class="tr"><span class="k mono">Ctrl+S</span><span class="v">Save without connecting</span></div>
+        <div class="tr"><span class="k mono">Alt+T</span><span class="v">Test connection</span></div>
+        <div class="tr"><span class="k mono">Ctrl+F</span><span class="v">Focus the filter</span></div>
+        <div class="tr"><span class="k mono">Up, Down</span><span class="v">Move through the list, which is one tab stop</span></div>
+        <div class="tr"><span class="k mono">Escape</span><span class="v">Cancel a running test, or dismiss the confirmation</span></div>
+        <div class="tr"><span class="k">Result strip</span><span class="v">Announced politely, focus never moves</span></div>
+        <div class="tr"><span class="k">Every hint</span><span class="v">Tied to its field, so it is read with the label</span></div>
+        <div class="tr"><span class="k">Focus ring</span><span class="v">Always visible, never removed</span></div>
+      </div>
+    </div>
+
+  </div>
+</div>
+</x-dc>
+
+<script data-dc-script data-props='{"$preview":{"width":1180,"height":1040}}'>
+class Component extends DCLogic {}
+</script>
+</body>
+</html>

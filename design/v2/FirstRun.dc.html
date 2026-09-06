@@ -1,0 +1,187 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>
+* { box-sizing: border-box; }
+body { margin: 0; }
+a { color: #4daafc; text-decoration: none; }
+a:hover { color: #4daafc; text-decoration: underline; }
+.fr {
+  font-family: "Segoe WPC", "Segoe UI", system-ui, -apple-system, sans-serif;
+  font-size: 13px; line-height: 1.4; -webkit-font-smoothing: antialiased;
+}
+.fr ::-webkit-scrollbar { width: 10px; }
+.fr ::-webkit-scrollbar-thumb { background: #4f4f4f; border: 3px solid transparent; background-clip: content-box; border-radius: 6px; }
+.card { border: 1px solid #3c3c3c; border-radius: 5px; background: #252526; padding: 16px 18px; text-align: left; cursor: pointer; color: #cccccc; font: inherit; display: flex; align-items: flex-start; gap: 14px; width: 100%; }
+.card:hover { background: #2a2d2e; border-color: #4a4a4a; }
+.card-ms { border-color: #e0463f; box-shadow: 0 0 0 1px #e0463f; background: linear-gradient(115deg, rgba(224,70,63,.10) 0%, rgba(224,70,63,0) 62%), #252526; }
+.card-pg:hover { border-color: #5aa0d0; background: linear-gradient(115deg, rgba(90,160,208,.09) 0%, rgba(90,160,208,0) 62%), #2a2d2e; }
+.find { display: flex; align-items: center; gap: 11px; padding: 10px 12px; border: 1px solid #2b2b2b; border-left: 3px solid #3fb84f; border-radius: 4px; background: linear-gradient(90deg, rgba(63,184,79,.09) 0%, rgba(63,184,79,0) 46%), #252526; }
+.btn { height: 26px; padding: 0 12px; border-radius: 2px; border: 1px solid transparent; font: inherit; font-size: 12px; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; gap: 6px; white-space: nowrap; }
+.btn-p { background: #0078d4; color: #ffffff; font-size: 13px; padding: 0 14px; }
+.btn-p:hover { background: #026ec1; }
+.btn-env { background: rgba(63,184,79,.15); color: #3fb84f; border-color: rgba(63,184,79,.4); }
+.btn-env:hover { background: rgba(63,184,79,.22); }
+.in { height: 26px; background: #313131; color: #cccccc; border: 1px solid #3c3c3c; border-radius: 2px; padding: 0 9px; font: inherit; font-size: 13px; width: 100%; }
+.in::placeholder { color: #7a7a7a; }
+.in:focus { outline: none; border-color: #0078d4; box-shadow: 0 0 0 1px #0078d4; }
+.mono { font-family: Consolas, "Cascadia Mono", "Courier New", monospace; font-size: 12px; }
+.cap { font-size: 11px; font-weight: 600; letter-spacing: .09em; text-transform: uppercase; color: #9d9d9d; }
+.plate { display: inline-flex; align-items: center; justify-content: center; border-radius: 6px; flex-shrink: 0; }
+.chip { display: inline-flex; align-items: center; height: 18px; padding: 0 7px; border-radius: 3px; border: 1px solid; font-size: 10px; font-weight: 600; }
+</style>
+</helmet>
+
+<div class="fr" style="width:1180px;height:800px;display:flex;flex-direction:column;background:#1f1f1f;color:#cccccc;overflow:hidden">
+
+  <div style="height:35px;flex-shrink:0;display:flex;align-items:stretch;background:#181818;border-bottom:1px solid #2b2b2b">
+    <div style="display:flex;align-items:center;gap:7px;padding:0 12px;background:#1f1f1f;color:#e7e7e7;border-top:1px solid #0078d4;border-right:1px solid #2b2b2b">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="#0078d4"><ellipse cx="12" cy="5.4" rx="7.6" ry="2.9"></ellipse><path d="M4.4 8.6v3.2c0 1.6 3.4 2.9 7.6 2.9s7.6-1.3 7.6-2.9V8.6c-1.5 1.2-4.3 1.9-7.6 1.9s-6.1-.7-7.6-1.9z"></path><path d="M4.4 14.6v3.2c0 1.6 3.4 2.9 7.6 2.9s7.6-1.3 7.6-2.9v-3.2c-1.5 1.2-4.3 1.9-7.6 1.9s-6.1-.7-7.6-1.9z"></path></svg>
+      <span>Connections</span>
+      <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" style="opacity:.7;margin-left:4px"><path d="M4.2 4.2l7.6 7.6M11.8 4.2l-7.6 7.6"></path></svg>
+    </div>
+  </div>
+
+  <div style="flex:1;display:flex;min-height:0">
+
+    <aside style="width:260px;flex-shrink:0;display:flex;flex-direction:column;background:#181818;border-right:1px solid #2b2b2b">
+      <div style="height:40px;flex-shrink:0;display:flex;align-items:center;gap:4px;padding:0 6px 0 10px;border-bottom:1px solid #2b2b2b">
+        <div style="position:relative;flex:1;opacity:.45">
+          <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" style="position:absolute;left:6px;top:50%;transform:translateY(-50%);color:#9d9d9d"><circle cx="7" cy="7" r="4.2"></circle><path d="M10.2 10.2L14 14"></path></svg>
+          <input class="in" style="height:24px;padding-left:24px;font-size:12px" placeholder="Filter connections" readonly />
+        </div>
+        <button class="btn" style="width:24px;height:24px;padding:0;background:transparent;color:#cccccc">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><path d="M8 3.4v9.2M3.4 8h9.2"></path></svg>
+        </button>
+      </div>
+      <div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;padding:0 30px;text-align:center">
+        <div style="display:flex;flex-direction:column;gap:7px;width:100%">
+          <div style="display:flex;align-items:center;gap:8px;opacity:.32">
+            <span style="width:2px;height:15px;border-radius:1px;background:#3fb84f"></span>
+            <span style="height:8px;flex:1;border-radius:4px;background:#3a3a3a"></span>
+          </div>
+          <div style="display:flex;align-items:center;gap:8px;opacity:.24">
+            <span style="width:2px;height:15px;border-radius:1px;background:#4a93f0"></span>
+            <span style="height:8px;flex:1;border-radius:4px;background:#3a3a3a"></span>
+          </div>
+          <div style="display:flex;align-items:center;gap:8px;opacity:.18">
+            <span style="width:2px;height:15px;border-radius:1px;background:#e08a3c"></span>
+            <span style="height:8px;flex:1;border-radius:4px;background:#3a3a3a"></span>
+          </div>
+          <div style="display:flex;align-items:center;gap:8px;opacity:.14">
+            <span style="width:2px;height:15px;border-radius:1px;background:#f0563f"></span>
+            <span style="height:8px;flex:1;border-radius:4px;background:#3a3a3a"></span>
+          </div>
+        </div>
+        <div style="font-size:12px;color:#7a7a7a;line-height:1.55">Saved connections land here, grouped by environment and coloured by it.</div>
+      </div>
+      <div style="height:34px;flex-shrink:0;display:flex;align-items:center;padding:0 12px;border-top:1px solid #2b2b2b;font-size:11px;color:#7a7a7a">No connections yet</div>
+    </aside>
+
+    <main style="flex:1;min-width:0;overflow-y:auto;display:flex;flex-direction:column;justify-content:center;padding:40px 44px">
+      <div style="width:100%;max-width:840px;margin:0 auto">
+
+        <div style="font-size:22px;font-weight:600;color:#e7e7e7;letter-spacing:-.012em">Connect to a database</div>
+        <div style="font-size:13px;color:#9d9d9d;margin-top:8px;line-height:1.6;max-width:640px">Three fields get you connected. Encryption, timeouts and driver properties all have safe defaults and stay out of the way until you need them.</div>
+
+        <div style="display:grid;grid-template-columns:repeat(2, minmax(0, 1fr));gap:34px;margin-top:30px;align-items:start">
+
+          <div>
+            <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px">
+              <span class="cap">Choose a server type</span>
+              <div style="flex:1;height:1px;background:#2b2b2b"></div>
+            </div>
+
+            <div style="display:flex;flex-direction:column;gap:12px">
+              <button class="card card-ms">
+                <span class="plate" style="width:42px;height:42px;background:rgba(224,70,63,.16)">
+                  <svg width="25" height="25" viewBox="0 0 24 24" fill="#e0463f"><ellipse cx="12" cy="5.4" rx="7.6" ry="2.9"></ellipse><path d="M4.4 8.6v3.2c0 1.6 3.4 2.9 7.6 2.9s7.6-1.3 7.6-2.9V8.6c-1.5 1.2-4.3 1.9-7.6 1.9s-6.1-.7-7.6-1.9z"></path><path d="M4.4 14.6v3.2c0 1.6 3.4 2.9 7.6 2.9s7.6-1.3 7.6-2.9v-3.2c-1.5 1.2-4.3 1.9-7.6 1.9s-6.1-.7-7.6-1.9z"></path></svg>
+                </span>
+                <span style="min-width:0;flex:1">
+                  <span style="display:block;font-size:14px;font-weight:600;color:#e7e7e7">Microsoft SQL Server</span>
+                  <span style="display:block;font-size:12px;color:#9d9d9d;line-height:1.55;margin-top:4px">2016 and newer, Azure SQL Database, Managed Instance, and Amazon RDS.</span>
+                  <span style="display:flex;gap:5px;margin-top:9px">
+                    <span class="chip" style="color:#8b93ec;background:rgba(139,147,236,.14);border-color:rgba(139,147,236,.40)">Entra ID</span>
+                    <span class="chip" style="color:#3ebfa3;background:rgba(62,191,163,.12);border-color:rgba(62,191,163,.38)">TDS 8.0</span>
+                  </span>
+                </span>
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="#e0463f" stroke-width="1.4" style="flex-shrink:0;margin-top:13px"><path d="M6 4l4 4-4 4"></path></svg>
+              </button>
+
+              <button class="card card-pg">
+                <span class="plate" style="width:42px;height:42px;background:rgba(90,160,208,.15)">
+                  <svg width="25" height="25" viewBox="0 0 24 24" fill="#5aa0d0"><path d="M12 1.8l8.4 4.9v9.8L12 21.4 3.6 16.5V6.7z"></path><circle cx="12" cy="11.6" r="3.1" fill="#252526"></circle></svg>
+                </span>
+                <span style="min-width:0;flex:1">
+                  <span style="display:block;font-size:14px;font-weight:600;color:#e7e7e7">PostgreSQL</span>
+                  <span style="display:block;font-size:12px;color:#9d9d9d;line-height:1.55;margin-top:4px">12 and newer, plus Aurora, Cloud SQL, Neon, Supabase and Timescale.</span>
+                  <span style="display:flex;gap:5px;margin-top:9px">
+                    <span class="chip" style="color:#8b93ec;background:rgba(139,147,236,.14);border-color:rgba(139,147,236,.40)">SCRAM</span>
+                    <span class="chip" style="color:#3ebfa3;background:rgba(62,191,163,.12);border-color:rgba(62,191,163,.38)">verify-full</span>
+                  </span>
+                </span>
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="#7a7a7a" stroke-width="1.4" style="flex-shrink:0;margin-top:13px"><path d="M6 4l4 4-4 4"></path></svg>
+              </button>
+            </div>
+          </div>
+
+          <div>
+            <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px">
+              <span class="cap">Start from something you have</span>
+              <div style="flex:1;height:1px;background:#2b2b2b"></div>
+            </div>
+
+            <div style="display:flex;gap:8px;align-items:center">
+              <input class="in mono" style="flex:1" placeholder="Paste a connection string or URL" />
+              <button class="btn btn-p">Parse</button>
+            </div>
+            <div style="font-size:11px;color:#7a7a7a;margin-top:7px;line-height:1.5">Every field is filled in from the string. A password inside it moves straight into the secret store and is stripped from what gets saved.</div>
+
+            <div style="display:flex;align-items:center;gap:9px;margin:22px 0 12px">
+              <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="#3fb84f" stroke-width="1.3"><circle cx="7" cy="7" r="4.4"></circle><path d="M10.3 10.3L14 14"></path></svg>
+              <span class="cap" style="color:#3fb84f">Found in this workspace</span>
+              <div style="flex:1;height:1px;background:#2b2b2b"></div>
+            </div>
+
+            <div style="display:flex;flex-direction:column;gap:9px">
+              <div class="find">
+                <span class="plate" style="width:26px;height:26px;background:rgba(90,160,208,.15)">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="#5aa0d0"><path d="M12 1.8l8.4 4.9v9.8L12 21.4 3.6 16.5V6.7z"></path><circle cx="12" cy="11.6" r="3.1" fill="#252526"></circle></svg>
+                </span>
+                <div style="min-width:0;flex:1">
+                  <div style="font-size:12px;color:#cccccc"><span class="mono">docker-compose.yml</span> runs postgres:16</div>
+                  <div style="font-size:11px;color:#7a7a7a;margin-top:2px">localhost:5433 · app_dev · postgres</div>
+                </div>
+                <button class="btn btn-env">Add as DEV</button>
+              </div>
+              <div class="find">
+                <span class="plate" style="width:26px;height:26px;background:rgba(224,179,65,.14)">
+                  <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="#e0b341" stroke-width="1.3"><rect x="3.2" y="7" width="9.6" height="6.6" rx="1.2"></rect><path d="M5.4 7V5a2.6 2.6 0 0 1 5.2 0v2"></path></svg>
+                </span>
+                <div style="min-width:0;flex:1">
+                  <div style="font-size:12px;color:#cccccc"><span class="mono">.env</span> sets DATABASE_URL</div>
+                  <div style="font-size:11px;color:#7a7a7a;margin-top:2px">localhost:5432 · orders · the password stays in the file and is not read until you connect</div>
+                </div>
+                <button class="btn btn-env">Add as DEV</button>
+              </div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </main>
+  </div>
+</div>
+</x-dc>
+
+<script data-dc-script data-props='{"$preview":{"width":1180,"height":800}}'>
+class Component extends DCLogic {}
+</script>
+</body>
+</html>

@@ -1,0 +1,192 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>
+* { box-sizing: border-box; }
+body { margin: 0; }
+a { color: #4daafc; text-decoration: none; }
+a:hover { color: #4daafc; text-decoration: underline; }
+.st {
+  --bg-editor:#1f1f1f; --bg-side:#181818; --bg-input:#313131; --bd-input:#3c3c3c; --bd:#2b2b2b;
+  --fg:#cccccc; --fg-strong:#e7e7e7; --fg-dim:#9d9d9d;
+  --accent:#0078d4; --accent-h:#026ec1;
+  --btn2-bg:#313131; --btn2-h:#3c3c3c; --hover:#2a2d2e;
+  --ok:#89d185; --warn:#cca700; --err:#f14c4c; --info:#3794ff;
+  --ok-bg:rgba(137,209,133,.10); --warn-bg:rgba(204,167,0,.10); --err-bg:rgba(241,76,76,.10);
+  --code-bg:#181818;
+  font-family: "Segoe WPF", "Segoe UI", system-ui, -apple-system, sans-serif;
+  font-size: 13px; line-height: 1.4; -webkit-font-smoothing: antialiased;
+}
+.cap { font-size: 11px; font-weight: 600; letter-spacing: .09em; text-transform: uppercase; color: #9d9d9d; }
+.capn { font-size: 11px; color: #7a7a7a; }
+.strip { border: 1px solid #2b2b2b; border-radius: 3px; overflow: hidden; }
+.btn { height: 24px; padding: 0 11px; border-radius: 2px; border: 1px solid transparent; font: inherit; font-size: 12px; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; gap: 6px; white-space: nowrap; }
+.btn-s { background: #313131; color: #cccccc; border-color: #3c3c3c; }
+.btn-g { background: transparent; color: #9d9d9d; }
+.mono { font-family: Consolas, "Cascadia Mono", "Courier New", monospace; font-size: 12px; }
+.in { height: 26px; background: #313131; color: #cccccc; border: 1px solid #3c3c3c; border-radius: 2px; padding: 0 8px; font: inherit; font-size: 13px; width: 100%; }
+.in-bad { border-color: #f14c4c; box-shadow: 0 0 0 1px rgba(241,76,76,.35); }
+.lbl { font-size: 12px; color: #cccccc; margin-bottom: 6px; display: block; }
+.vmsg { font-size: 11px; margin-top: 6px; display: flex; gap: 6px; line-height: 1.45; }
+@keyframes dbspin { to { transform: rotate(360deg); } }
+.sp { animation: dbspin 1s linear infinite; }
+</style>
+</helmet>
+
+<div class="st" style="width:1180px;height:1000px;background:#1f1f1f;color:#cccccc;padding:26px 30px;display:flex;flex-direction:column;gap:0">
+
+  <div style="margin-bottom:22px">
+    <div style="font-size:17px;font-weight:600;color:#e7e7e7">Result states</div>
+    <div style="font-size:12px;color:#9d9d9d;margin-top:5px;max-width:820px">Every outcome lands in the same strip above the action bar, never in a modal dialog and never in a toast that disappears before it is read. A failure states what the server said, what it means, and offers the fix as a button.</div>
+  </div>
+
+  <div style="display:flex;flex-direction:column;gap:20px">
+
+    <div style="display:flex;flex-direction:column;gap:8px">
+      <div style="display:flex;align-items:baseline;gap:12px">
+        <span class="cap">Not tested</span>
+        <span class="capn">The resting state. No colour, no icon, nothing to dismiss.</span>
+      </div>
+      <div class="strip" style="display:flex;align-items:center;gap:10px;padding:10px 20px;background:#1f1f1f">
+        <span style="font-size:12px;color:#9d9d9d">Not tested yet. Connecting will test it.</span>
+      </div>
+    </div>
+
+    <div style="display:flex;flex-direction:column;gap:8px">
+      <div style="display:flex;align-items:baseline;gap:12px">
+        <span class="cap">Testing</span>
+        <span class="capn">Names the step in progress, and stays cancellable throughout.</span>
+      </div>
+      <div class="strip" style="display:flex;align-items:center;gap:10px;padding:10px 20px;background:#181818">
+        <svg class="sp" width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="#0078d4" stroke-width="1.6" style="flex-shrink:0"><circle cx="8" cy="8" r="6" stroke-dasharray="28 12" stroke-linecap="round"></circle></svg>
+        <span style="font-size:12px;color:#cccccc">Resolving sql01.northwind.corp, then opening a socket on 1433</span>
+        <span style="flex:1"></span>
+        <button class="btn btn-g">Cancel</button>
+      </div>
+    </div>
+
+    <div style="display:flex;flex-direction:column;gap:8px">
+      <div style="display:flex;align-items:baseline;gap:12px">
+        <span class="cap">Connected</span>
+        <span class="capn">Proves the round trip: how long, which build, which principal the server saw.</span>
+      </div>
+      <div class="strip" style="display:flex;align-items:center;gap:10px;padding:10px 20px;background:rgba(137,209,133,.10)">
+        <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="#89d185" stroke-width="1.3" style="flex-shrink:0"><circle cx="8" cy="8" r="6.3"></circle><path d="M5.3 8.2l2 2 3.5-4.3"></path></svg>
+        <span style="font-size:12px;color:#cccccc"><span style="font-weight:600">Connected in 42 ms.</span> <span style="color:#9d9d9d">SQL Server 2022 · 16.0.4145.4 · signed in as t.rahman@northwind.corp · db_datareader</span></span>
+      </div>
+    </div>
+
+    <div style="display:flex;flex-direction:column;gap:8px">
+      <div style="display:flex;align-items:baseline;gap:12px">
+        <span class="cap">Certificate not trusted</span>
+        <span class="capn">The fix that keeps you safe comes first. Trusting blindly is a secondary action.</span>
+      </div>
+      <div class="strip" style="padding:12px 20px;background:rgba(241,76,76,.10)">
+        <div style="display:flex;gap:10px">
+          <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="#f14c4c" stroke-width="1.3" style="flex-shrink:0;margin-top:2px"><circle cx="8" cy="8" r="6.3"></circle><path d="M5.9 5.9l4.2 4.2M10.1 5.9l-4.2 4.2"></path></svg>
+          <div>
+            <div style="font-size:12px;font-weight:600;color:#cccccc">The server certificate could not be validated.</div>
+            <div style="font-size:12px;color:#9d9d9d;margin-top:3px;line-height:1.5;max-width:820px">sql02.northwind.corp presented a certificate issued by Northwind Internal CA, which is not in this machine's trust store. Encrypt is set to Mandatory, so the driver refused the connection rather than falling back to plain text.</div>
+            <div style="display:flex;gap:8px;margin-top:10px">
+              <button class="btn btn-s">Add Northwind Internal CA to the trust store</button>
+              <button class="btn btn-g">Show the certificate</button>
+              <button class="btn btn-g">Trust it for this connection only</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div style="display:flex;flex-direction:column;gap:8px">
+      <div style="display:flex;align-items:baseline;gap:12px">
+        <span class="cap">Login rejected</span>
+        <span class="capn">Reads the server's own state code and says what it usually means here.</span>
+      </div>
+      <div class="strip" style="padding:12px 20px;background:rgba(241,76,76,.10)">
+        <div style="display:flex;gap:10px">
+          <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="#f14c4c" stroke-width="1.3" style="flex-shrink:0;margin-top:2px"><circle cx="8" cy="8" r="6.3"></circle><path d="M5.9 5.9l4.2 4.2M10.1 5.9l-4.2 4.2"></path></svg>
+          <div>
+            <div style="font-size:12px;font-weight:600;color:#cccccc">The server refused the login for reporting.</div>
+            <div style="font-size:12px;color:#9d9d9d;margin-top:3px;line-height:1.5;max-width:820px">Error 18456, state 38. The password was accepted, but the login has no access to Warehouse. Either the database name is wrong or the login was never mapped to a user in it.</div>
+            <div style="display:flex;gap:8px;margin-top:10px">
+              <button class="btn btn-s">Connect to the default database instead</button>
+              <button class="btn btn-g">Clear the stored password</button>
+              <button class="btn btn-g">Copy the driver error</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div style="display:flex;flex-direction:column;gap:8px">
+      <div style="display:flex;align-items:baseline;gap:12px">
+        <span class="cap">Unreachable</span>
+        <span class="capn">Says how far it got, so the guess about what is broken is not yours to make.</span>
+      </div>
+      <div class="strip" style="padding:12px 20px;background:rgba(241,76,76,.10)">
+        <div style="display:flex;gap:10px">
+          <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="#f14c4c" stroke-width="1.3" style="flex-shrink:0;margin-top:2px"><circle cx="8" cy="8" r="6.3"></circle><path d="M5.9 5.9l4.2 4.2M10.1 5.9l-4.2 4.2"></path></svg>
+          <div>
+            <div style="font-size:12px;font-weight:600;color:#cccccc">No answer from pg-qa.northwind.corp on 5432 after 15 seconds.</div>
+            <div style="font-size:12px;color:#9d9d9d;margin-top:3px;line-height:1.5;max-width:820px">The name resolved to 10.42.7.19, so this is not a DNS problem. Nothing accepted the connection. The address is on a private range, which usually means the corporate network is not reachable from here.</div>
+            <div style="display:flex;gap:8px;margin-top:10px">
+              <button class="btn btn-s">Retry with a 60 second timeout</button>
+              <button class="btn btn-g">Set up an SSH tunnel</button>
+              <button class="btn btn-g">Copy the diagnostics</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <div style="height:1px;background:#2b2b2b;margin:26px 0 22px"></div>
+
+  <div>
+    <div style="display:flex;align-items:baseline;gap:12px;margin-bottom:14px">
+      <span class="cap">Field validation</span>
+      <span class="capn">Checked when the field loses focus, never while a character is being typed.</span>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(3, minmax(0, 1fr));gap:26px;max-width:1000px">
+      <div>
+        <label class="lbl">Connection name</label>
+        <input class="in in-bad" value="Billing-DB" readonly />
+        <div class="vmsg" style="color:#f14c4c">
+          <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" style="flex-shrink:0;margin-top:1px"><circle cx="8" cy="8" r="6.3"></circle><path d="M5.9 5.9l4.2 4.2M10.1 5.9l-4.2 4.2"></path></svg>
+          <span>A production connection already uses this name. Names have to be unique so the status bar is never ambiguous.</span>
+        </div>
+      </div>
+      <div>
+        <label class="lbl">Port</label>
+        <input class="in in-bad" value="1433000" readonly />
+        <div class="vmsg" style="color:#f14c4c">
+          <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" style="flex-shrink:0;margin-top:1px"><circle cx="8" cy="8" r="6.3"></circle><path d="M5.9 5.9l4.2 4.2M10.1 5.9l-4.2 4.2"></path></svg>
+          <span>A port has to be between 1 and 65535.</span>
+        </div>
+      </div>
+      <div>
+        <label class="lbl">SSL mode</label>
+        <input class="in" value="prefer" readonly style="border-color:#cca700" />
+        <div class="vmsg" style="color:#cca700">
+          <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" style="flex-shrink:0;margin-top:1px"><path d="M8 2.3l6.2 10.9H1.8z"></path><path d="M8 6.5v3.1M8 11.2v.6"></path></svg>
+          <span>Allowed, but prefer falls back to plain text without telling you. A QA connection should use verify-full.</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+</x-dc>
+
+<script data-dc-script data-props='{"$preview":{"width":1180,"height":1000}}'>
+class Component extends DCLogic {}
+</script>
+</body>
+</html>
