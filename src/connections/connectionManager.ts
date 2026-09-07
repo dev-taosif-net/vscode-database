@@ -25,6 +25,18 @@ interface ActiveConnection {
 }
 
 /**
+ * An attempt that has not landed yet. The kind is kept because the sidebar
+ * draws "Connecting" and "Testing" differently: only one of them ends in a
+ * session, and a row that says the wrong one is a row that lies.
+ */
+interface InFlight {
+  controller: AbortController;
+  kind: AttemptKind;
+}
+
+export type AttemptKind = 'connect' | 'test';
+
+/**
  * Everything between "the user pressed Connect" and "there is a session".
  * Owns credential resolution, the production guard, error translation, and the
  * set of open sessions.
@@ -36,7 +48,7 @@ export class ConnectionManager implements vscode.Disposable {
   ]);
 
   private readonly active = new Map<string, ActiveConnection>();
-  private readonly inFlight = new Map<string, AbortController>();
+  private readonly inFlight = new Map<string, InFlight>();
   /** Profile id to the title of its last failure, cleared by a success. */
   private readonly failures = new Map<string, string>();
 
@@ -58,6 +70,20 @@ export class ConnectionManager implements vscode.Disposable {
     return this.failures.get(profileId);
   }
 
+  /**
+   * Drops every remembered failure. It forgets them and nothing else: no
+   * attempt is retried, so a row that stops saying it failed is a row nobody
+   * has tried since, not a row that has quietly succeeded. That distinction is
+   * the entire honesty of the Refresh action, which is the only caller.
+   */
+  clearFailures(): void {
+    if (this.failures.size === 0) {
+      return;
+    }
+    this.failures.clear();
+    this.onDidChangeEmitter.fire();
+  }
+
   isConnected(profileId: string): boolean {
     const entry = this.active.get(profileId);
     return entry !== undefined && !entry.session.isClosed();
@@ -75,8 +101,13 @@ export class ConnectionManager implements vscode.Disposable {
     return this.inFlight.has(profileId);
   }
 
+  /** Which kind of attempt is in flight, or undefined when none is. */
+  busyKind(profileId: string): AttemptKind | undefined {
+    return this.inFlight.get(profileId)?.kind;
+  }
+
   cancel(profileId: string): void {
-    this.inFlight.get(profileId)?.abort();
+    this.inFlight.get(profileId)?.controller.abort();
   }
 
   /**
@@ -156,10 +187,13 @@ export class ConnectionManager implements vscode.Disposable {
   ): Promise<AttemptResult> {
     const existing = this.inFlight.get(profile.id);
     if (existing) {
-      existing.abort();
+      existing.controller.abort();
     }
     const controller = new AbortController();
-    this.inFlight.set(profile.id, controller);
+    this.inFlight.set(profile.id, { controller, kind: keep ? 'connect' : 'test' });
+    // The list draws a spinner from this, so it has to hear about the attempt
+    // when it starts and not only when it lands.
+    this.onDidChangeEmitter.fire();
 
     try {
       const driver = this.driverFor(profile);

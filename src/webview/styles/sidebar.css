@@ -1,0 +1,1531 @@
+@import './tokens.css';
+
+/*
+ * The connections sidebar.
+ *
+ * The list is read as three vertical columns of glyphs and one column of
+ * names, not as a hundred rows of prose, and every rule below serves that.
+ * The left rail is 0..44px and text begins at x=52 at every width and in
+ * every state. Nothing moves it — not a badge, not a hover, not a selection —
+ * because a glyph column that jogs by four pixels stops being a column.
+ *
+ * The ground tokens are defined here and not in `tokens.css`. The editor's
+ * `--bg` is `--vscode-editor-background`, which is #1f1f1f inside Dark
+ * Modern's #181818 sidebar; inheriting it would paint a visibly lighter
+ * rectangle inside the panel on first launch. The comment at the top of
+ * `tokens.css` says the same thing from the other side.
+ */
+
+:root {
+  --bg: var(--vscode-sideBar-background, var(--vscode-editor-background));
+  /* The Explorer's own section-header token, so headers render identically to
+     the workbench's in every theme with no theme code of our own. Several
+     themes leave it transparent, which is why the sticky overlay paints
+     `--bg` underneath rather than relying on it. */
+  --bg-header: var(--vscode-sideBarSectionHeader-background, transparent);
+  --fg: var(--vscode-sideBar-foreground, var(--vscode-foreground));
+  --fg-dim: var(--vscode-descriptionForeground);
+  --bd: var(--vscode-sideBar-border, var(--vscode-panel-border, color-mix(in srgb, var(--fg) 18%, transparent)));
+  --bd-header: var(--vscode-sideBarSectionHeader-border, var(--bd));
+  --hover: var(--vscode-list-hoverBackground);
+  --sel: var(--vscode-list-inactiveSelectionBackground);
+  --sel-active: var(--vscode-list-activeSelectionBackground);
+  --sel-fg: var(--vscode-list-activeSelectionForeground, var(--fg));
+  --focus: var(--vscode-focusBorder);
+  /* The tree's own match-highlight token, so a hit here looks like a hit in
+     the Explorer's filter. */
+  --mark: var(--vscode-list-highlightForeground, var(--vscode-textLink-foreground));
+  /* The workbench's in-progress token. It is defined in both high-contrast
+     themes, which `--fg-dim` is not a substitute for. */
+  --busy: var(--vscode-progressBar-background, var(--vscode-textLink-foreground));
+  --input-bg: var(--vscode-input-background);
+  --input-bd: var(--vscode-input-border, var(--vscode-contrastBorder, var(--bd)));
+  --input-ph: var(--vscode-input-placeholderForeground, var(--fg-dim));
+  --toolbar-hover: var(--vscode-toolbar-hoverBackground, var(--hover));
+  /* Mixed from the foreground rather than taken from `scrollbarSlider`, which
+     several themes leave almost fully transparent. Same recipe as the editor,
+     narrower bar. */
+  --scroll: color-mix(in srgb, var(--fg) 28%, transparent);
+  /* Resolve to nothing outside high contrast, so one rule serves every theme. */
+  --ct: var(--vscode-contrastBorder, transparent);
+  --ct-active: var(--vscode-contrastActiveBorder, transparent);
+
+  /*
+   * Geometry. These four are the CSS half of the `H` table in
+   * `src/webview/sidebar/model.ts` and they must agree with it exactly: the
+   * virtualizer positions every row from `H`, so a stylesheet that disagrees
+   * produces a list that is truthful about its offsets and visibly wrong.
+   * H.row 22, H.group 24, H.groupCollapsed 40, H.pinned 24, H.nomatch 44.
+   */
+  --row-h: 22px;
+  --head-h: 24px;
+  --head-h-collapsed: 40px;
+  --nomatch-h: 44px;
+  /* The left rail: ribbon, state glyph, engine mark, 0..44, text at 52. The
+     margins on `.glyph` and `.engine` sum to it; this is the ruler they are
+     checked against, not an input they are computed from, because a rail that
+     moved would have to move the text with it. */
+  --rail-w: 44px;
+  --band-h: 32px;
+  /* How much of the row's right edge the hover rail covers, per tier. The
+     text mask is derived from it so the two can never drift apart. */
+  --rail-open: 46px;
+}
+
+/*
+ * Nothing here reads `--vscode-font-size`, and the sizes below are literals.
+ * A row is a hard 22px; a user with a larger UI font would get clipped text
+ * while the virtualizer's offsets still said 22. The workbench's own tree does
+ * exactly this — list rows are 22px regardless of `editor.fontSize` and follow
+ * `window.zoomLevel` only, which scales the whole webview uniformly and keeps
+ * the ratio. Changing 13px to `var(--vscode-font-size)` looks like a fix and
+ * is the bug.
+ */
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  overflow: hidden;
+  color: var(--fg);
+  background: var(--bg);
+  font-family: var(--vscode-font-family);
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+#root {
+  height: 100%;
+}
+
+:focus-visible {
+  outline: 1px solid var(--focus);
+  outline-offset: -1px;
+}
+
+/* 8px, not the editor's 12. Twelve pixels of a 170px panel is seven percent. */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--scroll);
+  border: 2px solid transparent;
+  background-clip: content-box;
+  border-radius: 999px;
+  min-height: 28px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: color-mix(in srgb, var(--fg) 45%, transparent);
+  background-clip: content-box;
+}
+
+::-webkit-scrollbar-thumb:active {
+  background: color-mix(in srgb, var(--fg) 60%, transparent);
+  background-clip: content-box;
+}
+
+::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+/* ----------------------------------------------------------------- shell */
+
+/*
+ * `container-type: inline-size` is what every width rule in this file queries.
+ * It also applies layout containment, which makes `.sidebar` the containing
+ * block for the sticky overlay — the overlay has to sit outside the scroller's
+ * scrolled coordinate space or it would scroll away with the rows it is meant
+ * to pin.
+ */
+.sidebar {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  position: relative;
+  overflow: hidden;
+  container-type: inline-size;
+  container-name: rail;
+}
+
+/* ---------------------------------------------------------------- search */
+
+.search {
+  display: block;
+  position: relative;
+  flex: none;
+  height: var(--band-h);
+  padding: 3px 6px;
+  border-bottom: 1px solid var(--bd);
+}
+
+.search-icon {
+  position: absolute;
+  left: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 13px;
+  color: var(--fg-dim);
+  pointer-events: none;
+}
+
+.search-input {
+  width: 100%;
+  height: 26px;
+  padding: 0 26px 0 30px;
+  border: 1px solid var(--input-bd);
+  border-radius: var(--radius-sm);
+  background: var(--input-bg);
+  color: var(--vscode-input-foreground, var(--fg));
+  font-family: inherit;
+  font-size: 12px;
+}
+
+.search-input::placeholder {
+  color: var(--input-ph);
+}
+
+.search-input:focus {
+  outline: 1px solid var(--focus);
+  outline-offset: -1px;
+}
+
+.search-clear {
+  position: absolute;
+  right: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: 0;
+  border-radius: 3px;
+  background: none;
+  color: var(--fg-dim);
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.search-clear:hover {
+  background: var(--toolbar-hover);
+  color: var(--fg);
+}
+
+/* ------------------------------------------------------------------ list */
+
+/*
+ * `scrollbar-gutter: stable` reserves the 8px rather than overlaying it. A
+ * scrollbar that appears the moment the list outgrows the viewport reflows
+ * every row underneath it, and eight permanent pixels are cheaper than that.
+ */
+.list {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  scrollbar-gutter: stable;
+  outline: none;
+}
+
+/* The full pixel height of the flattened list. Rows, headers and ribbons are
+   absolutely positioned inside it at the offsets `measure()` computed. */
+.spacer {
+  position: relative;
+  width: 100%;
+}
+
+/* --------------------------------------------------------------- ribbons */
+
+/*
+ * One bar per group, sized to the group's whole pixel extent — four or five
+ * elements whether the list holds twenty connections or two thousand.
+ *
+ * Environment saturation lives here and row state lives on `.row.is-live`'s
+ * pseudo-element. They are two axes and putting them on one element is the
+ * contradiction this design was built to remove: "production is the only
+ * saturated ribbon" compares environments, "a connected row is brighter"
+ * compares rows, and a single opacity cannot say both.
+ */
+.ribbon {
+  position: absolute;
+  left: 0;
+  width: 3px;
+  z-index: 0;
+  background: var(--env-ink);
+  opacity: 0.55;
+  pointer-events: none;
+}
+
+.ribbon.env-prod {
+  opacity: 1;
+}
+
+/* --------------------------------------------------------- sticky header */
+
+/*
+ * `VirtualList` writes `translateY` on this element once per frame for the
+ * push-off and nothing else touches it. Where it sits decides how it holds
+ * still, and both placements are covered below because the geometry, not the
+ * DOM, is the thing that has to be right.
+ */
+.sticky {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 3;
+  /* `--bg-header` is transparent in several themes, and rows would scroll
+     through an overlay that had no ground of its own. */
+  background: var(--bg);
+  pointer-events: auto;
+  will-change: transform;
+}
+
+/*
+ * Rendered inside the scroller, as a child of the spacer. An absolutely
+ * positioned descendant of a scroll container is laid out in the scrolled
+ * coordinate space and would slide away with the rows it is meant to pin, so
+ * here `top: 0` has to mean sticky rather than absolute. The objection to
+ * `position: sticky` was that it does not compose with absolutely positioned
+ * rows inside a *transformed* spacer; this spacer is not transformed — it is a
+ * plain box with an explicit height — so sticky composes, and the push-off
+ * transform rides on top of it either way. It is the only in-flow child of the
+ * spacer, so it starts at y=0 whatever its order in the markup.
+ */
+.spacer > .sticky {
+  position: sticky;
+  left: auto;
+  right: auto;
+}
+
+/* Rendered as a sibling of the scroller, where `.sidebar` is the containing
+   block and the search band above it is an offset to add back. */
+.sidebar > .sticky {
+  top: var(--band-h);
+}
+
+/* The overlay sits directly under the search band's own hairline, so its
+   header draws no top border of its own; two lines there read as one thick
+   one. It is also the reason no header needs a "not the first" rule: the
+   first header is always the one the overlay is covering. */
+.sticky .head {
+  position: relative;
+  border-top-color: transparent;
+}
+
+.sticky .ribbon {
+  top: 0;
+  bottom: 0;
+  height: auto;
+}
+
+/* --------------------------------------------------------- section heads */
+
+/*
+ * A group header or the pinned header. The 3px transparent left border with
+ * `background-clip: padding-box` is what lets the ribbon run unbroken behind
+ * it: the header's ground starts at x=3 and the bar shows through underneath.
+ * Twistie still lands at x=8, because 3 + 5 = 8.
+ */
+.head {
+  position: absolute;
+  left: 0;
+  right: 0;
+  z-index: 1;
+  height: var(--head-h);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  align-content: flex-start;
+  padding: 0 8px 0 5px;
+  border-left: 3px solid transparent;
+  border-top: 1px solid var(--bd-header);
+  background: var(--bg-header);
+  background-clip: padding-box;
+  cursor: pointer;
+  user-select: none;
+}
+
+.head.is-collapsed {
+  height: var(--head-h-collapsed);
+}
+
+.head:hover {
+  background: var(--hover);
+  background-clip: padding-box;
+}
+
+.twistie {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 24px;
+  margin-right: 4px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--fg-dim);
+  font-size: 14px;
+  cursor: pointer;
+}
+
+/*
+ * Only a chevron that points down may be rotated. A component that swaps in
+ * `codicon-chevron-right` instead is already correct and rotating that one
+ * would point it at the ceiling.
+ */
+.twistie .codicon-chevron-down {
+  transition: transform var(--motion) ease;
+}
+
+.head.is-collapsed .twistie .codicon-chevron-down {
+  transform: rotate(-90deg);
+}
+
+/*
+ * The pinned header carries no `.env-*` class, because a pinned section
+ * belongs to no environment — its rows keep their own hues and that
+ * multicoloured ribbon column is how the section is told apart. So `--env-ink`
+ * is genuinely unset there and the fallback, not a modifier class, is what
+ * makes it a neutral.
+ */
+.head-glyph {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 12px;
+  height: 24px;
+  margin-right: 4px;
+  font-size: 12px;
+  color: var(--env-ink, var(--fg-dim));
+}
+
+.head-badge {
+  flex: none;
+  min-width: 22px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: var(--env-ink, var(--fg-dim));
+  white-space: nowrap;
+}
+
+.head-full {
+  display: none;
+  flex: 0 1 auto;
+  min-width: 0;
+  margin-left: 4px;
+  height: 24px;
+  line-height: 24px;
+  font-size: 11px;
+  color: var(--fg-dim);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.head-count {
+  flex: none;
+  margin-left: auto;
+  padding-left: 8px;
+  height: 24px;
+  line-height: 24px;
+  font-size: 10px;
+  font-weight: 500;
+  color: var(--fg-dim);
+  white-space: nowrap;
+}
+
+/*
+ * The guard sentence. It is hidden on an open header until there is width for
+ * it, and it appears on a collapsed one — 24px of header plus a 16px line —
+ * because that is information arriving exactly where space became free, and it
+ * is what makes folding everything an orientation view rather than a way to
+ * hide rows.
+ */
+.head-guard {
+  display: none;
+  flex: 0 0 100%;
+  height: 16px;
+  line-height: 16px;
+  padding-left: 34px;
+  font-size: 10.5px;
+  color: var(--fg-dim);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.head.is-collapsed .head-guard {
+  display: block;
+}
+
+/* ------------------------------------------------------------------- row */
+
+/*
+ * 22px, and it is 22px at 170 pixels of panel and at 900. Extra width buys
+ * extra columns, never extra rows. The same 3px transparent left border the
+ * headers carry keeps the ribbon unbroken behind a hover or a selection, and
+ * lands the state glyph at x=8.
+ */
+.row {
+  position: absolute;
+  left: 0;
+  right: 0;
+  z-index: 1;
+  height: var(--row-h);
+  display: flex;
+  align-items: center;
+  padding: 0 8px 0 5px;
+  border-left: 3px solid transparent;
+  background-clip: padding-box;
+  color: var(--fg);
+  cursor: pointer;
+  user-select: none;
+}
+
+/*
+ * The connected row's tick. `left: -3px` because the row's padding box starts
+ * after the transparent border, and this bar belongs at x=0 with the group
+ * ribbon it overwrites. Zero extra elements and zero extra geometry, and the
+ * ribbon column becomes a state readout: a mostly-faint bar with bright ticks
+ * wherever a session is open.
+ */
+.row.is-live::before {
+  content: '';
+  position: absolute;
+  left: -3px;
+  top: 3px;
+  bottom: 3px;
+  width: 3px;
+  background: var(--env-ink);
+}
+
+/*
+ * Hover and selection are the only backgrounds any row ever gets. Not
+ * connectedness, not production, not a 7% tint and not a glow: background is
+ * the channel selection owns, a row can be both connected and selected, and
+ * forty washed rows are wallpaper rather than a signal.
+ */
+.row:hover {
+  background: var(--hover);
+  background-clip: padding-box;
+}
+
+.row.is-selected {
+  background: var(--sel);
+  background-clip: padding-box;
+}
+
+.list:focus-within .row.is-selected {
+  background: var(--sel-active);
+  background-clip: padding-box;
+  color: var(--sel-fg);
+  outline: 1px solid var(--focus);
+  outline-offset: -1px;
+}
+
+.row.is-cursor:focus-visible,
+.head:focus-visible {
+  outline: 1px solid var(--focus);
+  outline-offset: -1px;
+}
+
+/* ----------------------------------------------------------- state glyph */
+
+/* 8..24. The only place in a row where a filled shape appears, which is what
+   makes four live sessions findable among eighty-four rows pre-attentively. */
+.glyph {
+  position: relative;
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  margin-right: 4px;
+  font-size: 12px;
+  color: color-mix(in srgb, var(--env-ink) 70%, transparent);
+}
+
+.row.is-live .glyph {
+  color: var(--env-ink);
+}
+
+/* Failure surrenders the environment hue. That surrender is itself the
+   signal, and it is why amber never appears on a ribbon. */
+.row.is-failed .glyph {
+  color: var(--warn-ink);
+}
+
+.row.is-busy .glyph {
+  color: var(--busy);
+}
+
+/*
+ * Both spinner glyphs are always in the DOM and the media query picks one.
+ * Under reduced motion `codicon-loading` freezes into a static arc that claims
+ * a motion it does not have — a lie in the one state that is about to change —
+ * so the static `sync` takes over. No JavaScript branch, nothing that can
+ * disagree with the stylesheet.
+ */
+.glyph-busy .codicon-sync {
+  display: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .glyph-busy .codicon-loading {
+    display: none;
+  }
+  .glyph-busy .codicon-sync {
+    display: inline-block;
+  }
+}
+
+.lock {
+  position: absolute;
+  right: -2px;
+  bottom: -2px;
+  font-size: 9px;
+  line-height: 1;
+  color: var(--env-ink);
+}
+
+/* 28..44. */
+.engine {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  margin-right: 8px;
+}
+
+/* ------------------------------------------------- the elastic text run */
+
+/*
+ * Text begins at x=52 — 5 padding + 3 border + 16 glyph + 4 + 16 engine + 8.
+ * The shrink order below never varies within a tier: the domain suffix
+ * evaporates first, then the database, then the host's first label, then the
+ * name ellipsises. Every row in a tier shows the same fields, because a field
+ * that appears on some rows and not others destroys the vertical scan the
+ * whole design is built on.
+ */
+.run {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  overflow: hidden;
+}
+
+/*
+ * The rail's fade is a mask, not a colour gradient. A colour gradient has to
+ * fade to whatever the row's background currently is — plain, hover, inactive
+ * selection, active selection — and CSS cannot name that composite. A mask
+ * does not care what is behind it, which is also why it survives high contrast
+ * and forced colors.
+ *
+ * It is applied only under :hover and :focus-within and must never move to the
+ * base rule. Masking creates a stacking context and can force a composited
+ * layer; thirty masked rows is thirty GPU layers on a list that has to scroll
+ * at 60fps. At most one row is masked at any moment. If a profiler ever shows
+ * a layer per row, this selector has been widened and the fix is to narrow it
+ * back, not to swap the mask for a colour.
+ */
+.row:hover .run,
+.row:focus-within .run {
+  -webkit-mask-image: linear-gradient(
+    90deg,
+    #000 calc(100% - var(--rail-open)),
+    transparent calc(100% - var(--rail-open) + 24px)
+  );
+  mask-image: linear-gradient(
+    90deg,
+    #000 calc(100% - var(--rail-open)),
+    transparent calc(100% - var(--rail-open) + 24px)
+  );
+}
+
+/* A row lifted into the pinned section, or any row in flat mode, has no header
+   above it saying what environment it is in, so it says so itself. */
+.env-badge {
+  flex: none;
+  margin-right: 6px;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: var(--env-ink);
+  white-space: nowrap;
+}
+
+/* The only 13px text in the panel, so three text elements on one line never
+   compete: the ramp is luminance and weight, not size. */
+.name {
+  flex: 1 1 auto;
+  min-width: 76px;
+  font-size: 13px;
+  font-weight: 450;
+  color: inherit;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.row.is-live .name {
+  font-weight: 600;
+}
+
+/*
+ * A 1px hairline rather than a middot. At 10.5px a dot is a speck the eye has
+ * to jump over; a rule is something it can run down. Drawn only when the field
+ * after it is drawn, which is what keeps a trailing separator off a row whose
+ * database is hidden.
+ */
+.sep {
+  display: none;
+  flex: none;
+  align-self: center;
+  width: 1px;
+  height: 10px;
+  margin: 0 5px;
+  background: color-mix(in srgb, var(--fg) 14%, transparent);
+}
+
+/* Monospace because 10.0.14.22 and 10.0.14.23 are only separable at a fixed
+   pitch, and because it gives the line a texture the eye can skip. */
+.host {
+  display: none;
+  flex: 0 1 auto;
+  flex-shrink: 2;
+  min-width: 0;
+  align-items: baseline;
+  font-family: var(--vscode-editor-font-family, monospace);
+  font-size: 10.5px;
+  color: var(--fg-dim);
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.host-head {
+  flex: 0 1 auto;
+  flex-shrink: 1;
+  min-width: 4ch;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/*
+ * The domain suffix is twenty repeated characters down sixty of eighty-four
+ * rows, so it is the first thing pressure takes — but it stays in the DOM at
+ * every width, so a copy takes the whole host and a search can mark a hit
+ * inside the domain.
+ */
+.host-tail {
+  flex: 0 1 auto;
+  flex-shrink: 6;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.host-port {
+  flex: none;
+}
+
+/*
+ * An address has no domain suffix to give away, so when it overflows it is
+ * truncated from the left: octets differ at their right end, and a `10.0.14…`
+ * that could be any of two hundred machines is worse than no host at all.
+ * `unicode-bidi: plaintext` keeps the characters in their written order while
+ * `direction` moves the ellipsis to the other side.
+ */
+.host:not(:has(.host-tail:not(:empty))) .host-head {
+  direction: rtl;
+  unicode-bidi: plaintext;
+  text-align: left;
+  min-width: 0;
+}
+
+.db {
+  display: none;
+  flex: 0 1 auto;
+  flex-shrink: 3;
+  min-width: 0;
+  font-size: 10.5px;
+  color: color-mix(in srgb, var(--fg-dim) 78%, transparent);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.auth {
+  display: none;
+  flex: none;
+  font-size: 10.5px;
+  color: var(--fg-dim);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* The matched substring, in the tree's own highlight colour. No background:
+   eighty-four highlighted cells with grounds of their own would be a second
+   selection channel competing with the real one. */
+mark {
+  background: transparent;
+  color: var(--mark);
+  font-weight: 600;
+}
+
+/* ----------------------------------------------------------- state badge */
+
+/*
+ * Saved carries no badge. On a realistic list seventy-eight of eighty-four
+ * rows are saved, and seventy-eight badges saying the same word is not
+ * information, it is 78 × 38px of ink competing with the name. The absence is
+ * a real encoding because the other three states reliably produce a mark.
+ */
+.badge {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 14px;
+  min-width: 38px;
+  margin-left: 6px;
+  padding: 0 6px;
+  border: 1px solid transparent;
+  border-radius: 3px;
+  font-size: 9.5px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  transition: opacity 80ms ease;
+}
+
+.badge-live {
+  color: var(--env-ink);
+}
+
+.badge-fail {
+  color: var(--warn-ink);
+}
+
+.badge-test {
+  color: var(--busy);
+}
+
+/* The one filled badge in the panel. A production session is the single state
+   worth spending a solid ground on. */
+.env-prod .badge-live {
+  background: var(--env-ink);
+  color: var(--bg);
+}
+
+/* The rail overlays the right edge of the row, so the badge goes with the text
+   it would otherwise sit on top of. A connected row still says so through the
+   filled disc, the 600-weight name and the bright ribbon tick — the badge is
+   its fourth carrier, not its only one. */
+.row:hover .badge,
+.row:focus-within .badge {
+  opacity: 0;
+}
+
+/* ------------------------------------------------------------ hover rail */
+
+/*
+ * Buttons are `tabindex="-1"` and never in the tab order, exactly as the
+ * native tree's inline actions behave. The keyboard path to every one of them
+ * is a direct key or the `⋯` menu, which is the same menu at every width.
+ * Only opacity transitions; nothing here may animate a layout property.
+ */
+.rail {
+  position: absolute;
+  right: 8px;
+  top: 0;
+  bottom: 0;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 80ms ease;
+}
+
+.row:hover .rail,
+.row:focus-within .rail {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.rail-btn {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: 0;
+  border-radius: 3px;
+  background: none;
+  color: var(--fg-dim);
+  font-size: 16px;
+  cursor: pointer;
+}
+
+.rail-btn:hover {
+  background: var(--toolbar-hover);
+  color: var(--fg);
+}
+
+.rail-btn:focus-visible {
+  outline: 1px solid var(--focus);
+  outline-offset: -1px;
+}
+
+/*
+ * The rail renders every button it will ever show and CSS decides how many
+ * survive, because the panel holds no breakpoint numbers in JavaScript. The
+ * first button is the primary session action and the last is `⋯`; those two
+ * are the pair that survives the narrowest panel.
+ */
+.rail-btn:not(:first-child):not(:last-child) {
+  display: none;
+}
+
+/* ------------------------------------------------- no match, empty state */
+
+/* Two lines inside 44px: the message beside its icon, then the link under it.
+   Wrapping does the second line, so the card needs no wrapper element of its
+   own and stays one flat item in the tree. */
+.nomatch {
+  position: absolute;
+  left: 0;
+  right: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  align-content: center;
+  column-gap: 8px;
+  height: var(--nomatch-h);
+  padding: 0 8px;
+}
+
+.nomatch .codicon {
+  flex: none;
+  font-size: 14px;
+  color: var(--fg-dim);
+}
+
+.nomatch p {
+  flex: 1 1 auto;
+  min-width: 0;
+  margin: 0;
+  font-size: 12px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.nomatch button {
+  flex: 0 0 100%;
+  margin-top: 2px;
+  /* Under the message, not under its icon. */
+  padding: 0 0 0 22px;
+  border: 0;
+  background: none;
+  color: var(--vscode-textLink-foreground);
+  font-family: inherit;
+  font-size: 11px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.nomatch button:hover {
+  color: var(--vscode-textLink-activeForeground, var(--vscode-textLink-foreground));
+  text-decoration: underline;
+}
+
+/* Replaces the scroller, not the search band. The editor's 272px `.engine-card`
+   does not fit a 170px panel, so this is its own thing and the button is full
+   width rather than a card. */
+.empty {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 16px;
+  text-align: center;
+}
+
+.empty .codicon {
+  font-size: 32px;
+  color: var(--fg-dim);
+}
+
+.empty h2 {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.empty p {
+  margin: 0;
+  font-size: 12px;
+  color: var(--fg-dim);
+  line-height: 1.5;
+}
+
+.empty button {
+  width: 100%;
+  height: 26px;
+  margin-top: 4px;
+  border: 1px solid var(--vscode-contrastBorder, transparent);
+  border-radius: 2px;
+  background: var(--vscode-button-background);
+  color: var(--vscode-button-foreground);
+  font-family: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.empty button:hover {
+  background: var(--vscode-button-hoverBackground, var(--vscode-button-background));
+}
+
+/* ---------------------------------------------------------------- footer */
+
+.footer {
+  flex: none;
+  border-top: 1px solid var(--bd);
+}
+
+/*
+ * A production session is open and nothing may hide it. 18px above the counts
+ * strip, so the footer grows from 22 to 40 and the list loses a row — which is
+ * the correct trade the one time it happens.
+ */
+.prod-band {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 18px;
+  padding: 0 8px 0 11px;
+  border-bottom: 1px solid var(--bd);
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--env-prod-ink);
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.prod-band::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  background: var(--env-prod-ink);
+}
+
+.prod-band .codicon {
+  flex: none;
+  font-size: 12px;
+}
+
+.prod-band button {
+  flex: 0 1 auto;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font-family: inherit;
+  font-size: inherit;
+  font-weight: inherit;
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.prod-band button:last-child {
+  margin-left: auto;
+  padding-left: 8px;
+  flex: none;
+}
+
+.prod-band button:hover {
+  text-decoration: underline;
+}
+
+.counts {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  height: var(--row-h);
+  padding: 0 8px;
+  font-size: 11px;
+  color: var(--fg-dim);
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+/*
+ * The counts strip stays mounted and stays a live region while the readout has
+ * the footer, so it wears `.sr-only` as well. That utility is defined in
+ * `tokens.css` and therefore loses to anything here at the same specificity;
+ * these two are the declarations it needs back to stay a one-pixel box.
+ */
+.counts.sr-only {
+  height: 1px;
+  padding: 0;
+}
+
+.counts .codicon {
+  font-size: 11px;
+  margin-right: 3px;
+}
+
+.counts .codicon-warning {
+  color: var(--warn-ink);
+}
+
+.counts > :last-child {
+  margin-left: auto;
+}
+
+/*
+ * The cursor row's detail, and it follows the cursor rather than the pointer.
+ * Slaved to hover it would rewrite itself eighty-four times as the mouse
+ * crossed the list, which is how a strip with a production alarm in it becomes
+ * a strip the eye discounts. Driven by the cursor it changes at click and
+ * keypress rate, and the mouse and keyboard paths are the same path.
+ */
+.readout {
+  height: var(--row-h);
+  padding: 0 8px;
+  line-height: var(--row-h);
+  font-family: var(--vscode-editor-font-family, monospace);
+  font-size: 10.5px;
+  color: var(--fg-dim);
+  white-space: nowrap;
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+
+.readout::-webkit-scrollbar {
+  height: 0;
+}
+
+/* --------------------------------------------------- environment scoping */
+
+/*
+ * Exactly the scoping `editor.css` uses: the class sets the two variables and
+ * everything beneath reads them, so no rule in this file names an environment.
+ * The class goes on the `.row`, the `.head` and the `.ribbon`.
+ *
+ * The sidebar reads `--env-ink` almost everywhere. Every environment mark here
+ * is small — a 3px bar, a 12px glyph, a 10.5px badge — and a small mark is
+ * read the way text is read, so it needs text contrast. `--env` is defined
+ * anyway so the class means the same thing on both surfaces.
+ */
+.env-dev {
+  --env: var(--env-dev);
+  --env-ink: var(--env-dev-ink);
+}
+
+.env-qa {
+  --env: var(--env-qa);
+  --env-ink: var(--env-qa-ink);
+}
+
+.env-uat {
+  --env: var(--env-uat);
+  --env-ink: var(--env-uat-ink);
+}
+
+.env-prod {
+  --env: var(--env-prod);
+  --env-ink: var(--env-prod-ink);
+}
+
+/* ------------------------------------------------------------------ tiers */
+
+/*
+ * Five tiers, all `@container rail`. There is not one media query for width in
+ * this file and not one breakpoint number in the panel's JavaScript, so
+ * dragging the sash costs zero React renders at every width rather than merely
+ * within a tier. The thresholds come from measuring content against the
+ * workbench UI font at 13px and the editor mono at 10.5px:
+ *
+ *   name floor 76px · badge 38 + 6 gap · host 57 + 11 sep · database 47 + 11
+ *   elastic = W − 52 − 8 − 8
+ *
+ * The base rules above are the xs tier, below 196px: name only, and a badge
+ * only where a missing word costs something.
+ */
+
+/*
+ * xs, under 196px. Connected and testing give up their badge; failed and
+ * production keep theirs. Connected already carries three other marks, so its
+ * word is the cheapest thing in the panel to lose. Failure's amber triangle
+ * could be read as UAT's amber by someone who has not learned the vocabulary,
+ * and production is where a missing word costs something.
+ */
+.badge-live,
+.badge-test {
+  display: none;
+}
+
+.env-prod .badge-live {
+  display: inline-flex;
+}
+
+/* sm — 196px. The badge returns for every state. 152px of elastic, and a state
+   word beats twenty more characters of a host you already know. */
+@container rail (min-width: 196px) {
+  .badge-live,
+  .badge-test {
+    display: inline-flex;
+  }
+
+  .rail-btn:not(:first-child):not(:last-child) {
+    display: flex;
+  }
+
+  /* Four 20px buttons. The mask is derived from this number rather than
+     carrying its own, so a rail that grows cannot outrun its own fade. */
+  .row {
+    --rail-open: 80px;
+  }
+}
+
+/* md — 256px, the canonical drawing. 192px of elastic; 148px of text after the
+   badge and its gap. */
+@container rail (min-width: 256px) {
+  .host {
+    display: flex;
+  }
+
+  .sep:has(+ .host) {
+    display: block;
+  }
+
+  .head-full {
+    display: block;
+  }
+}
+
+/* lg — 312px. The database appears as a third element, and the group header
+   carries its guard without being collapsed first. */
+@container rail (min-width: 312px) {
+  .db {
+    display: inline;
+  }
+
+  .sep:has(+ .db) {
+    display: block;
+  }
+
+  .head:not(.is-collapsed) .head-guard {
+    display: block;
+    flex: 0 1 auto;
+    min-width: 0;
+    height: 24px;
+    line-height: 24px;
+    padding-left: 10px;
+  }
+}
+
+/*
+ * xl — 440px. The run becomes a grid and the badge leaves it for a fixed right
+ * column, so name, host, database and badge align into vertical columns across
+ * every row. At 500px you are no longer reading rows, you are reading columns.
+ *
+ * The leading `auto` track is the pinned and flat rows' environment badge. It
+ * collapses to zero on a row that has none, and since a badge is present on
+ * every row of a section or on none of them, the columns still line up inside
+ * each section. Gaps live on the children rather than the tracks so a zero
+ * track really is zero, and the hairline separators step aside for the grid.
+ */
+@container rail (min-width: 440px) {
+  .run {
+    display: grid;
+    grid-template-columns: auto minmax(76px, 1fr) 30% 22%;
+    align-items: center;
+  }
+
+  /*
+   * Columns replace the hairlines, and the `!important` is the honest kind:
+   * a separator here is not merely unwanted, it is an unplaced grid item that
+   * would land in the badge's track. The search override below would otherwise
+   * out-specify a plain rule and put one back.
+   */
+  .sep {
+    display: none !important;
+  }
+
+  .env-badge {
+    grid-column: 1;
+  }
+
+  .name {
+    grid-column: 2;
+    padding-right: 10px;
+  }
+
+  .host {
+    grid-column: 3;
+    display: flex;
+    padding-right: 10px;
+  }
+
+  .db {
+    grid-column: 4;
+    display: block;
+    padding-right: 10px;
+  }
+
+  .badge {
+    width: 46px;
+    min-width: 46px;
+    margin-left: 8px;
+  }
+}
+
+/*
+ * 560px. A fourth track carries `authLabel(profile)` right-aligned. Both
+ * `authLabel` and `transportLabel` already appear in the tree's tooltip, so
+ * this promotes existing data out of a hover into the glance at no new cost.
+ */
+@container rail (min-width: 560px) {
+  .run {
+    grid-template-columns: auto minmax(76px, 1fr) 26% 19% 92px;
+  }
+
+  .auth {
+    grid-column: 5;
+    display: block;
+    text-align: right;
+  }
+}
+
+/* ----------------------------------------------------- the search override */
+
+/*
+ * A field the query matched is on the row at every width, 170px included, with
+ * the matched substring marked. Searching "billing" and getting back a row
+ * that reads `orders-write / orders-qa-01` with no visible reason it matched is
+ * the single worst scanning failure available, and this removes it without
+ * spending a pixel while nobody is searching. When it fires at 170px the name
+ * is cut to about six characters, which is correct: the user is searching, the
+ * match is the point, and the full name is in the readout, the `title=` and
+ * the accessible name.
+ *
+ * These come last so they beat every tier rule above without a specificity
+ * argument, and `.host` is forced to `flex` rather than the `inline` the
+ * database gets, because it is a flex container holding its own head, tail and
+ * port.
+ */
+.row[data-hit~='host'] .host {
+  display: flex !important;
+  flex-shrink: 0;
+  max-width: 100%;
+}
+
+.row[data-hit~='host'] .sep:has(+ .host) {
+  display: block;
+}
+
+.row[data-hit~='database'] .db {
+  display: inline !important;
+  flex-shrink: 0;
+  max-width: 100%;
+}
+
+.row[data-hit~='database'] .sep:has(+ .db) {
+  display: block;
+}
+
+/*
+ * The name's 76px floor is what stops it evicting its neighbours in the
+ * ordinary case, and it is exactly what has to give here: at 170px a forced
+ * host leaves the name about six characters, which is the correct trade while
+ * a query is running. `max-width: 100%` above is the other half — a field that
+ * refuses to shrink still has to fit inside the run rather than be clipped
+ * with the match halfway off the edge.
+ */
+.row[data-hit~='host'] .name,
+.row[data-hit~='database'] .name {
+  min-width: 0;
+}
+
+/* ------------------------------------------------------- high contrast */
+
+/*
+ * Every tint in this design is a `color-mix` against `transparent`, and high
+ * contrast flattens perceived opacity until those are at or near invisible. So
+ * each one has a shape twin: a width, a dash pattern, a border, an outline.
+ * Nothing that carries meaning is lost when the tints die.
+ */
+body.vscode-high-contrast .ribbon,
+body.vscode-high-contrast-light .ribbon {
+  width: 4px;
+  opacity: 1;
+}
+
+/* Production stops being a saturation and becomes a dash pattern, because
+   saturation is exactly what high contrast takes away. */
+body.vscode-high-contrast .ribbon.env-prod,
+body.vscode-high-contrast-light .ribbon.env-prod {
+  background: repeating-linear-gradient(180deg, var(--env-ink) 0 4px, transparent 4px 8px);
+}
+
+body.vscode-high-contrast .row.is-live::before,
+body.vscode-high-contrast-light .row.is-live::before {
+  left: -4px;
+  width: 4px;
+}
+
+body.vscode-high-contrast .row,
+body.vscode-high-contrast-light .row,
+body.vscode-high-contrast .head,
+body.vscode-high-contrast-light .head {
+  border-left-width: 4px;
+  padding-left: 4px;
+}
+
+/* There is no row border normally; without one, rows in high contrast run
+   together into a single block of text. */
+body.vscode-high-contrast .row,
+body.vscode-high-contrast-light .row {
+  border-bottom: 1px solid var(--ct);
+}
+
+body.vscode-high-contrast .row.is-selected,
+body.vscode-high-contrast-light .row.is-selected {
+  outline: 1px solid var(--ct-active);
+  outline-offset: -1px;
+}
+
+/* `sideBarSectionHeader-background` may be transparent, so a header needs an
+   edge of its own to be a header at all. */
+body.vscode-high-contrast .head,
+body.vscode-high-contrast-light .head {
+  border-block: 1px solid var(--ct);
+}
+
+/*
+ * The badge becomes outline-plus-text for every state including production. A
+ * filled `--env-prod-ink` ground under `--bg` text is the one place in this
+ * file that depends on a measured contrast between two literals, and high
+ * contrast is where that measurement stops being ours to make.
+ */
+body.vscode-high-contrast .badge,
+body.vscode-high-contrast-light .badge {
+  border-color: currentColor;
+}
+
+body.vscode-high-contrast .env-prod .badge-live,
+body.vscode-high-contrast-light .env-prod .badge-live {
+  background: transparent;
+  color: var(--env-ink);
+}
+
+body.vscode-high-contrast :focus-visible,
+body.vscode-high-contrast-light :focus-visible,
+body.vscode-high-contrast .list:focus-within .row.is-selected,
+body.vscode-high-contrast-light .list:focus-within .row.is-selected {
+  outline-width: 2px;
+}
+
+/* --------------------------------------------------------- forced colors */
+
+/*
+ * A separate mechanism from the two `body.vscode-high-contrast*` classes, and
+ * a webview on Windows can be in both at once.
+ *
+ * Here the environment hue is surrendered to the OS entirely: ribbons render
+ * `CanvasText` and differ only by width and dash pattern. Fighting the system
+ * palette with `forced-color-adjust: none` on a decorative bar is precisely
+ * what makes a webview look wrong inside an OS that has been told to stop
+ * using colour. The environment is still carried by the sticky header's short
+ * badge, which is text and is always on screen.
+ */
+@media (forced-colors: active) {
+  .ribbon {
+    background: CanvasText;
+    opacity: 1;
+    width: 3px;
+  }
+
+  .ribbon.env-prod {
+    width: 4px;
+    background: repeating-linear-gradient(180deg, CanvasText 0 4px, transparent 4px 8px);
+  }
+
+  .row.is-live::before {
+    background: CanvasText;
+  }
+
+  .row {
+    border-bottom: 1px solid CanvasText;
+  }
+
+  .head {
+    border-block: 1px solid CanvasText;
+  }
+
+  .badge {
+    border-color: currentColor;
+    background: transparent;
+    forced-color-adjust: none;
+    color: CanvasText;
+  }
+
+  /* The one place a forced palette must be overruled: selection has to remain
+     distinguishable from a plain row, and Highlight is the OS's own answer. */
+  .row.is-selected,
+  .list:focus-within .row.is-selected {
+    background: Highlight;
+    color: HighlightText;
+  }
+
+  .rail-btn:hover {
+    background: Highlight;
+    color: HighlightText;
+  }
+}

@@ -21,15 +21,20 @@ const host = {
 };
 
 /**
- * The connection editor. It runs in a webview, which is a browser, so it is
- * bundled separately for the browser with React linked in. Nothing here is
- * loaded until an editor is opened.
+ * The two webviews: the connection editor in a tab, and the connections list in
+ * the sidebar. Each is a browser, so each is bundled for the browser with React
+ * linked in. They are separate entry points rather than one shared bundle
+ * because the sidebar is resolved on startup and the editor is not: sharing a
+ * bundle would make opening the sidebar pay for a form nobody has asked for.
  */
 /** @type {import('esbuild').BuildOptions} */
 const webview = {
-  entryPoints: ['src/webview/index.tsx'],
+  entryPoints: {
+    editor: 'src/webview/index.tsx',
+    sidebar: 'src/webview/sidebar/index.tsx'
+  },
   bundle: true,
-  outfile: 'dist/webview/editor.js',
+  outdir: 'dist/webview',
   platform: 'browser',
   target: 'es2020',
   format: 'iife',
@@ -42,10 +47,10 @@ const webview = {
 
 /** @type {import('esbuild').BuildOptions} */
 const styles = {
-  entryPoints: ['src/webview/styles/editor.css'],
+  entryPoints: ['src/webview/styles/editor.css', 'src/webview/styles/sidebar.css'],
   bundle: true,
-  outfile: 'dist/webview/editor.css',
-  // The codicon font ships beside this file and is linked from the page, so
+  outdir: 'dist/webview',
+  // The codicon font ships beside these files and is linked from each page, so
   // its url() is left exactly as written.
   external: ['*.ttf'],
   minify: production,

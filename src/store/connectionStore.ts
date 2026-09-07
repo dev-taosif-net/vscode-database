@@ -9,6 +9,7 @@ import {
 } from '../types';
 
 const PROFILES_KEY = 'databaseTools.profiles.v1';
+const FAVOURITES_KEY = 'databaseTools.favourites.v1';
 
 /**
  * Owns the connection list and the credentials that go with it.
@@ -24,10 +25,22 @@ export class ConnectionStore {
   readonly onDidChange = this.onDidChangeEmitter.event;
 
   private profiles: ConnectionProfile[];
+  /**
+   * Pinned ids, kept beside the profiles rather than inside them. A pin is a
+   * reading of the list, not a property of the connection, and keeping it out
+   * of the profile means pinning never rewrites `updatedAt` and never shows up
+   * as a change the editor would offer to save.
+   */
+  private pinned: Set<string>;
 
   constructor(private readonly context: vscode.ExtensionContext) {
     const stored = context.globalState.get<ConnectionProfile[]>(PROFILES_KEY, []);
     this.profiles = stored.map((p) => normalise(p));
+    const favourites = context.globalState.get<string[]>(FAVOURITES_KEY, []);
+    // A pin can outlive the profile it points at if a delete failed halfway,
+    // so the set is filtered on the way in rather than trusted.
+    const known = new Set(this.profiles.map((p) => p.id));
+    this.pinned = new Set(favourites.filter((id) => known.has(id)));
   }
 
   dispose(): void {
@@ -83,8 +96,37 @@ export class ConnectionStore {
 
   async remove(id: string): Promise<void> {
     this.profiles = this.profiles.filter((p) => p.id !== id);
+    this.pinned.delete(id);
     await this.context.secrets.delete(secretKey(id));
+    await this.flushFavourites();
     await this.flush();
+  }
+
+  /* ---------------------------------------------------------- favourites */
+
+  isFavourite(id: string): boolean {
+    return this.pinned.has(id);
+  }
+
+  favourites(): string[] {
+    return [...this.pinned];
+  }
+
+  async setFavourite(id: string, on: boolean): Promise<void> {
+    if (!this.get(id) || this.pinned.has(id) === on) {
+      return;
+    }
+    if (on) {
+      this.pinned.add(id);
+    } else {
+      this.pinned.delete(id);
+    }
+    await this.flushFavourites();
+    this.onDidChangeEmitter.fire();
+  }
+
+  private async flushFavourites(): Promise<void> {
+    await this.context.globalState.update(FAVOURITES_KEY, [...this.pinned]);
   }
 
   /** The stored secret, or undefined when there is none to read. */

@@ -2,7 +2,9 @@
 
 The editor is a React application compiled into a VS Code webview. This
 document covers what it is made of, how state moves through it, how it borrows
-the workbench theme, and what it does for people who do not use a mouse.
+the workbench theme, and what it does for people who do not use a mouse. It is
+one of two webviews; the connections sidebar is the other, and
+`docs/connections-explorer.md` covers it.
 
 ## Layout
 
@@ -178,10 +180,14 @@ src/webview/
 
 ## Build
 
-`esbuild.mjs` produces three outputs: the extension host bundle for Node, the
-webview bundle for the browser with React linked in, and the stylesheet. The
-codicon font and stylesheet are copied beside them. React is a dev dependency
-because it is bundled, so it is never shipped twice.
+`esbuild.mjs` produces five outputs: the extension host bundle for Node, two
+webview bundles for the browser with React linked in — this editor and the
+connections sidebar — and a stylesheet for each. The two webviews are separate
+entry points rather than one shared bundle because the sidebar is resolved on
+startup and the editor is not, so sharing would make opening the sidebar pay for
+a form nobody has asked for. The codicon font and stylesheet are copied beside
+them. React is a dev dependency because it is bundled, so it is never shipped
+twice.
 
 `tsconfig.json` covers the host and excludes the webview; `tsconfig.webview.json`
 covers the webview with the DOM library and JSX. `npm run typecheck` runs both.

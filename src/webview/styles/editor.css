@@ -1,12 +1,14 @@
+@import './tokens.css';
+
 /*
  * The connection editor.
  *
  * Every neutral surface reads a VS Code theme token, so the page follows the
  * user's theme, high contrast ones included, with no theme code of its own.
  * The engine and environment colours are the only literals, and each has a
- * light-theme value below. No colour is ever the only carrier of meaning: an
- * environment is a colour, a short badge and a sentence; a transport state is
- * a colour, an icon and a word.
+ * per-theme value in `tokens.css`. No colour is ever the only carrier of
+ * meaning: an environment is a colour, a short badge and a sentence; a
+ * transport state is a colour, an icon and a word.
  */
 
 :root {
@@ -33,39 +35,6 @@
   --bad: var(--vscode-errorForeground, var(--vscode-charts-red, #f0563f));
   --info: var(--vscode-textLink-foreground);
   --scroll: var(--vscode-scrollbarSlider-background);
-
-  --env-dev: #3fb84f;
-  --env-qa: #4a93f0;
-  --env-uat: #e08a3c;
-  --env-prod: #f0563f;
-  --eng-mssql: #0078d4;
-  --eng-postgres: #336791;
-
-  --radius: 6px;
-  --radius-sm: 4px;
-  --gap: 14px;
-  --motion: 120ms;
-}
-
-body.vscode-light,
-body.vscode-high-contrast-light {
-  --env-dev: #1a7f37;
-  --env-qa: #0b62ce;
-  --env-uat: #b45309;
-  --env-prod: #c6362a;
-  --eng-mssql: #0078d4;
-  --eng-postgres: #336791;
-}
-
-/* A reduced-motion setting is a request, not a preference to weigh. */
-@media (prefers-reduced-motion: reduce) {
-  :root {
-    --motion: 0ms;
-  }
-  * {
-    animation-duration: 0.001ms !important;
-    transition-duration: 0.001ms !important;
-  }
 }
 
 * {
@@ -95,21 +64,6 @@ body {
   outline: 1px solid var(--focus);
   outline-offset: 1px;
   border-radius: 2px;
-}
-
-.sr-only {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  padding: 0;
-  margin: -1px;
-  overflow: hidden;
-  clip: rect(0 0 0 0);
-  white-space: nowrap;
-}
-
-.mono {
-  font-family: var(--vscode-editor-font-family, monospace);
 }
 
 .muted {

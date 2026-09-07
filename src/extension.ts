@@ -2,12 +2,16 @@ import * as vscode from 'vscode';
 import { ConnectionManager } from './connections/connectionManager';
 import { ConnectionStore } from './store/connectionStore';
 import { ConnectionsPanel } from './ui/connectionsPanel';
-import { ConnectionsTree, ConnectionTreeItem } from './ui/connectionsTree';
+import { ConnectionsView } from './ui/connectionsView';
 import { ConnectionStatusBar } from './ui/statusBar';
 import { ConnectionProfile, environmentLabel } from './types';
 
-/** A command can arrive from the palette with nothing, or from the tree. */
-type CommandTarget = string | ConnectionTreeItem | undefined;
+/**
+ * A command arrives from the palette with nothing, from the sidebar with a
+ * profile id, and from a menu with whatever context that menu carries. The
+ * webview replaced the tree, so a `TreeItem` is no longer one of the shapes.
+ */
+type CommandTarget = string | undefined;
 
 /**
  * Phase 1: everything up to and including an open connection. Nothing here
@@ -19,26 +23,43 @@ export function activate(context: vscode.ExtensionContext): void {
   const store = new ConnectionStore(context);
   const manager = new ConnectionManager(store, output);
   const statusBar = new ConnectionStatusBar(store, manager);
-  const tree = new ConnectionsTree(store, manager, context.globalState);
+  const view = new ConnectionsView(context, store, manager);
 
-  context.subscriptions.push(output, store, manager, statusBar, tree);
+  context.subscriptions.push(output, store, manager, statusBar, view);
+
+  // No `retainContextWhenHidden`. It costs thirty to sixty megabytes for a view
+  // many people have open at startup, and it buys nothing here: grouping, sort
+  // and folding live in the host's memento, and scroll position lives in the
+  // webview's own `setState`, so a hidden panel has nothing left to keep.
+  context.subscriptions.push(
+    vscode.window.registerWebviewViewProvider(ConnectionsView.viewType, view)
+  );
 
   // The list follows the editor rather than the click that opened it, so it
   // stays right when the editor declines to move or a first save renames the id.
-  context.subscriptions.push(ConnectionsPanel.onDidChangeSelection((id) => void tree.reveal(id)));
+  context.subscriptions.push(ConnectionsPanel.onDidChangeSelection((id) => void view.select(id)));
 
   context.subscriptions.push(
     vscode.commands.registerCommand('databaseTools.openConnections', (target?: CommandTarget) => {
       ConnectionsPanel.show(context, store, manager, targetId(target));
     }),
 
-    vscode.commands.registerCommand('databaseTools.filterConnections', () => tree.promptForFilter()),
+    // Search is a box inside the panel now, not a QuickInput over the window.
+    // The command only puts the caret in it, which is why it can leave focus
+    // alone everywhere else.
+    vscode.commands.registerCommand('databaseTools.filterConnections', () => view.focusSearch()),
 
-    vscode.commands.registerCommand('databaseTools.clearFilter', () => tree.clearFilter()),
+    vscode.commands.registerCommand('databaseTools.clearFilter', () => view.clearSearch()),
 
-    vscode.commands.registerCommand('databaseTools.groupByEnvironment', () => tree.setGrouped(true)),
+    vscode.commands.registerCommand('databaseTools.refreshConnections', () => view.refresh()),
 
-    vscode.commands.registerCommand('databaseTools.showFlatList', () => tree.setGrouped(false)),
+    vscode.commands.registerCommand('databaseTools.viewOptions', () => view.showViewOptions()),
+
+    vscode.commands.registerCommand('databaseTools.collapseAllGroups', () => view.collapseAll(true)),
+
+    vscode.commands.registerCommand('databaseTools.groupByEnvironment', () => view.setGrouped(true)),
+
+    vscode.commands.registerCommand('databaseTools.showFlatList', () => view.setGrouped(false)),
 
     // Straight into the editor. The server type is a field on the form, and
     // nothing reaches the list until the connection is saved.
@@ -113,12 +134,15 @@ export function deactivate(): void {
   // Sessions are closed by ConnectionManager.dispose through the subscriptions.
 }
 
-/** The profile id behind a command argument, whatever shape it arrived in. */
+/**
+ * The profile id behind a command argument. Commands are invoked dynamically,
+ * so the shape is checked rather than trusted: the palette passes nothing and a
+ * menu can pass its own context object, and both must land on `undefined` so
+ * `pickProfile` takes over instead of a connection being opened against a
+ * stringified object.
+ */
 function targetId(target: CommandTarget): string | undefined {
-  if (typeof target === 'string') {
-    return target;
-  }
-  return target instanceof ConnectionTreeItem ? target.profile.id : undefined;
+  return typeof target === 'string' ? target : undefined;
 }
 
 async function pickProfile(store: ConnectionStore, verb: string): Promise<ConnectionProfile | undefined> {

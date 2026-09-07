@@ -1,0 +1,119 @@
+/*
+ * What the two webviews genuinely share: four environment hues, two engine
+ * hues, the radii, the gap, the motion duration, and the two utility classes
+ * every surface needs. Nothing else.
+ *
+ * There is no ground token in this file and there must never be one. The
+ * connection editor's `--bg` is `--vscode-editor-background`, which in Dark
+ * Modern is #1f1f1f while the sidebar it would be painted into is #181818,
+ * and in Light Modern is #ffffff against a #f8f8f8 sidebar. The moment this
+ * file supplies a `--bg`, somebody writes `var(--bg)` in `sidebar.css`, gets
+ * the editor's ground, and the panel paints a visibly lighter rectangle
+ * inside the sidebar on first launch — a failure that is invisible in a
+ * screenshot of one theme and obvious in the product. Each surface defines
+ * its own `--bg`, `--fg` and `--bd` in its own `:root`. The same argument
+ * applies to `--hover`, `--sel` and every other surface colour: they are
+ * properties of a surface, not of the extension.
+ *
+ * Every hue that renders as text has an `-ink` twin, measured against that
+ * theme family's sidebar ground. Shapes use the plain token. The environment
+ * hues are literals rather than `--vscode-charts-*` because a value that can
+ * be measured beats a value a theme may set to anything: charts.orange on
+ * Light Modern's #f8f8f8 measures 2.97:1, well under the 4.5:1 a 10.5px badge
+ * needs.
+ */
+
+:root {
+  --env-dev: #3fb84f;
+  --env-qa: #4a93f0;
+  --env-uat: #e08a3c;
+  --env-prod: #f0563f;
+
+  --env-dev-ink: #57c76a;
+  --env-qa-ink: #6aa9f5;
+  --env-uat-ink: #e5a054;
+  --env-prod-ink: #ff7a66;
+  --warn-ink: #e8b445;
+
+  --eng-mssql: #0078d4;
+  --eng-postgres: #336791;
+
+  --radius: 6px;
+  --radius-sm: 4px;
+  --gap: 14px;
+  --motion: 120ms;
+}
+
+body.vscode-light,
+body.vscode-high-contrast-light {
+  --env-dev: #1a7f37;
+  --env-qa: #0b62ce;
+  --env-uat: #b45309;
+  --env-prod: #c6362a;
+
+  --env-dev-ink: #14682c;
+  --env-qa-ink: #0a52ad;
+  --env-uat-ink: #92420a;
+  --env-prod-ink: #a82d22;
+  --warn-ink: #a35c00;
+}
+
+/*
+ * High contrast dark. This branch did not exist while the editor was the only
+ * surface, so high-contrast-dark users got the ordinary dark literals and no
+ * theme participation at all. The four hues below clear 7:1 on pure black,
+ * which the ordinary dark values do not, and the ink twins collapse onto them:
+ * under high contrast a hue is already at its legibility ceiling, and a second
+ * value one step brighter buys nothing and can only drift.
+ */
+body.vscode-high-contrast {
+  --env-dev: #5fd97a;
+  --env-qa: #7cb8ff;
+  --env-uat: #f0b26a;
+  --env-prod: #ff8a75;
+
+  --env-dev-ink: var(--env-dev);
+  --env-qa-ink: var(--env-qa);
+  --env-uat-ink: var(--env-uat);
+  --env-prod-ink: var(--env-prod);
+  --warn-ink: var(--env-uat);
+}
+
+body.vscode-high-contrast-light {
+  --env-dev: #0d5c22;
+  --env-qa: #003f9e;
+  --env-uat: #7a3600;
+  --env-prod: #96201a;
+
+  --env-dev-ink: var(--env-dev);
+  --env-qa-ink: var(--env-qa);
+  --env-uat-ink: var(--env-uat);
+  --env-prod-ink: var(--env-prod);
+  --warn-ink: var(--env-uat);
+}
+
+/* A reduced-motion setting is a request, not a preference to weigh. */
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --motion: 0ms;
+  }
+  * {
+    animation-duration: 0.001ms !important;
+    transition-duration: 0.001ms !important;
+  }
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+.mono {
+  font-family: var(--vscode-editor-font-family, monospace);
+}
