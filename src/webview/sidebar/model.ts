@@ -1,7 +1,11 @@
 import { ConnectionRow, SortOrder } from '../../shared/sidebar';
 import { EnvironmentId } from '../../types';
 
-/** Riskiest first, so a production profile is never scrolled out of sight. */
+/**
+ * The order environments are always listed in: Development, QA, UAT,
+ * Production. It is the order a change travels in, and it is fixed — the list
+ * reads the same way every time it is opened, whatever is in it.
+ */
 const RANK: Record<EnvironmentId, number> = { dev: 0, qa: 1, uat: 2, prod: 3 };
 
 /**
@@ -113,7 +117,7 @@ export function compare(sort: SortOrder, a: ConnectionRow, b: ConnectionRow): nu
   if (sort === 'recent') {
     return b.updatedAt - a.updatedAt;
   }
-  return RANK[b.environment] - RANK[a.environment] || a.name.localeCompare(b.name);
+  return RANK[a.environment] - RANK[b.environment] || a.name.localeCompare(b.name);
 }
 
 export interface FlattenInput {
@@ -185,7 +189,7 @@ export function flatten(input: FlattenInput): Flattened {
   }
 
   const folded = new Set(input.collapsed);
-  const present = [...new Set(rest.map((r) => r.environment))].sort((a, b) => RANK[b] - RANK[a]);
+  const present = [...new Set(rest.map((r) => r.environment))].sort((a, b) => RANK[a] - RANK[b]);
   for (const environment of present) {
     const members = rest.filter((r) => r.environment === environment);
     // A filter that hides its matches inside a folded group would read as a

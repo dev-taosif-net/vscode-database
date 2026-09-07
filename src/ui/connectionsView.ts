@@ -332,7 +332,7 @@ export class ConnectionsView implements vscode.WebviewViewProvider, vscode.Dispo
       { label: 'Sort by', kind: vscode.QuickPickItemKind.Separator },
       {
         label: `${mark(this.sort === 'environment')} Environment`,
-        description: 'Riskiest first',
+        description: 'Dev, QA, UAT, Production',
         action: 'sort:environment'
       },
       { label: `${mark(this.sort === 'name')} Name`, action: 'sort:name' },
