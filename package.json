@@ -166,34 +166,29 @@
       ],
       "view/title": [
         {
-          "command": "databaseTools.filterConnections",
+          "command": "databaseTools.newConnection",
           "when": "view == databaseTools.connections",
           "group": "navigation@1"
         },
         {
-          "command": "databaseTools.newConnection",
+          "command": "databaseTools.refreshConnections",
           "when": "view == databaseTools.connections",
           "group": "navigation@2"
         },
         {
-          "command": "databaseTools.refreshConnections",
+          "command": "databaseTools.viewOptions",
           "when": "view == databaseTools.connections",
           "group": "navigation@3"
         },
         {
-          "command": "databaseTools.viewOptions",
-          "when": "view == databaseTools.connections",
-          "group": "navigation@4"
-        },
-        {
           "command": "databaseTools.collapseAllGroups",
           "when": "view == databaseTools.connections && databaseTools.grouped",
-          "group": "navigation@5"
+          "group": "navigation@4"
         },
         {
           "command": "databaseTools.clearFilter",
           "when": "view == databaseTools.connections && databaseTools.filtered",
-          "group": "navigation@6"
+          "group": "navigation@5"
         },
         {
           "command": "databaseTools.disconnectAll",
