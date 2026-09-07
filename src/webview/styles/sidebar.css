@@ -55,11 +55,10 @@
    * `src/webview/sidebar/model.ts` and they must agree with it exactly: the
    * virtualizer positions every row from `H`, so a stylesheet that disagrees
    * produces a list that is truthful about its offsets and visibly wrong.
-   * H.row 22, H.group 24, H.groupCollapsed 40, H.pinned 24, H.nomatch 44.
+   * H.row 22, H.group 24, H.pinned 24, H.nomatch 44.
    */
   --row-h: 22px;
   --head-h: 24px;
-  --head-h-collapsed: 40px;
   --nomatch-h: 44px;
   /* The left rail: ribbon, state glyph, engine mark, 0..44, text at 52. The
      margins on `.glyph` and `.engine` sum to it; this is the ruler they are
@@ -67,6 +66,11 @@
      moved would have to move the text with it. */
   --rail-w: 44px;
   --band-h: 32px;
+  /* The scrollbar's width, permanently reserved by `.list`. The sticky
+     overlay is a sibling of the scroller rather than a descendant, so it
+     has to subtract this by hand or its copy of a header sits eight pixels
+     right of every real one — visible as a count that will not line up. */
+  --gutter: 8px;
   /* How much of the row's right edge the hover rail covers, per tier. The
      text mask is derived from it so the two can never drift apart. */
   --rail-open: 46px;
@@ -112,8 +116,8 @@ body {
 
 /* 8px, not the editor's 12. Twelve pixels of a 170px panel is seven percent. */
 ::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
+  width: var(--gutter);
+  height: var(--gutter);
 }
 
 ::-webkit-scrollbar-track {
@@ -314,10 +318,17 @@ body {
   right: auto;
 }
 
-/* Rendered as a sibling of the scroller, where `.sidebar` is the containing
-   block and the search band above it is an offset to add back. */
+/*
+ * Rendered as a sibling of the scroller, where `.sidebar` is the containing
+ * block: the search band above it is an offset to add back, and the
+ * scrollbar gutter beside it is one to take off. Without the second, the
+ * overlay spans eight pixels the scroller does not have, and every
+ * right-aligned thing in it — the count, first of all — sits eight pixels
+ * right of the same thing on the real headers below.
+ */
 .sidebar > .sticky {
   top: var(--band-h);
+  right: var(--gutter);
 }
 
 /* The overlay sits directly under the search band's own hairline, so its
@@ -350,9 +361,7 @@ body {
   z-index: 1;
   height: var(--head-h);
   display: flex;
-  flex-wrap: wrap;
   align-items: center;
-  align-content: flex-start;
   padding: 0 8px 0 5px;
   border-left: 3px solid transparent;
   border-top: 1px solid var(--bd-header);
@@ -360,10 +369,6 @@ body {
   background-clip: padding-box;
   cursor: pointer;
   user-select: none;
-}
-
-.head.is-collapsed {
-  height: var(--head-h-collapsed);
 }
 
 .head:hover {
@@ -419,9 +424,17 @@ body {
   color: var(--env-ink, var(--fg-dim));
 }
 
+/*
+ * A column, not a label that sizes to its own text. DEV is three letters and
+ * QA is two, and a badge that hugs its word gives every heading a different
+ * shape — which is the same failure the row rail exists to prevent, one line
+ * higher up. 34px holds PROD, the longest of the four; it is a floor rather
+ * than a fixed width so a theme whose UI font runs wide grows the column
+ * instead of clipping the word.
+ */
 .head-badge {
   flex: none;
-  min-width: 22px;
+  min-width: 34px;
   height: 24px;
   display: flex;
   align-items: center;
@@ -432,23 +445,15 @@ body {
   white-space: nowrap;
 }
 
-.head-full {
-  display: none;
-  flex: 0 1 auto;
-  min-width: 0;
-  margin-left: 4px;
-  height: 24px;
-  line-height: 24px;
-  font-size: 11px;
-  color: var(--fg-dim);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
+/*
+ * Beside the badge, not against the far edge. A count belongs to the word it
+ * counts, and thirty pixels of nothing between them made the eye travel the
+ * whole heading to pair two things that are one fact. It starts at the same x
+ * on every heading because the badge before it is a column, so the numbers
+ * read down the list as a column of their own.
+ */
 .head-count {
   flex: none;
-  margin-left: auto;
   padding-left: 8px;
   height: 24px;
   line-height: 24px;
@@ -456,30 +461,6 @@ body {
   font-weight: 500;
   color: var(--fg-dim);
   white-space: nowrap;
-}
-
-/*
- * The guard sentence. It is hidden on an open header until there is width for
- * it, and it appears on a collapsed one — 24px of header plus a 16px line —
- * because that is information arriving exactly where space became free, and it
- * is what makes folding everything an orientation view rather than a way to
- * hide rows.
- */
-.head-guard {
-  display: none;
-  flex: 0 0 100%;
-  height: 16px;
-  line-height: 16px;
-  padding-left: 34px;
-  font-size: 10.5px;
-  color: var(--fg-dim);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.head.is-collapsed .head-guard {
-  display: block;
 }
 
 /* ------------------------------------------------------------------- row */
@@ -1244,14 +1225,9 @@ mark {
   .sep:has(+ .host) {
     display: block;
   }
-
-  .head-full {
-    display: block;
-  }
 }
 
-/* lg — 312px. The database appears as a third element, and the group header
-   carries its guard without being collapsed first. */
+/* lg — 312px. The database appears as a third element. */
 @container rail (min-width: 312px) {
   .db {
     display: inline;
@@ -1259,15 +1235,6 @@ mark {
 
   .sep:has(+ .db) {
     display: block;
-  }
-
-  .head:not(.is-collapsed) .head-guard {
-    display: block;
-    flex: 0 1 auto;
-    min-width: 0;
-    height: 24px;
-    line-height: 24px;
-    padding-left: 10px;
   }
 }
 

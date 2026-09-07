@@ -63,13 +63,13 @@ Drawn at 260px, which is the canonical width.
 ├──────────────────────────────────────────────────────────┤
 │  ⌕ Name, host, database                              ⨯   │  search band, 32px, never scrolls
 ├──────────────────────────────────────────────────────────┤
-│  ⌄ 📌 PINNED                                         2   │  section header, 24px, sticky
+│  ⌄ 📌 PINNED  2                                          │  section header, 24px, sticky
 │▌  ●  ⛁  PROD billing-write     sql-prod-01      LIVE     │  a pinned row keeps its own ribbon
 │▏  ○  ⛁  DEV  local-scratch     localhost                 │
-│▌ ⌄ 🛡  PROD Production                       9 · 1       │  group header, riskiest group first
+│▌ ⌄ 🛡  PROD    9 · 1                                     │  group header, riskiest group first
 │▌  ○🔒 ⛁  billing              sql-prod-01                │
 │▌  ●🔒 ⛁  billing-reports      sql-prod-01       LIVE     │
-│▏ ⌄ ●   QA   Quality Assurance                   18       │
+│▏ ⌄ ●   QA      18                                        │
 │▏  △  🐘 analytics             pg-qa-3           FAIL     │
 │▏  ◐  ⛁  reporting             rpt-qa-01         TEST     │
 │▏  ○  ⛁  orders-read           orders-qa-01              ░│  the scroller — the only thing
@@ -116,6 +116,13 @@ scrollbar that appears the moment the list outgrows the viewport reflows every
 row underneath it. The webkit scrollbar is narrowed from `editor.css`'s 12px to
 8px: 12 of 170 is seven per cent of the panel.
 
+The gutter is a `--gutter` token rather than a repeated number, because the
+sticky overlay has to subtract it. The overlay is a sibling of the scroller,
+not a descendant, so left alone it spans the panel while every real header
+spans the panel minus the gutter — a copy eight pixels wider than the thing it
+copies, painting over the scrollbar and misplacing anything anchored to its
+right edge. The ruler above is the scroller's, and the overlay is held to it.
+
 ## The reading order
 
 The list is read as three vertical columns of glyphs and one column of names,
@@ -160,8 +167,6 @@ because it is the rule most likely to be helpfully "fixed".
 | connection name, saved | 13px | 450 | — | `--fg` |
 | connection name, connected | 13px | 600 | — | `--fg` |
 | environment short badge | 10.5px | 700 | 0.08em | `--env-*-ink` |
-| environment full label | 11px | 400 | — | `--fg-dim` |
-| guard sentence | 10.5px | 400 | — | `--fg-dim` |
 | host | 10.5px mono | 400 | — | `--fg-dim` |
 | database | 10.5px | 400 | — | `color-mix(in srgb, var(--fg-dim) 78%, transparent)` |
 | auth label, ≥560px | 10.5px | 400 | — | `--fg-dim` |
@@ -424,19 +429,18 @@ discriminated union so TypeScript proves it exhaustive.
 | item | height | |
 |---|---|---|
 | `row` | 22 | `list.rowHeight` |
-| `group`, expanded | 24 | |
-| `group`, collapsed | 40 | 24 plus a 16px guard line |
+| `group` | 24 | folded or not |
 | `pinned` | 24 | |
 | `nomatch` | 44 | |
 
-A collapsed header is *taller* than an open one because it spends the vertical
-budget it just freed on `ENVIRONMENTS[].guard`, verbatim, on one ellipsised
-line. That is information appearing exactly where space became free, and it is
-what makes Collapse All an orientation view — four groups folded into four 40px
-guard cards on one screen — rather than only a way to hide rows. It is also
-what replaced a scrollbar minimap: a standard `view/title` action that costs
-nothing and has a high-contrast definition, against a painted surface that has
-neither.
+A folded header used to grow to 40px and spend the freed pixels on
+`ENVIRONMENTS[].guard`, verbatim, on one ellipsised line. The sentence is gone
+from the list: the connection editor already says it at the moment the guard
+applies, and repeating it against a heading bought movement — a heading that
+changes height as you fold it — for a reading nobody was doing there. Collapse
+All is now what it says, and it is still what replaced a scrollbar minimap: a
+standard `view/title` action that costs nothing and has a high-contrast
+definition, against a painted surface that has neither.
 
 **Offsets** are one `Int32Array(n+1)` prefix sum, built in the same O(n) pass as
 `owner` (the index of the section header owning each item, or −1) and `headers`
@@ -634,7 +638,7 @@ to 40px: `593 − 120 = 473`, `473 / 22 = 21.5` → **21 rows**. At 170px, ident
 row.
 
 The tree this replaced showed `(665 − 4 × 22) / 22 = 26` rows, and told you the
-host but not the state, the database or the environment guard.
+host but not the state or the database.
 
 **So the new view costs four rows.** What the four rows buy: a search box that
 is always on screen, a hover rail, a state readout for the cursor row, a counts
@@ -672,20 +676,18 @@ asymmetry is deliberate: a connected row already carries three other marks — a
 filled disc, a 600-weight name, a bright ribbon tick — so its word is the
 cheapest thing to lose, while failure's amber triangle could be mistaken for
 UAT's amber by someone who has not learned the vocabulary, and production is
-where a missing word costs something. The placeholder shortens to `Filter`, the
-rail drops to two buttons, and the group header loses `ENVIRONMENTS[].full`.
+where a missing word costs something. The placeholder shortens to `Filter` and
+the rail drops to two buttons.
 
 **sm.** The badge returns for all four states. This is the biggest legibility
 gain per pixel in the system: a state word beats twenty more characters of a
 host you already know.
 
-**md — the canonical drawing.** The host returns as its first DNS label, and the
-group header adds `ENVIRONMENTS[].full` beside the short badge.
+**md — the canonical drawing.** The host returns as its first DNS label.
 
 **lg.** The database appears, separated from the host by a 1px × 10px vertical
 hairline rather than a middot — at 10.5px a hairline is a lighter mark and gives
-the eye a rule to run down instead of a speck to jump over. The group header
-gains its guard sentence inline, one line, ellipsised.
+the eye a rule to run down instead of a speck to jump over.
 
 **xl.** The elastic run becomes `grid-template-columns: minmax(76px, 1fr) 30% 22%`
 and the badge leaves it for a fixed 46px column. Name, host, database and badge
@@ -926,7 +928,7 @@ either way.
 
 **Colour is never the only carrier.** An environment is a hue, a 3px ribbon
 whose width and dash pattern differ under high contrast, a short text badge, a
-spelled-out label on the header, a guard sentence, and a position in the list.
+position in the list, and the environment spelled out in every accessible name.
 A state is a hue, one of four silhouettes chosen to stay separable at 12px in
 monochrome — disc, ring, triangle, arc — a word on the row, a word in the
 readout, and a word in the accessible name. Print the four state glyphs in black

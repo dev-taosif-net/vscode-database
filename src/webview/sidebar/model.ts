@@ -14,15 +14,14 @@ const RANK: Record<EnvironmentId, number> = { dev: 0, qa: 1, uat: 2, prod: 3 };
  * `--vscode-font-size`. A row is `list.rowHeight`, the value the workbench
  * gives its own trees, and it does not change with the width of the panel.
  *
- * A collapsed header is taller than an open one because it spends the vertical
- * budget it just freed on the environment's guard sentence. That is
- * information appearing exactly where space became free, and it is what makes
- * folding everything an orientation view rather than only a way to hide rows.
+ * A header is 24px folded and 24px open. It carried a second line naming the
+ * environment's guard while it was folded, and the sentence is gone from the
+ * list: the connection editor says it at the moment it applies, and a heading
+ * that changes height as you fold it is movement bought with a repetition.
  */
 export const H = {
   row: 22,
   group: 24,
-  groupCollapsed: 40,
   pinned: 24,
   nomatch: 44
 } as const;
@@ -38,7 +37,7 @@ export function heightOf(item: FlatItem): number {
     case 'row':
       return H.row;
     case 'group':
-      return item.collapsed ? H.groupCollapsed : H.group;
+      return H.group;
     case 'pinned':
       return H.pinned;
     case 'nomatch':

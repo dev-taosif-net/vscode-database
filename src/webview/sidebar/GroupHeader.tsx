@@ -17,13 +17,17 @@ export function headerId(environment: EnvironmentId): string {
 }
 
 /**
- * An environment heading: 24px open, 40px folded.
+ * An environment heading: 24px, folded or not.
  *
- * Folding is the only thing in the list that makes a row taller, and it spends
- * every one of the freed pixels on `ENVIRONMENTS[].guard`. Information arriving
- * exactly where space became free is what turns Collapse All into an
- * orientation view — four guard cards on one screen — rather than a way to hide
- * a hundred rows behind four chevrons.
+ * It once grew to 40px when folded, to spend the freed pixels on
+ * `ENVIRONMENTS[].guard`, and it once spelled the environment out beside the
+ * badge. Both are the connection editor's to say, at the moment they apply,
+ * so the heading is the badge and the count and nothing else, and folding
+ * moves nothing but rows.
+ *
+ * `ENVIRONMENTS[].full` did not leave with the text. It is still the twistie's
+ * accessible name, and dropping a word from the screen is not a reason to drop
+ * it from the one place it is read aloud.
  *
  * The open count is a prop rather than a subscription. It comes down on the
  * `FlatItem`, so a session opening re-renders the headers through their parent
@@ -65,7 +69,7 @@ export function GroupHeader(props: {
       // The overlay is aria-hidden and sits on top of the real header, so it
       // must never become the tab stop the real one already is.
       tabIndex={!overlay && cursor ? 0 : -1}
-      style={{ top, height: collapsed ? H.groupCollapsed : H.group }}
+      style={{ top, height: H.group }}
       onClick={toggle}
     >
       <button
@@ -89,12 +93,7 @@ export function GroupHeader(props: {
         <Codicon name={environment === 'prod' ? 'shield' : 'circle-filled'} />
       </span>
       <span className="head-badge">{meta.short}</span>
-      <span className="head-full">{meta.full}</span>
       <span className="head-count">{countText(count, open)}</span>
-      {/* Always in the DOM. The stylesheet shows it inline on a wide open
-          header and on its own second line once the group is folded, which is
-          two placements of one sentence rather than two sentences. */}
-      <span className="head-guard">{meta.guard}</span>
     </div>
   );
 }
