@@ -44,6 +44,13 @@ export class ConnectionStore {
   private readonly secretPresence = new Map<string, boolean>();
   /** Reads already in the air, so a burst of callers shares one round trip. */
   private readonly presenceReads = new Map<string, Promise<boolean>>();
+  /**
+   * Bumped whenever something invalidates the cache. A read carries the value
+   * it started under and throws its answer away if that has moved, because an
+   * answer fetched before a write landed is older than the write and would
+   * otherwise be cached as though it were newer.
+   */
+  private presenceEpoch = 0;
 
   private profiles: ConnectionProfile[];
   /**
@@ -69,6 +76,7 @@ export class ConnectionStore {
       context.secrets.onDidChange((event) => {
         for (const profile of this.profiles) {
           if (secretKey(profile.id) === event.key) {
+            this.presenceEpoch++;
             this.secretPresence.delete(profile.id);
             this.onDidChangeEmitter.fire();
             return;
@@ -138,6 +146,7 @@ export class ConnectionStore {
   async remove(id: string): Promise<void> {
     this.profiles = this.profiles.filter((p) => p.id !== id);
     this.pinned.delete(id);
+    this.presenceEpoch++;
     this.secretPresence.delete(id);
     this.presenceReads.delete(id);
 
@@ -184,6 +193,9 @@ export class ConnectionStore {
   }
 
   async writeSecret(profileId: string, secret: string | undefined): Promise<void> {
+    // The epoch moves before the write, so a read already in the air is
+    // discarded rather than allowed to overwrite what this is about to set.
+    this.presenceEpoch++;
     if (secret === undefined || secret === '') {
       await this.context.secrets.delete(secretKey(profileId));
       this.secretPresence.set(profileId, false);
@@ -202,10 +214,16 @@ export class ConnectionStore {
     if (inFlight) {
       return inFlight;
     }
+    const startedAt = this.presenceEpoch;
     const read = Promise.resolve(this.context.secrets.get(secretKey(profileId))).then(
       (value) => {
         const present = value !== undefined;
-        this.secretPresence.set(profileId, present);
+        // Only if nothing has been written since this read was issued. A write
+        // that landed while it was in the air is the newer truth, and caching
+        // this answer over it would hold the stale one until the next restart.
+        if (this.presenceEpoch === startedAt) {
+          this.secretPresence.set(profileId, present);
+        }
         this.presenceReads.delete(profileId);
         return present;
       },
@@ -312,6 +330,24 @@ export function blankProfile(seed: Partial<ConnectionProfile> = {}): ConnectionP
  * arriving from the webview, both pass through here, so every consumer can
  * assume the fields exist and the numbers are numbers.
  */
+/**
+ * The three numeric limits, brought into range and no more.
+ *
+ * Split out of `normalise` because the editor needs exactly this much for a
+ * draft it is about to test: the limits are handed to the driver as numbers and
+ * a cleared box is null, but the port must be left alone. A port the editor has
+ * already refused has to reach the driver as it was typed and fail, rather than
+ * be quietly replaced by the engine's default.
+ */
+export function coerceLimits(input: ConnectionProfile): ConnectionProfile {
+  return {
+    ...input,
+    connectTimeoutSeconds: clamp(input.connectTimeoutSeconds, 1, 600, 15),
+    queryTimeoutSeconds: clamp(input.queryTimeoutSeconds, 0, 86400, 30, 0),
+    rowsPerFetch: clamp(input.rowsPerFetch, 50, 100000, 1000)
+  };
+}
+
 export function normalise(input: ConnectionProfile): ConnectionProfile {
   const driver: DriverKind = input.driver === 'postgres' ? 'postgres' : 'mssql';
   const port = coercePort(input.port);
@@ -330,7 +366,7 @@ export function normalise(input: ConnectionProfile): ConnectionProfile {
           .map((p) => ({ name: p.name.trim(), value: (p.value ?? '').toString() }))
       : [],
     connectTimeoutSeconds: clamp(input.connectTimeoutSeconds, 1, 600, 15),
-    queryTimeoutSeconds: clamp(input.queryTimeoutSeconds, 0, 86400, 30),
+    queryTimeoutSeconds: clamp(input.queryTimeoutSeconds, 0, 86400, 30, 0),
     rowsPerFetch: clamp(input.rowsPerFetch, 50, 100000, 1000),
     sshPort: input.sshEnabled ? coercePort(input.sshPort) ?? 22 : input.sshPort ?? 22
   };
@@ -351,11 +387,24 @@ function coerceEnvironment(value: unknown): EnvironmentId {
   return value === 'qa' || value === 'uat' || value === 'prod' ? value : 'dev';
 }
 
-function clamp(value: unknown, min: number, max: number, fallback: number): number {
-  // An empty box arrives as null, and `Number(null)` is 0, which is finite and
-  // would have been clamped to the minimum. A cleared connect timeout became
-  // one second rather than the fifteen the field is documented to default to.
-  if (value === null || value === undefined || value === '') {
+/**
+ * `blank` is what an empty box means, and it is not always the default.
+ *
+ * An empty box arrives as null, and `Number(null)` is 0 — finite, so it used to
+ * fall through and be clamped to the minimum. That made a cleared connect
+ * timeout one second rather than the documented fifteen, and a cleared page
+ * size fifty rather than a thousand. Query timeout is the one field where the
+ * old answer was meaningful rather than accidental: zero there is "no limit",
+ * which is what the field's own hint promises, so that one keeps it.
+ */
+function clamp(value: unknown, min: number, max: number, fallback: number, blank = fallback): number {
+  // Null and empty string are a box the user cleared. Undefined is a field a
+  // profile stored before this version never had, which is not the same thing
+  // and takes the default rather than the blank reading.
+  if (value === null || value === '') {
+    return blank;
+  }
+  if (value === undefined) {
     return fallback;
   }
   const n = Number(value);

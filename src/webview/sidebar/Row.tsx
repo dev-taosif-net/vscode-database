@@ -152,13 +152,18 @@ function StateGlyph({ state, readOnly }: { state: ConnectionState; readOnly: boo
 }
 
 /**
- * The elastic run: badge, name, host, database.
+ * The run, in two lines: the name, and under it the address it names.
  *
- * Every field is in the DOM on every row at every width, and the stylesheet
- * alone decides what is visible. Dropping a field in JavaScript when it will
- * not fit is what destroys the vertical column scan the list is read by — a
- * field present on some rows and absent on others makes the eye read a hundred
- * rows of prose instead of four columns.
+ * The name owns the first line alone, so it ellipsises only when it is genuinely
+ * too long for the panel rather than because a host and a database were bidding
+ * for the same 170 pixels. The second line carries the two facts that identify
+ * the target, at a smaller size and a dimmer ink, so the pair reads as a
+ * subtitle rather than as two more columns.
+ *
+ * Every field is in the DOM on every row, and the stylesheet alone decides what
+ * is visible. Dropping a field in JavaScript when it will not fit is what
+ * destroys the vertical scan the list is read by — a field present on some rows
+ * and absent on others makes the eye read a hundred rows of prose.
  */
 function NameRun({
   row,
@@ -175,26 +180,29 @@ function NameRun({
 
   return (
     <span className="run">
-      {/* A pinned or flat row has no header above it saying where it lives,
-          so it carries the environment itself — the rule the tree already
-          applied when grouping was off. */}
-      {showBadge ? <span className="env-badge">{environmentMeta(row.environment).short}</span> : null}
-      <span className="name">
-        <Marked text={label} needle={needle} />
-      </span>
-      <span className="sep" aria-hidden="true" />
-      <span className="host mono">
-        <span className="host-head">
-          <Marked text={parts.head} needle={needle} />
+      <span className="run-primary">
+        {/* A pinned or flat row has no header above it saying where it lives,
+            so it carries the environment itself — the rule the tree already
+            applied when grouping was off. */}
+        {showBadge ? <span className="env-badge">{environmentMeta(row.environment).short}</span> : null}
+        <span className="name">
+          <Marked text={label} needle={needle} />
         </span>
-        <span className="host-tail">
-          <Marked text={parts.tail} needle={needle} />
-        </span>
-        <span className="host-port">{parts.port}</span>
       </span>
-      <span className="sep" aria-hidden="true" />
-      <span className="db">
-        <Marked text={row.database} needle={needle} />
+      <span className="run-detail">
+        <span className="host mono">
+          <span className="host-head">
+            <Marked text={parts.head} needle={needle} />
+          </span>
+          <span className="host-tail">
+            <Marked text={parts.tail} needle={needle} />
+          </span>
+          <span className="host-port">{parts.port}</span>
+        </span>
+        <span className="sep" aria-hidden="true" />
+        <span className="db">
+          <Marked text={row.database} needle={needle} />
+        </span>
       </span>
     </span>
   );

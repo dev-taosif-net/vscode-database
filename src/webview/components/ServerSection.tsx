@@ -62,6 +62,12 @@ function ProbeStrip() {
   useEffect(() => {
     window.clearTimeout(timer.current);
     if (!id || host.trim().length < 2 || portInvalid(port)) {
+      // Nothing here is worth looking up, so there is nothing to report. The
+      // strip is cleared rather than left as it was: a lookup already in the
+      // air will be discarded when it lands, because it no longer describes
+      // what is in the box, and without this the spinner it put up would go on
+      // saying "Looking up" a host that has since been deleted.
+      store.setState((state) => (state.probe ? { ...state, probe: null } : state));
       return;
     }
     const target = `${host.trim()}|${port ?? ''}`;

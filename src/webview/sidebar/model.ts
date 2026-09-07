@@ -20,7 +20,15 @@ const RANK: Record<EnvironmentId, number> = { dev: 0, qa: 1, uat: 2, prod: 3 };
  * that changes height as you fold it is movement bought with a repetition.
  */
 export const H = {
-  row: 22,
+  /**
+   * Two lines: the name at 13px over the address at 10.5px. The row carried
+   * both on one line and bought extra columns with extra width; it now stacks,
+   * so the name has the width to itself and the host and database read as a
+   * subtitle under it rather than as two more columns competing for the same
+   * 170 pixels. The cost is honest and unavoidable — a two-line row is about
+   * a third fewer connections on screen.
+   */
+  row: 34,
   group: 24,
   pinned: 24,
   nomatch: 44

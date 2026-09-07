@@ -211,20 +211,26 @@ function buildConfig(
 }
 
 /**
- * True when the server answered on the connection rather than refusing to
- * build one.
+ * True when the backend answered on the connection rather than the connection
+ * failing to come up.
  *
- * A five-character SQLSTATE is the tell: only the backend produces one, and it
- * cannot produce one until the transport is up and the startup packet has been
- * read. A negotiation failure has no SQLSTATE at all — node-postgres raises a
- * plain Error for a server with SSL off, and a handshake that dies arrives as
- * ECONNRESET or an ERR_SSL_ code. 28000 is the exception in the other
- * direction: that is how a `hostnossl` rule turns down the transport itself,
- * which is the one thing the fallback is for.
+ * `severity` is the tell, not the code. node-postgres sets it on the errors it
+ * builds from an ErrorResponse and on nothing else, so it separates a real
+ * answer from a socket that died. A five-character code alone does not: Node's
+ * own errno strings are the same shape, and EPIPE — which is what a handshake
+ * dying on a write looks like — would have been read as an answer and stopped
+ * `prefer` from falling back at all.
+ *
+ * 28000 is the exception in the other direction: that is how a `hostnossl`
+ * rule turns down the transport itself, which is the one thing the fallback is
+ * there for.
  */
 function answeredOverTls(error: unknown): boolean {
-  const code = (error as { code?: unknown } | null | undefined)?.code;
-  return typeof code === 'string' && /^[0-9A-Z]{5}$/.test(code) && code !== '28000';
+  const e = error as { code?: unknown; severity?: unknown } | null | undefined;
+  if (typeof e?.severity !== 'string') {
+    return false;
+  }
+  return typeof e.code === 'string' && /^[0-9A-Z]{5}$/.test(e.code) && e.code !== '28000';
 }
 
 function buildSsl(profile: ConnectionProfile, secrets: ConnectSecrets): ClientConfig['ssl'] {

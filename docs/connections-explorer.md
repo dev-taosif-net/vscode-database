@@ -64,15 +64,16 @@ Drawn at 260px, which is the canonical width.
 │  ⌕ Name, host, database                              ⨯   │  search band, 32px, never scrolls
 ├──────────────────────────────────────────────────────────┤
 │  ⌄ 📌 PINNED  2                                          │  section header, 24px, sticky
-│▌  ●  ⛁  PROD billing-write     sql-prod-01      LIVE     │  a pinned row keeps its own ribbon
-│▏  ○  ⛁  DEV  local-scratch     localhost                 │
+│▌  ●  ⛁  PROD billing-write                      LIVE     │  a pinned row keeps its own ribbon
+│▌        sql-prod-01 · billing                            │
 │▌ ⌄ 🛡  PROD    9 · 1                                     │  group header, riskiest group first
-│▌  ○🔒 ⛁  billing              sql-prod-01                │
-│▌  ●🔒 ⛁  billing-reports      sql-prod-01       LIVE     │
+│▌  ○🔒 ⛁  billing                                         │
+│▌        sql-prod-01 · billing                            │
+│▌  ●🔒 ⛁  billing-reports                        LIVE     │
+│▌        sql-prod-01 · billing_reports                    │
 │▏ ⌄ ●   QA      18                                        │
-│▏  △  🐘 analytics             pg-qa-3           FAIL     │
-│▏  ◐  ⛁  reporting             rpt-qa-01         TEST     │
-│▏  ○  ⛁  orders-read           orders-qa-01              ░│  the scroller — the only thing
+│▏  △  🐘 analytics                               FAIL     │
+│▏        pg-qa-3 · analytics                             ░│  the scroller — the only thing
 │                                                          │  that scrolls
 ├──────────────────────────────────────────────────────────┤
 │▌ 🛡 billing-reports · read-only                  Close   │  production band, 18px, present
@@ -85,10 +86,13 @@ The search band and the footer hold still; only the scroller moves. That is the
 same rule the editor follows for the same reason — the thing you use to find a
 row must not be a thing you have to scroll back to.
 
-Every row is the same 22px at every width, in every state, in every tier. That
-is `list.rowHeight`, the value the workbench gives the Explorer and Source
-Control views sitting in the same sidebar, and it is the property the whole
-design is built on. It removes the hardest problem in a resizable panel: there
+Every row is the same 34px at every width, in every state, in every tier: two
+lines, the name at 13px over the host and database at 10.5px. It was one 22px
+line — `list.rowHeight`, the value the workbench gives the Explorer — and the
+stack is what a name, a host and a database need to stop bidding for the same
+170 pixels. What did not change is that the height is *fixed*, and that is the
+property the whole design is built on. It removes the hardest problem in a
+resizable panel: there
 is no `ResizeObserver` on width, no measured probe row, no `getComputedStyle`
 handshake, no breakpoint hysteresis, and no pair of constants that CSS and
 JavaScript can disagree about while the sash is being dragged.
@@ -153,11 +157,11 @@ the database, then the state badge at the right edge.
 ### The type ramp
 
 Nothing is sized in `em`, and the sidebar never reads `--vscode-font-size`.
-That is deliberate and load-bearing: the row is a hard 22px and a font that
+That is deliberate and load-bearing: the row is a hard 34px and a font that
 followed the user's editor settings would clip it, while the virtualizer's
-offsets would still say 22 — geometry that is truthful about a row that is
-visibly wrong. The workbench's own tree does exactly this: list rows are 22px
-regardless of `editor.fontSize` and follow `window.zoomLevel` only, which scales
+offsets would still say 34 — geometry that is truthful about a row that is
+visibly wrong. The workbench's own tree does exactly this: its rows are a fixed
+height regardless of `editor.fontSize` and follow `window.zoomLevel` only, which scales
 the whole webview uniformly and keeps the ratio. `sidebar.css` carries that
 sentence above the type block and `model.ts`'s `H` table cross-references it,
 because it is the rule most likely to be helpfully "fixed".
@@ -506,7 +510,7 @@ tick():
     persistScroll(top)                                   // throttled to 250ms
 ```
 
-Scrolling a 22px row by three pixels writes one transform and nothing else.
+Scrolling a 34px row by three pixels writes one transform and nothing else.
 Crossing a row boundary re-renders `VirtualList`, and React reconciles about
 thirty keyed elements whose props are all unchanged primitives and bails on
 every one. `OVERSCAN` is 8 — 176px above and below, cheap insurance against a
@@ -520,7 +524,7 @@ const virtual = geom.items.length > VIRTUALIZE_ABOVE;
 ```
 
 Below it, `first = 0` and `last = n − 1`: the whole list is in the DOM. 120
-items at 22px is 2,640px, about four viewports of six-node rows — roughly 720
+items at 34px is 4,080px, about six viewports of six-node rows — roughly 720
 nodes, which costs nothing. Everything else is identical in both modes:
 absolute positioning inside the spacer, the overlay header, the ribbons, the
 explicit `aria-setsize`. There is one geometry model and one sticky mechanism to
@@ -645,22 +649,19 @@ because a sidebar webview's viewport width *is* the view width, every rule would
 work identically as `@media`, and container queries are used only so the same
 authoring pattern survives the component being reused elsewhere.
 
-The tiers are derived from content, not from round numbers. Against the
-workbench UI font at 13px (about 6.2px average lowercase) and the mono font at
-10.5px (about 6.3px): a 12-character name floor is 76px, a four-character badge
-is 38px plus a 6px gap, nine characters of a first DNS label is 57px plus an
-11px separator, and nine characters of database is 47px plus a separator.
+There were five tiers when the row was one line, and three of them existed only
+to decide which of the three fields could afford to be on it. Stacking answered
+that question outright: the name has the first line, the host and the database
+share the second, and all three are present at 170px. What is left is the state
+badge.
 
 | tier | range | on the row | why there |
 |---|---|---|---|
-| **xs** | < 196px | name; badge only on failed and production rows | below where a badge and a readable name coexist |
-| **sm** | 196–255px | name, badge | 76 + 6 + 38 = 120 ≤ 128 elastic at 196 |
-| **md** | 256–311px | name, host, badge | 76 + 11 + 57 + 6 + 38 = 188 ≤ 192 elastic at 260 |
-| **lg** | 312–439px | name, host, database, badge | 188 + 11 + 47 = 246 ≤ 252 elastic at 320 |
-| **xl** | ≥ 440px | a column grid; badge in a fixed right column | tracks stay generous rather than merely fitting |
+| **xs** | < 196px | name, host, database; badge only on failed and production rows | below where a badge and a readable name coexist |
+| **sm** | 196–439px | name, host, database, badge | a state word beats twenty more characters of a host you already know |
+| **lg** | ≥ 440px | the badge takes a fixed 46px column | the words line up down the right edge across every row |
 
-**xs.** Host and database leave the row; both are still in the footer readout,
-in `title=` and in the accessible name. The badge collapses to zero width for
+**xs.** The badge collapses to zero width for
 connected and testing **but not for failed and not for production**. That
 asymmetry is deliberate: a connected row already carries three other marks — a
 filled disc, a 600-weight name, a bright ribbon tick — so its word is the
@@ -672,23 +673,16 @@ where a missing word costs something. The placeholder shortens to `Filter`.
 gain per pixel in the system: a state word beats twenty more characters of a
 host you already know.
 
-**md — the canonical drawing.** The host returns as its first DNS label.
+The host and the database sit on the second line separated by a 1px × 10px
+vertical hairline rather than a middot — at 10.5px a hairline is a lighter mark
+and gives the eye a rule to run down instead of a speck to jump over.
 
-**lg.** The database appears, separated from the host by a 1px × 10px vertical
-hairline rather than a middot — at 10.5px a hairline is a lighter mark and gives
-the eye a rule to run down instead of a speck to jump over.
+**lg.** The badge takes a fixed 46px column, so the state words line up down the
+right edge across every row. That is the one vertical alignment worth keeping
+once the text itself is stacked.
 
-**xl.** The elastic run becomes `grid-template-columns: minmax(76px, 1fr) 30% 22%`
-and the badge leaves it for a fixed 46px column. Name, host, database and badge
-now align into vertical columns across every row: at 500px you are reading
-columns rather than rows. At ≥560px a fourth track carries `authLabel(profile)`
-right-aligned, and the group header count splits into `18 · 2 open`. Both
-`authLabel` and `transportLabel` already exist in `types.ts` and already appeared
-in the tree's tooltip, so this promotes existing data out of a hover at no new
-data cost.
-
-**The row is still 22px in every tier. Extra width buys extra columns, never
-extra rows.** That is the line that does not move.
+**The row is 34px in every tier. Extra width buys room inside the two lines,
+never a third one.** That is the line that does not move.
 
 ### The shrink order
 
@@ -722,14 +716,13 @@ content — the same trap `docs/ui-architecture.md` documents for the editor's
 
 ### The search-aware override
 
-The arithmetic above says a one-line row cannot carry a database at 260px
-without cutting the name to nothing. But search "billing", get a row reading
-`orders-write / orders-qa-01`, and you have to hover to find out why it matched.
-So the fix is not a breakpoint, it is a rule:
+Both fields are on every row now, so nothing has to be revealed. What is left
+is narrower and still worth having: the field the query matched must not be the
+one that gets ellipsised while the other keeps its room.
 
 ```css
-.row[data-hit~="database"] .db   { display: inline !important; flex-shrink: 0 }
-.row[data-hit~="host"]     .host { display: inline !important; flex-shrink: 0 }
+.row[data-hit~="database"] .db   { flex-shrink: 0; max-width: 100% }
+.row[data-hit~="host"]     .host { flex-shrink: 0; max-width: 100% }
 mark { background: transparent; color: var(--mark); font-weight: 600 }
 ```
 

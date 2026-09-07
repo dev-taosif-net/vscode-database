@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import { AttemptResult, ConnectionManager } from '../connections/connectionManager';
-import { ConnectionStore, blankProfile, normalise } from '../store/connectionStore';
+import { ConnectionStore, blankProfile, coerceLimits } from '../store/connectionStore';
 import { probeServer } from '../connections/probe';
 import { DraftPayload, EditorState, HostMessage, WebviewMessage } from '../shared/protocol';
 import { ConnectionProfile, DriverKind, FailureActionId, defaultPort } from '../types';
@@ -463,12 +463,16 @@ export class ConnectionsPanel {
     if (!message.patch) {
       return stored;
     }
-    // The same coercion a save would apply, applied here too. Testing a draft
-    // used to hand the driver the boxes exactly as typed, so a cleared timeout
-    // reached it as null and a port typed as text reached it as a string —
-    // and a test could therefore behave differently from the connection it was
-    // supposed to be proving.
-    return normalise({ ...stored, ...message.patch, id: stored.id });
+    // The three limits get the same coercion a save would give them, and
+    // nothing else does. A cleared box arrives as null, and null seconds
+    // reached the driver as a timeout of nothing at all, so testing a draft
+    // could behave differently from connecting the profile it was proving.
+    //
+    // Deliberately not `normalise`: that also coerces the port, and a port the
+    // editor has already marked invalid would come back as the engine's
+    // default. An address the page says is unusable must not quietly become a
+    // different, usable one.
+    return coerceLimits({ ...stored, ...message.patch, id: stored.id });
   }
 
   private async runFailureAction(message: { id: string; actionId: FailureActionId; raw: string }): Promise<void> {

@@ -57,11 +57,17 @@
    * `src/webview/sidebar/model.ts` and they must agree with it exactly: the
    * virtualizer positions every row from `H`, so a stylesheet that disagrees
    * produces a list that is truthful about its offsets and visibly wrong.
-   * H.row 22, H.group 24, H.pinned 24, H.nomatch 44.
+   * H.row 34, H.group 24, H.pinned 24, H.nomatch 44.
+   *
+   * A row is 34 because it carries two lines: the name at 13px over the host
+   * and database at 10.5px.
    */
-  --row-h: 22px;
+  --row-h: 34px;
   --head-h: 24px;
   --nomatch-h: 44px;
+  /* The footer strips are one line of 10.5px text and are not list rows, so
+     they keep the 22px the row used to be rather than following it upward. */
+  --strip-h: 22px;
   /* The left rail: ribbon, state glyph, engine mark, 0..44, text at 52. The
      margins on `.glyph` and `.engine` sum to it; this is the ruler they are
      checked against, not an input they are computed from, because a rail that
@@ -608,18 +614,42 @@ body {
 
 /*
  * Text begins at x=52 — 5 padding + 3 border + 16 glyph + 4 + 16 engine + 8.
- * The shrink order below never varies within a tier: the domain suffix
- * evaporates first, then the database, then the host's first label, then the
- * name ellipsises. Every row in a tier shows the same fields, because a field
- * that appears on some rows and not others destroys the vertical scan the
- * whole design is built on.
+ *
+ * Two lines, stacked: the name, and under it the address it names. The name
+ * has its line to itself, so it ellipsises only when it is genuinely longer
+ * than the panel rather than because a host and a database were bidding for
+ * the same 170 pixels. Within the second line the shrink order is unchanged —
+ * the domain suffix evaporates first, then the database, then the host's first
+ * label. Every row shows the same fields, because a field that appears on some
+ * rows and not others destroys the vertical scan the whole design is built on.
  */
 .run {
   flex: 1 1 auto;
   min-width: 0;
   display: flex;
-  align-items: center;
+  flex-direction: column;
+  justify-content: center;
   overflow: hidden;
+}
+
+.run-primary,
+.run-detail {
+  display: flex;
+  align-items: baseline;
+  min-width: 0;
+  overflow: hidden;
+}
+
+/* Baseline alignment would let a descender in the name push the line down, so
+   the two lines are given their heights outright and they sum to the 34 the
+   virtualizer positions every row from. */
+.run-primary {
+  height: 18px;
+  align-items: center;
+}
+
+.run-detail {
+  height: 14px;
 }
 
 /* A row lifted into the pinned section, or any row in flat mode, has no header
@@ -637,8 +667,8 @@ body {
 /* The only 13px text in the panel, so three text elements on one line never
    compete: the ramp is luminance and weight, not size. */
 .name {
-  flex: 1 1 auto;
-  min-width: 76px;
+  flex: 0 1 auto;
+  min-width: 0;
   font-size: 13px;
   font-weight: 450;
   color: inherit;
@@ -658,7 +688,7 @@ body {
  * database is hidden.
  */
 .sep {
-  display: none;
+  display: block;
   flex: none;
   align-self: center;
   width: 1px;
@@ -670,7 +700,7 @@ body {
 /* Monospace because 10.0.14.22 and 10.0.14.23 are only separable at a fixed
    pitch, and because it gives the line a texture the eye can skip. */
 .host {
-  display: none;
+  display: flex;
   flex: 0 1 auto;
   flex-shrink: 2;
   min-width: 0;
@@ -724,7 +754,7 @@ body {
 }
 
 .db {
-  display: none;
+  display: inline;
   flex: 0 1 auto;
   flex-shrink: 3;
   min-width: 0;
@@ -965,7 +995,7 @@ mark {
   display: flex;
   align-items: center;
   gap: 12px;
-  height: var(--row-h);
+  height: var(--strip-h);
   padding: 0 8px;
   font-size: 11px;
   color: var(--fg-dim);
@@ -1005,9 +1035,9 @@ mark {
  * keypress rate, and the mouse and keyboard paths are the same path.
  */
 .readout {
-  height: var(--row-h);
+  height: var(--strip-h);
   padding: 0 8px;
-  line-height: var(--row-h);
+  line-height: var(--strip-h);
   font-family: var(--vscode-editor-font-family, monospace);
   font-size: 10.5px;
   color: var(--fg-dim);
@@ -1055,17 +1085,16 @@ mark {
 /* ------------------------------------------------------------------ tiers */
 
 /*
- * Five tiers, all `@container rail`. There is not one media query for width in
+ * Three tiers, all `@container rail`. There is not one media query for width in
  * this file and not one breakpoint number in the panel's JavaScript, so
  * dragging the sash costs zero React renders at every width rather than merely
- * within a tier. The thresholds come from measuring content against the
- * workbench UI font at 13px and the editor mono at 10.5px:
+ * within a tier.
  *
- *   name floor 76px · badge 38 + 6 gap · host 57 + 11 sep · database 47 + 11
- *   elastic = W − 52 − 8 − 8
- *
- * The base rules above are the xs tier, below 196px: name only, and a badge
- * only where a missing word costs something.
+ * There used to be five, and the two that went were the ones that revealed the
+ * host at 256 and the database at 312. Both fields now have a line to
+ * themselves at every width, so there is no longer a width at which they are
+ * absent and nothing to reveal. What is left is the state badge: whether it
+ * appears at all below 196, and whether it gets a fixed column above 440.
  */
 
 /*
@@ -1093,78 +1122,16 @@ mark {
   }
 }
 
-/* md — 256px, the canonical drawing. 192px of elastic; 148px of text after the
-   badge and its gap. */
-@container rail (min-width: 256px) {
-  .host {
-    display: flex;
-  }
-
-  .sep:has(+ .host) {
-    display: block;
-  }
-}
-
-/* lg — 312px. The database appears as a third element. */
-@container rail (min-width: 312px) {
-  .db {
-    display: inline;
-  }
-
-  .sep:has(+ .db) {
-    display: block;
-  }
-}
-
 /*
- * xl — 440px. The run becomes a grid and the badge leaves it for a fixed right
- * column, so name, host, database and badge align into vertical columns across
- * every row. At 500px you are no longer reading rows, you are reading columns.
+ * md and up. The host and the database have their own line at every width, so
+ * there is no threshold at which they appear: the tiers that used to reveal
+ * them bought horizontal room the second line now supplies outright.
  *
- * The leading `auto` track is the pinned and flat rows' environment badge. It
- * collapses to zero on a row that has none, and since a badge is present on
- * every row of a section or on none of them, the columns still line up inside
- * each section. Gaps live on the children rather than the tracks so a zero
- * track really is zero, and the hairline separators step aside for the grid.
+ * What width still buys is the state badge's column. Above 440 it is given a
+ * fixed width so the words line up down the right edge across every row, which
+ * is the one vertical alignment worth keeping once the text is stacked.
  */
 @container rail (min-width: 440px) {
-  .run {
-    display: grid;
-    grid-template-columns: auto minmax(76px, 1fr) 30% 22%;
-    align-items: center;
-  }
-
-  /*
-   * Columns replace the hairlines, and the `!important` is the honest kind:
-   * a separator here is not merely unwanted, it is an unplaced grid item that
-   * would land in the badge's track. The search override below would otherwise
-   * out-specify a plain rule and put one back.
-   */
-  .sep {
-    display: none !important;
-  }
-
-  .env-badge {
-    grid-column: 1;
-  }
-
-  .name {
-    grid-column: 2;
-    padding-right: 10px;
-  }
-
-  .host {
-    grid-column: 3;
-    display: flex;
-    padding-right: 10px;
-  }
-
-  .db {
-    grid-column: 4;
-    display: block;
-    padding-right: 10px;
-  }
-
   .badge {
     width: 46px;
     min-width: 46px;
@@ -1172,65 +1139,23 @@ mark {
   }
 }
 
-/*
- * 560px. A fourth track carries `authLabel(profile)` right-aligned. Both
- * `authLabel` and `transportLabel` already appear in the tree's tooltip, so
- * this promotes existing data out of a hover into the glance at no new cost.
- */
-@container rail (min-width: 560px) {
-  .run {
-    grid-template-columns: auto minmax(76px, 1fr) 26% 19% 92px;
-  }
-}
-
 /* ----------------------------------------------------- the search override */
 
 /*
- * A field the query matched is on the row at every width, 170px included, with
- * the matched substring marked. Searching "billing" and getting back a row
- * that reads `orders-write / orders-qa-01` with no visible reason it matched is
- * the single worst scanning failure available, and this removes it without
- * spending a pixel while nobody is searching. When it fires at 170px the name
- * is cut to about six characters, which is correct: the user is searching, the
- * match is the point, and the full name is in the readout, the `title=` and
- * the accessible name.
- *
- * These come last so they beat every tier rule above without a specificity
- * argument, and `.host` is forced to `flex` rather than the `inline` the
- * database gets, because it is a flex container holding its own head, tail and
- * port.
+ * The field a query matched keeps its room while the query is running, so the
+ * marked substring is never the part that gets ellipsised. Both fields are on
+ * the row at every width now that they have a line of their own, so this no
+ * longer has to reveal anything — it only stops the matched one from being the
+ * first thing the other one squeezes.
  */
 .row[data-hit~='host'] .host {
-  display: flex !important;
   flex-shrink: 0;
   max-width: 100%;
-}
-
-.row[data-hit~='host'] .sep:has(+ .host) {
-  display: block;
 }
 
 .row[data-hit~='database'] .db {
-  display: inline !important;
   flex-shrink: 0;
   max-width: 100%;
-}
-
-.row[data-hit~='database'] .sep:has(+ .db) {
-  display: block;
-}
-
-/*
- * The name's 76px floor is what stops it evicting its neighbours in the
- * ordinary case, and it is exactly what has to give here: at 170px a forced
- * host leaves the name about six characters, which is the correct trade while
- * a query is running. `max-width: 100%` above is the other half — a field that
- * refuses to shrink still has to fit inside the run rather than be clipped
- * with the match halfway off the edge.
- */
-.row[data-hit~='host'] .name,
-.row[data-hit~='database'] .name {
-  min-width: 0;
 }
 
 /* ------------------------------------------------------- high contrast */
