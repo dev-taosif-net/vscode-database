@@ -93,6 +93,20 @@ export class ConnectionManager implements vscode.Disposable {
     return this.active.get(profileId)?.info;
   }
 
+  /**
+   * The live session, for the catalog to read the object tree through.
+   *
+   * It hands out the session rather than proxying every statement, because the
+   * manager has no opinion about catalog SQL and a pass-through method per
+   * query would be a second place for the closed-session check to live. A
+   * session that has closed underneath us is returned as undefined, so a caller
+   * cannot act on a socket that is already gone.
+   */
+  sessionFor(profileId: string): DriverSession | undefined {
+    const entry = this.active.get(profileId);
+    return entry && !entry.session.isClosed() ? entry.session : undefined;
+  }
+
   activeIds(): string[] {
     return [...this.active.keys()].filter((id) => this.isConnected(id));
   }

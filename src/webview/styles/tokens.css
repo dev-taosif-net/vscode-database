@@ -38,14 +38,68 @@
   --eng-mssql: #0078d4;
   --eng-postgres: #336791;
 
+  /*
+   * The eight object hues, plus the four the explorer's containers and members
+   * use.
+   *
+   * These are deliberately *not* the environment hues, and the rule that says
+   * one hue means one thing is exactly why. `--env-qa` is #4a93f0 and a table
+   * is #4d9de0: near neighbours, but they never appear in the same column and
+   * they are never the same swatch. The environment hues live in the left rail
+   * of a connection row and in its heading — a 3px ribbon, a state disc, a
+   * short badge — and the object hues live inside a connection, on a 16px mark
+   * at a different x, on a shorter row. Nothing in the panel shows one of each
+   * at the same indent.
+   *
+   * Colour is also never the carrier. Each mark in `ObjectIcon.tsx` has a
+   * silhouette of its own, so the set survives a high-contrast theme, a forced
+   * palette, and the one man in twelve who cannot separate the red from the
+   * green. The hue makes the tree scannable; the shape makes it correct.
+   */
+  --obj-table: #4d9de0;
+  --obj-view: #3fae7a;
+  --obj-procedure: #a97fe0;
+  --obj-function: #d9a441;
+  --obj-trigger: #e0605f;
+  --obj-sequence: #e0884c;
+  --obj-type: #8e97ad;
+  --obj-synonym: #3fb8c4;
+  --obj-folder: #8892a4;
+  --obj-schema: #c99a63;
+  --obj-favourite: #e8b445;
+  --obj-key: #d9b44a;
+  --obj-ref: #7fa7c4;
+  --obj-member: #8892a4;
+
   --radius: 6px;
   --radius-sm: 4px;
   --gap: 14px;
   --motion: 120ms;
 }
 
+/*
+ * The light values are darker rather than the same hue at a lower lightness,
+ * because a mark on #f8f8f8 has to clear 3:1 the way a non-text control does,
+ * and the dark set measures between 1.6 and 2.4 there. Every value below was
+ * chosen against the light sidebar's own ground, not against white.
+ */
 body.vscode-light,
 body.vscode-high-contrast-light {
+  --obj-table: #1f6fb2;
+  --obj-view: #14795a;
+  --obj-procedure: #7040b8;
+  --obj-function: #8a6206;
+  --obj-trigger: #b03a3a;
+  --obj-sequence: #9c5417;
+  --obj-type: #58607a;
+  --obj-synonym: #0d7683;
+  --obj-folder: #5c6478;
+  --obj-schema: #8a6438;
+  --obj-favourite: #96700a;
+  --obj-key: #8a6a00;
+  --obj-ref: #3d6b8c;
+  --obj-member: #5c6478;
+
   --env-dev: #1a7f37;
   --env-qa: #0b62ce;
   --env-uat: #b45309;
@@ -67,6 +121,21 @@ body.vscode-high-contrast-light {
  * value one step brighter buys nothing and can only drift.
  */
 body.vscode-high-contrast {
+  --obj-table: #7cc4f5;
+  --obj-view: #64d9a2;
+  --obj-procedure: #cba6ff;
+  --obj-function: #f0c860;
+  --obj-trigger: #ff8a85;
+  --obj-sequence: #f5a86a;
+  --obj-type: #b8c0d0;
+  --obj-synonym: #6fdce8;
+  --obj-folder: #b0b8c8;
+  --obj-schema: #e0b98a;
+  --obj-favourite: #f5cc66;
+  --obj-key: #f5cc66;
+  --obj-ref: #9dc4e0;
+  --obj-member: #b0b8c8;
+
   --env-dev: #5fd97a;
   --env-qa: #7cb8ff;
   --env-uat: #f0b26a;

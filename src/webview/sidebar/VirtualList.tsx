@@ -9,12 +9,37 @@ import {
   useState
 } from 'react';
 import { useStoreSelector } from '../state/store';
-import { NOMATCH_ID, NoMatch } from './EmptyState';
-import { GroupHeader, PINNED_ID, PinnedHeader, headerId } from './GroupHeader';
+import { NoMatch } from './EmptyState';
+import { GroupHeader, PinnedHeader } from './GroupHeader';
 import { Row } from './Row';
 import { StickyHeader } from './StickyHeader';
-import { FlatItem, flatten, heightOf, indexAt, measure } from './model';
-import { CursorState, ListState, SessionMap, cursorStore, listStore, sessionStore } from './state';
+import { FolderRow, MemberRow, NoteRow, ObjectRow, ResultsHeader, SchemaRow } from './TreeRow';
+import { parseQuery } from './fuzzy';
+import {
+  CatalogMap,
+  FlatItem,
+  depthOf,
+  flatten,
+  heightOf,
+  indexAt,
+  isHeader,
+  keyOf,
+  measure,
+  parentOf
+} from './model';
+import {
+  CursorState,
+  ExpandedMap,
+  ListState,
+  SessionMap,
+  catalogStore,
+  cursorStore,
+  expandedStore,
+  listStore,
+  request,
+  sessionStore,
+  setObjectHits
+} from './state';
 
 /**
  * Below this many items the whole list is in the DOM.
@@ -36,6 +61,8 @@ const selSort = (s: ListState) => s.sort;
 const selCollapsed = (s: ListState) => s.collapsed;
 const selQuery = (s: ListState) => s.query;
 const selCursor = (s: CursorState) => s.cursorId;
+const selCatalog = (s: CatalogMap) => s;
+const selExpanded = (s: ExpandedMap) => s;
 
 /**
  * A value, not an object, so `useSyncExternalStore` compares it with `Object.is`
@@ -56,25 +83,6 @@ const selOpenKey = (s: SessionMap): string => {
   }
   return ids.sort().join(' ');
 };
-
-/**
- * The cursor is a flat index here and a string in `cursorStore`, so a row can
- * test it with one comparison. The three ids that are not profile ids are owned
- * by the components that answer to them rather than minted here, because a
- * second convention for the same thing is a second thing to get wrong.
- */
-export function keyOf(item: FlatItem): string {
-  switch (item.kind) {
-    case 'row':
-      return item.id;
-    case 'group':
-      return headerId(item.environment);
-    case 'pinned':
-      return PINNED_ID;
-    case 'nomatch':
-      return NOMATCH_ID;
-  }
-}
 
 function indexOfKey(items: readonly FlatItem[], key: string | null): number {
   if (key === null) {
@@ -100,8 +108,11 @@ export interface ListHandle {
   items(): readonly FlatItem[];
   /** The flat index the cursor is on, or -1 when the list has not been touched. */
   cursorIndex(): number;
-  /** The index of the section header owning an item, or -1. */
-  ownerOf(index: number): number;
+  /**
+   * The index of the item one level up: a section header for a connection, the
+   * folder for an object, the object for a column. -1 when there is none.
+   */
+  parentOf(index: number): number;
   /** How many items a viewport holds, for PageUp and PageDown. */
   page(): number;
   /** Scroll it into view, make it the cursor, and give it DOM focus. */
@@ -133,24 +144,53 @@ export function VirtualList({ handle, initialTop, onTop }: Props): JSX.Element {
   const query = useStoreSelector(listStore, selQuery);
   const cursorKey = useStoreSelector(cursorStore, selCursor);
   const openKey = useStoreSelector(sessionStore, selOpenKey);
+  const catalog = useStoreSelector(catalogStore, selCatalog);
+  const expandedMap = useStoreSelector(expandedStore, selExpanded);
 
   const open = useMemo(() => new Set(openKey ? openKey.split(' ') : []), [openKey]);
+  const expanded = useMemo(() => new Set(Object.keys(expandedMap)), [expandedMap]);
 
   /**
    * A hundred connections plus five headers is 105 entries and two typed arrays
-   * of about 850 bytes. It runs when a profile changes, when a group folds,
-   * when the query changes and when a session opens. Not per frame, not per
-   * scroll, and never for a spinner.
+   * of about 850 bytes; a connection with a folder of twelve hundred tables
+   * open is 1305 entries and about 10KB, which is still one pass over an array.
+   * It runs when a profile changes, when a group folds, when a node is opened,
+   * when a page of objects lands, when the query changes and when a session
+   * opens. Not per frame, not per scroll, and never for a spinner.
    */
   const geom = useMemo(() => {
-    const flat = flatten({ rows, grouped, sort, collapsed, query, open });
-    return { ...measure(flat.items), matches: flat.matches };
-  }, [rows, grouped, sort, collapsed, query, open]);
+    const flat = flatten({ rows, grouped, sort, collapsed, query, open, catalog, expanded });
+    return {
+      ...measure(flat.items),
+      matches: flat.matches,
+      wanted: flat.wanted,
+      objectHits: flat.objectHits
+    };
+  }, [rows, grouped, sort, collapsed, query, open, catalog, expanded]);
+
+  /**
+   * Whatever the tree is waiting for, asked for once.
+   *
+   * `flatten` is pure and reports its gaps on every pass; `request` holds the
+   * set of things already asked. Putting the effect here rather than in each
+   * folder means one place decides what gets fetched, and a windowed row that
+   * scrolls out of view mid-flight cannot cancel a load the tree still needs.
+   */
+  useEffect(() => {
+    if (geom.wanted.length > 0) {
+      request(geom.wanted);
+    }
+  }, [geom]);
+
+  useEffect(() => setObjectHits(geom.objectHits), [geom.objectHits]);
 
   const n = geom.items.length;
   const total = geom.offsets[n];
   const virtual = n > VIRTUALIZE_ABOVE;
   const needle = query.trim().toLowerCase();
+  // Objects are matched against the name part alone, so `proc:cust` marks
+  // `cust` and not the filter that selected the folder it came from.
+  const objectNeedle = useMemo(() => parseQuery(query).needle, [query]);
 
   const scroller = useRef<HTMLDivElement>(null);
   const overlay = useRef<HTMLDivElement>(null);
@@ -285,7 +325,7 @@ export function VirtualList({ handle, initialTop, onTop }: Props): JSX.Element {
     handle.current = {
       items: () => geom.items,
       cursorIndex: () => cursorIndex,
-      ownerOf: (i) => (i >= 0 && i < n ? geom.owner[i] : -1),
+      parentOf: (i) => (i >= 0 && i < n ? parentOf(geom, i) : -1),
       page: () => {
         const el = scroller.current;
         const height = el ? el.clientHeight : viewportH;
@@ -293,7 +333,10 @@ export function VirtualList({ handle, initialTop, onTop }: Props): JSX.Element {
       },
       focusIndex,
       focusFirst: (rowsOnly) => {
-        const i = rowsOnly ? geom.items.findIndex((item) => item.kind === 'row') : 0;
+        // `rowsOnly` is Enter from the search box: skip the headings and land
+        // on the first thing that actually matched, which during an object
+        // search is an object and not a connection.
+        const i = rowsOnly ? geom.items.findIndex((item) => !isHeader(item)) : 0;
         focusIndex(i);
       },
       reveal: (id) => {
@@ -415,9 +458,20 @@ export function VirtualList({ handle, initialTop, onTop }: Props): JSX.Element {
   const first = virtual ? Math.min(win.first, Math.max(0, n - 1)) : 0;
   const last = virtual ? Math.min(win.last, n - 1) : n - 1;
 
+  /**
+   * The depth a screen reader is told, which is one more than the depth the
+   * geometry uses whenever a section header sits above the item. The two are
+   * kept apart on purpose: `depthOf` drives indentation and the ← key and has
+   * to be zero-based from the connection, while `aria-level` is one-based from
+   * the root of the tree and has to count the header.
+   */
+  const ariaLevelAt = (i: number): number => depthOf(geom.items[i]) + (geom.owner[i] >= 0 ? 1 : 0);
+
   const node = (i: number): JSX.Element => {
     const item = geom.items[i];
     const top = geom.offsets[i];
+    const shared = { top, posinset: i + 1, setsize: n, ariaLevel: ariaLevelAt(i) };
+
     switch (item.kind) {
       case 'pinned':
         return <PinnedHeader key="pinned" count={item.count} top={top} posinset={i + 1} setsize={n} />;
@@ -442,11 +496,100 @@ export function VirtualList({ handle, initialTop, onTop }: Props): JSX.Element {
             top={top}
             pinned={item.pinned}
             showBadge={item.showBadge}
-            level={geom.owner[i] >= 0 ? 2 : 1}
+            level={shared.ariaLevel}
             posinset={i + 1}
             setsize={n}
             needle={needle}
             hit={geom.matches.get(item.id)?.join(' ') ?? ''}
+            expandable={item.expandable}
+            expanded={item.expanded}
+            schemaMode={item.schemaMode}
+          />
+        );
+      case 'results':
+        return (
+          <ResultsHeader
+            key={item.key}
+            gkey={item.key}
+            top={top}
+            label={item.label}
+            count={item.count}
+            capped={item.capped}
+            posinset={i + 1}
+            setsize={n}
+          />
+        );
+      case 'folder':
+        return (
+          <FolderRow
+            key={item.key}
+            gkey={item.key}
+            level={item.level}
+            label={item.label}
+            count={item.count}
+            mark={item.mark}
+            expanded={item.expanded}
+            alwaysCount={item.mark === 'favourite'}
+            {...shared}
+          />
+        );
+      case 'schema':
+        return (
+          <SchemaRow
+            key={item.key}
+            gkey={item.key}
+            level={item.level}
+            name={item.name}
+            total={item.total}
+            expanded={item.expanded}
+            needle={objectNeedle}
+            {...shared}
+          />
+        );
+      case 'object':
+        return (
+          <ObjectRow
+            key={item.key}
+            gkey={item.key}
+            level={item.level}
+            profileId={item.profileId}
+            objKind={item.objKind}
+            schema={item.schema}
+            name={item.name}
+            detail={item.detail}
+            qualify={item.qualify}
+            expandable={item.expandable}
+            expanded={item.expanded}
+            favourite={item.favourite}
+            needle={objectNeedle}
+            {...shared}
+          />
+        );
+      case 'member':
+        return (
+          <MemberRow
+            key={item.key}
+            gkey={item.key}
+            level={item.level}
+            name={item.name}
+            type={item.type}
+            mark={item.mark}
+            nullable={item.nullable}
+            {...shared}
+          />
+        );
+      case 'note':
+        return (
+          <NoteRow
+            key={item.key}
+            gkey={item.key}
+            level={item.level}
+            tone={item.tone}
+            text={item.text}
+            profileId={item.profileId}
+            node={item.node}
+            offset={item.offset}
+            {...shared}
           />
         );
       case 'nomatch':

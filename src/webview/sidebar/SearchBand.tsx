@@ -4,10 +4,11 @@ import { Codicon } from '../primitives/Codicon';
 import { useStoreSelector } from '../state/store';
 import { post } from './api';
 import { matchRow } from './model';
-import { ListState, listStore } from './state';
+import { ListState, hitsStore, listStore, searchObjects } from './state';
 
 const selRows = (s: ListState) => s.rows;
 const selQuery = (s: ListState) => s.query;
+const selHits = (n: number) => n;
 
 function setQuery(value: string): void {
   listStore.setState((s) => (s.query === value ? s : { ...s, query: value }));
@@ -30,6 +31,7 @@ interface Props {
 export function SearchBand({ inputRef, onLeave }: Props): JSX.Element {
   const rows = useStoreSelector(listStore, selRows);
   const query = useStoreSelector(listStore, selQuery);
+  const objectHits = useStoreSelector(hitsStore, selHits);
   const [announce, setAnnounce] = useState('');
 
   const needle = query.trim().toLowerCase();
@@ -43,6 +45,26 @@ export function SearchBand({ inputRef, onLeave }: Props): JSX.Element {
     return () => window.clearTimeout(id);
   }, [needle, matched]);
 
+  /**
+   * The server-side half of the search, on a longer fuse than the local half.
+   *
+   * The panel has already matched everything it holds by the time this fires —
+   * that is what makes the first keystroke feel instant — and this is only for
+   * the objects it has never read. 250ms rather than 200 because every one of
+   * these is a query against every open connection, and the cost of firing one
+   * early is a round trip nobody waits for, on a database somebody else is
+   * also using. The raw query is sent rather than the parsed needle, so the
+   * answer can be matched against the query it answers and a late one dropped.
+   */
+  useEffect(() => {
+    const value = query.trim();
+    if (value.length < 2) {
+      return;
+    }
+    const id = window.setTimeout(() => searchObjects(value), 250);
+    return () => window.clearTimeout(id);
+  }, [query]);
+
   // Typing must not produce a stream of interruptions, so the count is
   // announced when the typing stops rather than on every keystroke.
   useEffect(() => {
@@ -50,12 +72,16 @@ export function SearchBand({ inputRef, onLeave }: Props): JSX.Element {
       setAnnounce('');
       return;
     }
-    const id = window.setTimeout(
-      () => setAnnounce(`${matched} of ${rows.length} connections match`),
-      500
-    );
+    const id = window.setTimeout(() => {
+      const connections = `${matched} of ${rows.length} connections match`;
+      setAnnounce(
+        objectHits > 0
+          ? `${connections}, and ${objectHits} database ${objectHits === 1 ? 'object' : 'objects'}`
+          : connections
+      );
+    }, 500);
     return () => window.clearTimeout(id);
-  }, [needle, matched, rows.length]);
+  }, [needle, matched, rows.length, objectHits]);
 
   useEffect(() => {
     const onMessage = (event: MessageEvent<SidebarHostMessage>): void => {
@@ -93,8 +119,8 @@ export function SearchBand({ inputRef, onLeave }: Props): JSX.Element {
         className="search-input"
         type="text"
         value={query}
-        placeholder="Name, host, database"
-        aria-label="Search connections by name, host or database"
+        placeholder="Search connections and objects…"
+        aria-label="Search connections and database objects by name, schema or type"
         spellCheck={false}
         autoComplete="off"
         onChange={(event) => setQuery(event.currentTarget.value)}

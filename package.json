@@ -129,6 +129,78 @@
         "title": "Copy Server Address",
         "category": "Database",
         "icon": "$(copy)"
+      },
+      {
+        "command": "databaseTools.refreshCatalog",
+        "title": "Refresh Objects",
+        "category": "Database",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "databaseTools.enableSchemaMode",
+        "title": "Enable Schema Focused Mode",
+        "category": "Database",
+        "icon": "$(symbol-namespace)"
+      },
+      {
+        "command": "databaseTools.disableSchemaMode",
+        "title": "Disable Schema Focused Mode",
+        "category": "Database",
+        "icon": "$(symbol-namespace)"
+      },
+      {
+        "command": "databaseTools.openDefinition",
+        "title": "Open Definition",
+        "category": "Database",
+        "icon": "$(go-to-file)"
+      },
+      {
+        "command": "databaseTools.selectTop100",
+        "title": "Select Top 100",
+        "category": "Database",
+        "icon": "$(table)"
+      },
+      {
+        "command": "databaseTools.generateCrud",
+        "title": "Generate CRUD",
+        "category": "Database",
+        "icon": "$(symbol-method)"
+      },
+      {
+        "command": "databaseTools.executeObject",
+        "title": "Execute",
+        "category": "Database",
+        "icon": "$(play)"
+      },
+      {
+        "command": "databaseTools.scriptAsAlter",
+        "title": "Script As ALTER",
+        "category": "Database",
+        "icon": "$(edit)"
+      },
+      {
+        "command": "databaseTools.copyObjectName",
+        "title": "Copy Name",
+        "category": "Database",
+        "icon": "$(copy)"
+      },
+      {
+        "command": "databaseTools.copyObjectFullName",
+        "title": "Copy Full Name",
+        "category": "Database",
+        "icon": "$(copy)"
+      },
+      {
+        "command": "databaseTools.addObjectFavourite",
+        "title": "Add to Favourites",
+        "category": "Database",
+        "icon": "$(star-add)"
+      },
+      {
+        "command": "databaseTools.removeObjectFavourite",
+        "title": "Remove from Favourites",
+        "category": "Database",
+        "icon": "$(star-delete)"
       }
     ],
     "configuration": {
@@ -212,6 +284,50 @@
         {
           "command": "databaseTools.copyServerAddress",
           "when": "false"
+        },
+        {
+          "command": "databaseTools.enableSchemaMode",
+          "when": "false"
+        },
+        {
+          "command": "databaseTools.disableSchemaMode",
+          "when": "false"
+        },
+        {
+          "command": "databaseTools.openDefinition",
+          "when": "false"
+        },
+        {
+          "command": "databaseTools.selectTop100",
+          "when": "false"
+        },
+        {
+          "command": "databaseTools.generateCrud",
+          "when": "false"
+        },
+        {
+          "command": "databaseTools.executeObject",
+          "when": "false"
+        },
+        {
+          "command": "databaseTools.scriptAsAlter",
+          "when": "false"
+        },
+        {
+          "command": "databaseTools.copyObjectName",
+          "when": "false"
+        },
+        {
+          "command": "databaseTools.copyObjectFullName",
+          "when": "false"
+        },
+        {
+          "command": "databaseTools.addObjectFavourite",
+          "when": "false"
+        },
+        {
+          "command": "databaseTools.removeObjectFavourite",
+          "when": "false"
         }
       ],
       "view/title": [
@@ -268,34 +384,94 @@
           "group": "1_session@1"
         },
         {
-          "command": "databaseTools.editConnection",
-          "when": "webviewSection == 'connection'",
-          "group": "2_profile@1"
+          "command": "databaseTools.refreshCatalog",
+          "when": "webviewSection == 'connection' && dbConnectionLive",
+          "group": "1_session@2"
         },
         {
           "command": "databaseTools.addFavourite",
           "when": "webviewSection == 'connection' && !dbConnectionPinned",
-          "group": "2_profile@2"
+          "group": "2_reading@1"
         },
         {
           "command": "databaseTools.removeFavourite",
           "when": "webviewSection == 'connection' && dbConnectionPinned",
-          "group": "2_profile@2"
+          "group": "2_reading@1"
+        },
+        {
+          "command": "databaseTools.enableSchemaMode",
+          "when": "webviewSection == 'connection' && !dbSchemaMode",
+          "group": "2_reading@2"
+        },
+        {
+          "command": "databaseTools.disableSchemaMode",
+          "when": "webviewSection == 'connection' && dbSchemaMode",
+          "group": "2_reading@2"
+        },
+        {
+          "command": "databaseTools.editConnection",
+          "when": "webviewSection == 'connection'",
+          "group": "3_profile@1"
         },
         {
           "command": "databaseTools.duplicateConnection",
           "when": "webviewSection == 'connection'",
-          "group": "2_profile@3"
+          "group": "3_profile@2"
         },
         {
           "command": "databaseTools.copyServerAddress",
           "when": "webviewSection == 'connection'",
-          "group": "3_copy@1"
+          "group": "4_copy@1"
         },
         {
           "command": "databaseTools.deleteConnection",
           "when": "webviewSection == 'connection'",
-          "group": "4_danger@1"
+          "group": "5_danger@1"
+        },
+        {
+          "command": "databaseTools.openDefinition",
+          "when": "webviewSection == 'dbObject'",
+          "group": "1_open@1"
+        },
+        {
+          "command": "databaseTools.selectTop100",
+          "when": "webviewSection == 'dbObject' && dbObjectRelational",
+          "group": "1_open@2"
+        },
+        {
+          "command": "databaseTools.executeObject",
+          "when": "webviewSection == 'dbObject' && dbObjectRoutine",
+          "group": "1_open@3"
+        },
+        {
+          "command": "databaseTools.generateCrud",
+          "when": "webviewSection == 'dbObject' && objectKind == 'table'",
+          "group": "2_script@1"
+        },
+        {
+          "command": "databaseTools.scriptAsAlter",
+          "when": "webviewSection == 'dbObject' && (dbObjectRoutine || objectKind == 'view')",
+          "group": "2_script@2"
+        },
+        {
+          "command": "databaseTools.copyObjectName",
+          "when": "webviewSection == 'dbObject'",
+          "group": "3_copy@1"
+        },
+        {
+          "command": "databaseTools.copyObjectFullName",
+          "when": "webviewSection == 'dbObject'",
+          "group": "3_copy@2"
+        },
+        {
+          "command": "databaseTools.addObjectFavourite",
+          "when": "webviewSection == 'dbObject' && !dbObjectPinned",
+          "group": "4_pin@1"
+        },
+        {
+          "command": "databaseTools.removeObjectFavourite",
+          "when": "webviewSection == 'dbObject' && dbObjectPinned",
+          "group": "4_pin@1"
         }
       ]
     },

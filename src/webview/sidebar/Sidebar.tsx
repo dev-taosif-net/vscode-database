@@ -7,7 +7,27 @@ import { EmptyState } from './EmptyState';
 import { Footer } from './Footer';
 import { SearchBand } from './SearchBand';
 import { ListHandle, VirtualList } from './VirtualList';
-import { ListState, cursorStore, fold, index, listStore, sessionStore } from './state';
+import { FlatItem, expansionOf, isHeader } from './model';
+import {
+  ListState,
+  applyCatalogError,
+  applyMembers,
+  applyNodeError,
+  applyObjects,
+  applySearchAnswer,
+  applySummary,
+  clearCatalog,
+  collapseTree,
+  connectionKey,
+  cursorStore,
+  fold,
+  index,
+  listStore,
+  loadMore,
+  sessionStore,
+  setExpanded,
+  toggleExpanded
+} from './state';
 
 const selReady = (s: ListState) => s.ready;
 const selCount = (s: ListState) => s.rows.length;
@@ -61,6 +81,21 @@ export function Sidebar(): JSX.Element {
           for (const update of message.active) {
             map[update.id] = update;
           }
+          /*
+           * A connection that has just gone live opens itself.
+           *
+           * Connecting is not a goal, it is a step towards looking at
+           * something, and a tree that made you connect and then click the
+           * chevron would be asking twice for one intention. It only fires on
+           * the transition, so collapsing a connected connection by hand keeps
+           * it collapsed.
+           */
+          const before = sessionStore.getState();
+          for (const update of message.active) {
+            if (update.state === 'connected' && before[update.id]?.state !== 'connected') {
+              setExpanded(connectionKey(update.id), true);
+            }
+          }
           sessionStore.setState(() => map);
           return;
         }
@@ -70,11 +105,44 @@ export function Sidebar(): JSX.Element {
           // back for every environment would be four writes to answer one.
           const next = message.on ? ENVIRONMENTS.map((e) => e.id) : [];
           listStore.setState((s) => ({ ...s, collapsed: next }));
+          if (message.on) {
+            // Folding the environments without folding the trees inside them
+            // would leave a hundred open folders waiting behind the chevrons.
+            collapseTree();
+          }
           return;
         }
 
         case 'reveal':
           list.current?.reveal(message.id);
+          return;
+
+        case 'catalog':
+          applySummary(message.profileId, message.summary);
+          return;
+
+        case 'catalogError':
+          applyCatalogError(message.profileId, message.message);
+          return;
+
+        case 'objects':
+          applyObjects(message.profileId, message.node, message.objects, message.total);
+          return;
+
+        case 'members':
+          applyMembers(message.profileId, message.node, message.members);
+          return;
+
+        case 'nodeError':
+          applyNodeError(message.profileId, message.node, message.message);
+          return;
+
+        case 'searchAnswer':
+          applySearchAnswer(message.profileId, message.query, message.objects, message.capped);
+          return;
+
+        case 'catalogCleared':
+          clearCatalog(message.profileId);
           return;
 
         default:
@@ -152,6 +220,66 @@ export function Sidebar(): JSX.Element {
   const onReveal = useCallback((id: string) => list.current?.reveal(id), []);
 
   /**
+   * The expansion key for an item, which is not its cursor id.
+   *
+   * A connection's cursor id is its profile id, because that is what `reveal`
+   * and the editor's selection are addressed by; its subtree is opened under
+   * `profileId + separator`, the same convention every node below it uses. The
+   * two are deliberately different strings and this is the one place that
+   * knows both.
+   */
+  const expansionKey = (item: FlatItem): string | null => {
+    switch (item.kind) {
+      case 'row':
+        return item.expandable ? connectionKey(item.id) : null;
+      case 'folder':
+      case 'schema':
+        return item.key;
+      case 'object':
+        return item.expandable ? item.key : null;
+      default:
+        return null;
+    }
+  };
+
+  const open = (item: FlatItem): void => {
+    const key = expansionKey(item);
+    if (key) {
+      setExpanded(key, true);
+    }
+  };
+
+  const collapse = (item: FlatItem): void => {
+    const key = expansionKey(item);
+    if (key) {
+      setExpanded(key, false);
+    }
+  };
+
+  /** What Enter means, for every kind of thing the cursor can be on. */
+  const activate = (item: FlatItem): void => {
+    if (item.kind === 'group') {
+      fold(item.environment, !item.collapsed);
+      return;
+    }
+    if (item.kind === 'note') {
+      if (item.tone === 'more') {
+        loadMore(item.profileId, item.node, item.offset);
+      }
+      return;
+    }
+    const key = expansionKey(item);
+    if (key) {
+      toggleExpanded(key);
+      return;
+    }
+    if (item.kind === 'row') {
+      // A saved connection is a leaf, and opening it means opening its editor.
+      post({ type: 'open', id: item.id });
+    }
+  };
+
+  /**
    * The whole keyboard model, in one table.
    *
    * It is bound to the panel rather than to each row because a virtualized row
@@ -188,7 +316,7 @@ export function Sidebar(): JSX.Element {
     const landing = at < 0;
     const i = landing ? 0 : at;
     const item = items[i];
-    const header = item.kind === 'group' || item.kind === 'pinned';
+    const header = isHeader(item);
 
     switch (event.key) {
       case 'ArrowDown':
@@ -221,52 +349,72 @@ export function Sidebar(): JSX.Element {
         handle.focusIndex(Math.max(0, i - handle.page()));
         return;
 
+      /*
+       * ← and → are the tree's own gesture and they now have five levels to
+       * cross, so both go through `expansionOf` rather than through a chain of
+       * `item.kind ===` tests. The rule is the workbench's: → opens what is
+       * closed and steps in when it is already open, ← closes what is open and
+       * steps out when it is already closed. Everything below is that rule and
+       * the two exceptions an environment heading needs.
+       */
+
       case 'ArrowLeft': {
         event.preventDefault();
+        const state = expansionOf(item);
         if (item.kind === 'group' && !item.collapsed) {
           fold(item.environment, true);
           return;
         }
-        if (header) {
-          for (let k = i - 1; k >= 0; k--) {
-            if (items[k].kind === 'group' || items[k].kind === 'pinned') {
-              handle.focusIndex(k);
-              return;
-            }
-          }
+        if (state?.expandable && state.expanded) {
+          collapse(item);
           return;
         }
-        const owner = handle.ownerOf(i);
-        if (owner >= 0) {
-          handle.focusIndex(owner);
+        const parent = handle.parentOf(i);
+        if (parent >= 0) {
+          handle.focusIndex(parent);
         }
         return;
       }
 
-      case 'ArrowRight':
+      case 'ArrowRight': {
         event.preventDefault();
-        if (item.kind === 'group' && item.collapsed) {
-          fold(item.environment, false);
+        const state = expansionOf(item);
+        if (item.kind === 'group') {
+          if (item.collapsed) {
+            fold(item.environment, false);
+          } else if (i + 1 < n) {
+            handle.focusIndex(i + 1);
+          }
           return;
         }
-        if (header && i + 1 < n && items[i + 1].kind === 'row') {
-          handle.focusIndex(i + 1);
+        if (state?.expandable && !state.expanded) {
+          open(item);
+          return;
+        }
+        if (header || state?.expanded) {
+          if (i + 1 < n) {
+            handle.focusIndex(i + 1);
+          }
         }
         return;
+      }
 
       case 'Enter':
         event.preventDefault();
-        if (item.kind === 'group') {
-          fold(item.environment, !item.collapsed);
-        } else if (item.kind === 'row') {
-          post({ type: 'open', id: item.id });
-        }
+        activate(item);
         return;
 
       case ' ':
         event.preventDefault();
         if (item.kind === 'group') {
           fold(item.environment, !item.collapsed);
+          return;
+        }
+        if (item.kind !== 'row') {
+          // Everything inside a connection has one meaning for both keys, so
+          // Space is Enter there. Only a connection row distinguishes them,
+          // because only a connection has a session to open or close.
+          activate(item);
           return;
         }
         if (item.kind === 'row') {
@@ -285,6 +433,9 @@ export function Sidebar(): JSX.Element {
         return;
 
       case 'Delete':
+        // Connections only. Nothing inside a connection is deletable from a
+        // tree: dropping a table is a statement somebody writes and runs, not
+        // a keypress in a sidebar.
         if (item.kind === 'row') {
           event.preventDefault();
           post({ type: 'delete', id: item.id });

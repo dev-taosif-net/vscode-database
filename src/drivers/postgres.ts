@@ -166,6 +166,20 @@ class PostgresSession implements DriverSession {
     return result.rows.map((r) => r.datname);
   }
 
+  async query<T = Record<string, unknown>>(sql: string, params?: unknown[]): Promise<T[]> {
+    if (this.closed) {
+      throw new DriverError('The connection is closed.', 'ECLOSED', undefined, undefined);
+    }
+    try {
+      // node-postgres binds `$1` server-side, so a schema or an object name
+      // coming back through the webview is data and never syntax.
+      const result = await this.client.query(sql, params as unknown[] | undefined);
+      return result.rows as T[];
+    } catch (error) {
+      throw toDriverError(error);
+    }
+  }
+
   async close(): Promise<void> {
     if (this.closed) {
       return;

@@ -17,10 +17,24 @@ export interface OpenResult {
   readOnlyApplied: boolean;
 }
 
-/** A live session. Phase 1 only needs identity, the database list and close. */
+/**
+ * A live session.
+ *
+ * `query` is the whole of phase 2's addition, and it is deliberately the
+ * smallest one that works: a statement and its parameters in, rows out. There
+ * is no cursor, no streaming and no result metadata, because the only caller is
+ * the catalog and every catalog statement is a bounded read that the server
+ * answers in one go. A result grid needs all three and will bring them.
+ *
+ * Placeholders are the engine's own — `@p0` for SQL Server, `$1` for
+ * PostgreSQL — because the catalog SQL is written per engine anyway and a
+ * portable placeholder dialect would be a translation layer serving nobody.
+ */
 export interface DriverSession {
   readonly profileId: string;
   listDatabases(): Promise<string[]>;
+  /** Positional parameters, in the engine's own placeholder syntax. */
+  query<T = Record<string, unknown>>(sql: string, params?: unknown[]): Promise<T[]>;
   close(): Promise<void>;
   isClosed(): boolean;
 }

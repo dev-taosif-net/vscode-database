@@ -3,13 +3,17 @@
 /*
  * The connections sidebar.
  *
- * The list is read as three vertical columns of glyphs and one column of
- * names, not as a hundred rows of prose, and every rule below serves that.
- * The left rail is 0..44px and text begins at x=52 at every width and in
- * every state. Nothing moves it — not a badge, not a hover, not a selection —
- * because a glyph column that jogs by four pixels stops being a column. A row
- * draws no controls of its own either: hovering one changes its ground and
- * nothing else, and every action on it is on the right-click menu.
+ * The list is read as two vertical columns of glyphs and one column of names,
+ * not as a hundred rows of prose, and every rule below serves that. The left
+ * rail is 0..42px and text begins at x=47 at every width and in every state.
+ * Nothing moves it — not a badge, not a hover, not a selection, not the row
+ * actions — because a glyph column that jogs by four pixels stops being a
+ * column.
+ *
+ * The actions are what makes that last clause worth stating. They are drawn
+ * over the row's right edge on hover rather than inserted into it, so the
+ * elastic gap, the name and the address never learn that they exist and no
+ * column reflows as the pointer crosses eighty rows.
  *
  * The ground tokens are defined here and not in `tokens.css`. The editor's
  * `--bg` is `--vscode-editor-background`, which is #1f1f1f inside Dark
@@ -57,22 +61,45 @@
    * `src/webview/sidebar/model.ts` and they must agree with it exactly: the
    * virtualizer positions every row from `H`, so a stylesheet that disagrees
    * produces a list that is truthful about its offsets and visibly wrong.
-   * H.row 34, H.group 24, H.pinned 24, H.nomatch 44.
+   * H.row 22, H.group 22, H.pinned 22, H.nomatch 44.
    *
-   * A row is 34 because it carries two lines: the name at 13px over the host
-   * and database at 10.5px.
+   * Everything in the list is 22 — `list.rowHeight`, the height the workbench
+   * gives its own trees. A row was 34 while it carried two lines; the second
+   * repeated what the footer readout already says in full for the cursor row,
+   * and twelve pixels a row is seven more connections in a 560px sidebar.
    */
-  --row-h: 34px;
-  --head-h: 24px;
+  --row-h: 22px;
+  --head-h: 22px;
   --nomatch-h: 44px;
-  /* The footer strips are one line of 10.5px text and are not list rows, so
-     they keep the 22px the row used to be rather than following it upward. */
+  /* Everything inside a connection. `H.node` and `H.results` in `model.ts`. */
+  --node-h: 22px;
+  --results-h: 24px;
+  /*
+   * One level of the tree. Ten, not the workbench Explorer's eight: this tree
+   * goes five deep where a file tree is usually two, and eight pixels is not
+   * enough to read as a level once a 14px chevron and a 16px mark sit between
+   * two of them. Ten is also what keeps a column at level five inside a 170px
+   * panel.
+   */
+  --indent: 10px;
+  --guide: color-mix(in srgb, var(--fg) 13%, transparent);
+  /* The footer strips are one line of 10.5px text and are not list rows. They
+     happen to match `--row-h` again and must not be written in terms of it. */
   --strip-h: 22px;
-  /* The left rail: ribbon, state glyph, engine mark, 0..44, text at 52. The
-     margins on `.glyph` and `.engine` sum to it; this is the ruler they are
-     checked against, not an input they are computed from, because a rail that
-     moved would have to move the text with it. */
-  --rail-w: 44px;
+  /*
+   * The left rail: ribbon, twistie, state glyph, 0..42, text at 47. The
+   * margins on `.twistie-node` and `.glyph` sum to it; this is the ruler they
+   * are checked against, not an input they are computed from, because a rail
+   * that moved would have to move the text with it.
+   *
+   * It was 62 with text at 70, when the engine mark had a slot between the
+   * state glyph and the name. Losing it is what makes the tree indent forward:
+   * a folder inside a connection starts at 8 + (2−1)×10 + 14 + 4 + 16 + 5 =
+   * 57, and against a parent at 70 the first level of the tree stepped
+   * *backwards* by thirteen pixels. Against 47 it steps forward by ten, which
+   * is `--indent`, which is what the tree says it does everywhere else.
+   */
+  --rail-w: 47px;
   --band-h: 32px;
   /* The scrollbar's width, permanently reserved by `.list`. The sticky
      overlay is a sibling of the scroller rather than a descendant, so it
@@ -387,7 +414,7 @@ body {
   align-items: center;
   justify-content: center;
   width: 14px;
-  height: 24px;
+  height: var(--head-h);
   margin-right: 4px;
   padding: 0;
   border: 0;
@@ -422,9 +449,9 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 12px;
-  height: 24px;
-  margin-right: 4px;
+  width: 16px;
+  height: var(--head-h);
+  margin-right: 5px;
   font-size: 12px;
   color: var(--env-ink, var(--fg-dim));
 }
@@ -440,7 +467,7 @@ body {
 .head-badge {
   flex: none;
   min-width: 34px;
-  height: 24px;
+  height: var(--head-h);
   display: flex;
   align-items: center;
   font-size: 10.5px;
@@ -460,8 +487,8 @@ body {
 .head-count {
   flex: none;
   padding-left: 8px;
-  height: 24px;
-  line-height: 24px;
+  height: var(--head-h);
+  line-height: var(--head-h);
   font-size: 10px;
   font-weight: 500;
   color: var(--fg-dim);
@@ -481,6 +508,11 @@ body {
   left: 0;
   right: 0;
   z-index: 1;
+  /* The ground the action fade blends into. Overridden by whichever of hover
+     and selection won below; without a default here a cursor row that is
+     neither would compute `var(--acts-bg)` as invalid, drop the gradient
+     entirely, and let the address show through the buttons. */
+  --acts-bg: var(--bg);
   height: var(--row-h);
   display: flex;
   align-items: center;
@@ -541,8 +573,16 @@ body {
 
 /* ----------------------------------------------------------- state glyph */
 
-/* 8..24. The only place in a row where a filled shape appears, which is what
-   makes four live sessions findable among eighty-four rows pre-attentively. */
+/*
+ * 26..42, and the 5px after it is what puts the name at 47.
+ *
+ * The only place in a row where a filled shape appears, which is what makes
+ * four live sessions findable among eighty-four rows pre-attentively. The
+ * margin is 5 rather than 4 so this column and `.oi` — the mark on every
+ * folder, schema and object below — are spaced identically; that is what makes
+ * a child's name land exactly one `--indent` right of its parent's rather than
+ * one indent minus one pixel.
+ */
 .glyph {
   position: relative;
   flex: none;
@@ -551,7 +591,7 @@ body {
   justify-content: center;
   width: 16px;
   height: 16px;
-  margin-right: 4px;
+  margin-right: 5px;
   font-size: 12px;
   color: color-mix(in srgb, var(--env-ink) 70%, transparent);
 }
@@ -599,57 +639,55 @@ body {
   color: var(--env-ink);
 }
 
-/* 28..44. */
+/*
+ * The engine mark, last on the row.
+ *
+ * It used to sit at 46..62, between the state glyph and the name, which is the
+ * position the eye lands on. A full-colour vendor tile there answers a
+ * question nobody scanning a list is asking, and it cost the name twenty-three
+ * pixels and the tree its indent. At the trailing edge the marks still form a
+ * column you can run down, and they compete with nothing.
+ */
 .engine {
   flex: none;
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 16px;
-  height: 16px;
-  margin-right: 8px;
+  width: 14px;
+  height: 14px;
+  margin-left: 6px;
+  opacity: 0.85;
 }
 
 /* ------------------------------------------------- the elastic text run */
 
 /*
- * Text begins at x=52 — 5 padding + 3 border + 16 glyph + 4 + 16 engine + 8.
+ * Text begins at x=47 — 3 border + 5 padding + 14 twistie + 4 + 16 glyph + 5.
  *
- * Two lines, stacked: the name, and under it the address it names. The name
- * has its line to itself, so it ellipsises only when it is genuinely longer
- * than the panel rather than because a host and a database were bidding for
- * the same 170 pixels. Within the second line the shrink order is unchanged —
- * the domain suffix evaporates first, then the database, then the host's first
- * label. Every row shows the same fields, because a field that appears on some
- * rows and not others destroys the vertical scan the whole design is built on.
+ * The name and the address it names, on one line, then an elastic gap.
+ *
+ * Shrink order is the whole design: the address is `flex-shrink: 4` against
+ * the name's 1, so pressure eats the address a character at a time and the
+ * name is the last thing in the row to lose anything. Inside the address the
+ * order is unchanged from when it had a line of its own — the domain suffix
+ * first, then the database, then the host's own label.
+ *
+ * `.pad` is what the actions are drawn over. It absorbs every spare pixel, so
+ * the badge, the engine mark and the action group are all fixed columns
+ * against the right edge and none of them moves when the name grows.
  */
-.run {
-  flex: 1 1 auto;
-  min-width: 0;
+.detail {
   display: flex;
-  flex-direction: column;
-  justify-content: center;
-  overflow: hidden;
-}
-
-.run-primary,
-.run-detail {
-  display: flex;
+  flex: 0 4 auto;
   align-items: baseline;
   min-width: 0;
+  margin-left: 8px;
   overflow: hidden;
 }
 
-/* Baseline alignment would let a descender in the name push the line down, so
-   the two lines are given their heights outright and they sum to the 34 the
-   virtualizer positions every row from. */
-.run-primary {
-  height: 18px;
-  align-items: center;
-}
-
-.run-detail {
-  height: 14px;
+.pad {
+  flex: 1 1 auto;
+  min-width: 0;
 }
 
 /* A row lifted into the pinned section, or any row in flat mode, has no header
@@ -801,10 +839,6 @@ mark {
   transition: opacity 80ms ease;
 }
 
-.badge-live {
-  color: var(--env-ink);
-}
-
 .badge-fail {
   color: var(--warn-ink);
 }
@@ -813,11 +847,80 @@ mark {
   color: var(--busy);
 }
 
-/* The one filled badge in the panel. A production session is the single state
-   worth spending a solid ground on. */
-.env-prod .badge-live {
-  background: var(--env-ink);
-  color: var(--bg);
+/* ----------------------------------------------------------- row actions */
+
+/*
+ * Three buttons, drawn over the right end of the row the pointer is on.
+ *
+ * Absolutely positioned rather than laid out, which is the whole trick: the
+ * row's flex line never learns they exist, so nothing reflows as the pointer
+ * crosses eighty rows and the name column holds at the pixel. What they cover
+ * is the address and the engine mark, and covering those is the point — while
+ * you are reaching for a control you are not reading a hostname.
+ *
+ * `--acts-bg` is set by whichever ground rule won on the row, so the fade
+ * matches hover, inactive selection and active selection without this block
+ * naming any of the three.
+ */
+.acts {
+  position: absolute;
+  right: 5px;
+  top: 0;
+  bottom: 0;
+  display: none;
+  align-items: center;
+  /* The lead-in, so text passing under the group does not end at a hard edge. */
+  padding-left: 24px;
+  background: linear-gradient(to right, transparent, var(--acts-bg) 24px);
+}
+
+.row:hover {
+  --acts-bg: var(--hover);
+}
+
+.row.is-selected {
+  --acts-bg: var(--sel);
+}
+
+.list:focus-within .row.is-selected {
+  --acts-bg: var(--sel-active);
+}
+
+/*
+ * Shown on hover, and on the cursor row whenever the list has focus.
+ *
+ * The second half is what keeps the keyboard honest: arrowing down the list
+ * shows the same three controls the mouse gets, so the actions are not a thing
+ * that only exists for people holding a pointer. They are still not tab stops
+ * — see `RowActions` — and the menu remains the keyboard path to all of them.
+ */
+.row:hover .acts,
+.list:focus-within .row.is-cursor .acts {
+  display: flex;
+}
+
+.act {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: inherit;
+  font-size: 16px;
+  cursor: pointer;
+}
+
+.act:hover {
+  background: var(--toolbar-hover);
+}
+
+.act .codicon {
+  font-size: 16px;
 }
 
 /* ------------------------------------------------- no match, empty state */
@@ -1082,6 +1185,339 @@ mark {
   --env-ink: var(--env-prod-ink);
 }
 
+/* ---------------------------------------------------------------- the tree */
+
+/*
+ * Everything inside a connection: folders, schemas, objects, columns and the
+ * notes among them. One rail, four columns, 22px, at every depth and every
+ * width.
+ *
+ *   x = 8 + (lvl-1)*10 -- guides -- twistie 14 -- mark 16 -- name ... -- tail
+ *
+ * The right-hand column is the design decision worth defending. `Tables 1240`
+ * and `dbo.Customer 34 columns` put their number in the same place, so counts
+ * and shapes form a column the eye runs down without reading a label. Putting
+ * the count in brackets after the label, which is what SSMS does, gives every
+ * row a different shape and destroys that scan at exactly the sizes where it
+ * matters most.
+ */
+.node {
+  position: absolute;
+  left: 0;
+  right: 0;
+  z-index: 1;
+  height: var(--node-h);
+  display: flex;
+  align-items: center;
+  padding-right: 8px;
+  padding-left: calc(5px + (var(--lvl) - 1) * var(--indent));
+  border-left: 3px solid transparent;
+  background-clip: padding-box;
+  color: var(--fg);
+  cursor: pointer;
+  user-select: none;
+}
+
+/*
+ * The indent guides, as one repeating gradient rather than one element per
+ * level.
+ *
+ * A tree five deep needs four vertical rules on its deepest row, and four
+ * absolutely-positioned spans per row across a windowed list is four thousand
+ * elements at a thousand rows. A gradient is one paint on one pseudo-element,
+ * and because the stripe period is `--indent` itself the lines cannot drift
+ * from the padding they are meant to sit beside.
+ */
+.node::before {
+  content: '';
+  position: absolute;
+  left: 14px;
+  top: 0;
+  bottom: 0;
+  width: calc((var(--lvl) - 1) * var(--indent));
+  background-image: repeating-linear-gradient(to right, var(--guide) 0 1px, transparent 1px var(--indent));
+  pointer-events: none;
+}
+
+.node:hover {
+  background: var(--hover);
+  background-clip: padding-box;
+}
+
+.node.is-cursor:focus-visible {
+  outline: 1px solid var(--focus);
+  outline-offset: -1px;
+}
+
+/* The twistie, and the gap a leaf leaves where one would be. Both are 14 + 4,
+   because a chevron column that closes up on leaf rows is not a column. */
+.twistie-node {
+  width: 14px;
+  height: var(--node-h);
+  margin-right: 4px;
+  font-size: 14px;
+  color: var(--fg-dim);
+}
+
+.twistie-node.is-collapsed .codicon-chevron-down {
+  transform: rotate(-90deg);
+}
+
+.twistie-node.is-hidden {
+  visibility: hidden;
+}
+
+.twistie-gap {
+  flex: none;
+  width: 18px;
+}
+
+/* The connection row's own twistie: same 14 + 4, so the chevrons of a heading,
+   a connection and a folder land in one column. */
+.row .twistie-node {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: var(--row-h);
+}
+
+/* ------------------------------------------------------------------ marks */
+
+.oi {
+  flex: none;
+  width: 16px;
+  height: 16px;
+  margin-right: 5px;
+}
+
+.oi-table {
+  color: var(--obj-table);
+}
+
+.oi-view {
+  color: var(--obj-view);
+}
+
+.oi-procedure {
+  color: var(--obj-procedure);
+}
+
+.oi-function {
+  color: var(--obj-function);
+}
+
+.oi-trigger {
+  color: var(--obj-trigger);
+}
+
+.oi-sequence {
+  color: var(--obj-sequence);
+}
+
+.oi-type {
+  color: var(--obj-type);
+}
+
+.oi-synonym {
+  color: var(--obj-synonym);
+}
+
+/*
+ * Every container — the kind folders and every schema — in one neutral.
+ *
+ * The eight hues above are for the things inside a folder, and spending one on
+ * the folder too made hue mean two things at once. Left to the leaves it means
+ * exactly one: this row is an object, and this is its kind.
+ */
+.oi-folder {
+  color: var(--obj-folder);
+}
+
+.oi-schema {
+  color: var(--obj-schema);
+}
+
+.oi-favourite {
+  color: var(--obj-favourite);
+}
+
+.oi-key {
+  color: var(--obj-key);
+}
+
+.oi-ref,
+.oi-column,
+.oi-parameter {
+  color: var(--obj-member);
+}
+
+/* ------------------------------------------------------------- name column */
+
+/*
+ * 12px, one step under the connection name's 13 and one over the tail's 10.
+ * The ramp across the whole panel is three sizes and it is doing hierarchy
+ * work: a connection, a thing inside it, and a fact about that thing.
+ */
+.node-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: 12px;
+  line-height: var(--node-h);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* A folder is a heading for the rows under it, and weight is the only channel
+   left: it cannot take a hue, because the hue beside it is the object type's. */
+.node-folder .node-name,
+.node-schema .node-name {
+  font-weight: 600;
+}
+
+/*
+ * The `dbo.` in front of `Customer`, dimmed.
+ *
+ * The schema is the qualifier and the name is the answer, and rendering both
+ * at one weight makes every row in a dbo-heavy database start with the same
+ * four characters. Dimming the prefix lets the eye skip a column of identical
+ * schemas and land on the names, while keeping the qualification a DBA needs
+ * to read a result list drawn from four of them.
+ */
+.node-object .node-qual {
+  color: color-mix(in srgb, var(--fg-dim) 85%, transparent);
+}
+
+/* A pin, inline after the name, so a favourite is recognisable in the folder
+   it lives in as well as in the Favourites list. */
+.node-pin {
+  flex: none;
+  margin: 0 0 0 5px;
+}
+
+/*
+ * NOT NULL as a filled dot, and nullable as nothing at all.
+ *
+ * The marks are the opposite way round from the obvious one, and that is
+ * deliberate: most columns are nullable, so marking those would put a dot on
+ * four rows in five and say nothing. The constraint is the news.
+ */
+.node-notnull {
+  flex: none;
+  width: 4px;
+  height: 4px;
+  margin-left: 6px;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--fg-dim) 70%, transparent);
+}
+
+/* ------------------------------------------------------------- tail column */
+
+/*
+ * 10px, dim, right-aligned, and never wider than 45% of the row.
+ *
+ * Tabular figures because the counts are read as a column: 1,240 over 420 over
+ * 980 only lines up if the digits are one width. The cap is what stops a long
+ * "on dbo.CustomerAddressArchive" from taking the row away from the trigger's
+ * own name.
+ */
+.node-tail {
+  flex: none;
+  max-width: 45%;
+  margin-left: 10px;
+  font-size: 10px;
+  color: color-mix(in srgb, var(--fg-dim) 88%, transparent);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.node-tail.num {
+  font-variant-numeric: tabular-nums;
+}
+
+.node-tail.mono {
+  font-family: var(--vscode-editor-font-family, monospace);
+}
+
+/* --------------------------------------------------------------- the notes */
+
+/*
+ * Loading, empty, error and Load more.
+ *
+ * All four are 22px rows in the tree rather than overlays or a spinner over
+ * the panel, and that is what keeps the geometry honest: a folder that is
+ * loading occupies exactly the one row it will still occupy when it says
+ * "Nothing here", so nothing under it jumps when the answer lands.
+ */
+.node-note .node-name {
+  font-size: 11px;
+  font-style: italic;
+  color: var(--fg-dim);
+}
+
+.node-note-glyph {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  margin-right: 5px;
+  font-size: 12px;
+  color: var(--fg-dim);
+}
+
+.node-note.tone-loading .node-note-glyph {
+  color: var(--busy);
+}
+
+.node-note.tone-error .node-note-glyph,
+.node-note.tone-error .node-name {
+  color: var(--warn-ink);
+  font-style: normal;
+}
+
+/* The one row inside the tree that is a control. It says what it will do and
+   how much of it, so it reads as a button without being drawn as one. */
+.node-note.tone-more .node-name {
+  color: var(--vscode-textLink-foreground, var(--busy));
+  font-style: normal;
+}
+
+.node-note.tone-more:hover .node-name {
+  text-decoration: underline;
+}
+
+.node-note.tone-empty,
+.node-note.tone-loading,
+.node-note.tone-error {
+  cursor: default;
+}
+
+/* ------------------------------------------------------- results headings */
+
+/*
+ * A search's per-connection heading. It reuses `.head`, so it sticks the way
+ * an environment heading does: forty results deep into a four-server search,
+ * the connection the rows belong to is still on screen. For `dbo.Customer`,
+ * which exists on all four, that is the only fact that separates them.
+ */
+.head-results .head-results-name {
+  min-width: 0;
+  flex: 0 1 auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  letter-spacing: 0.04em;
+  color: var(--fg);
+}
+
+.head-results .twistie {
+  cursor: default;
+  font-size: 12px;
+}
+
 /* ------------------------------------------------------------------ tiers */
 
 /*
@@ -1098,38 +1534,78 @@ mark {
  */
 
 /*
- * xs, under 196px. Connected and testing give up their badge; failed and
- * production keep theirs. Connected already carries three other marks, so its
- * word is the cheapest thing in the panel to lose. Failure's amber triangle
- * could be read as UAT's amber by someone who has not learned the vocabulary,
- * and production is where a missing word costs something.
+ * xs, under 196px. The in-flight word goes and failure keeps its own. A
+ * spinner is unambiguous about the fact that something is happening, and the
+ * only thing the word adds is which of two kinds — worth 38px at 260 and not
+ * at 170. Failure's amber triangle could be read as UAT's amber by someone who
+ * has not learned the vocabulary, so its word stays at every width.
  */
-.badge-live,
 .badge-test {
   display: none;
 }
 
-.env-prod .badge-live {
-  display: inline-flex;
+
+/*
+ * xs, under 196px: an object gives up its detail and a column gives up its
+ * type, because at 170 pixels a 45% tail leaves a table name eighty. A folder
+ * and a schema keep their count, which is four characters and is the whole
+ * reason to look at a folder you have not opened.
+ */
+.node-object .node-tail,
+.node-member .node-tail {
+  display: none;
 }
 
-/* sm — 196px. The badge returns for every state. 152px of elastic, and a state
-   word beats twenty more characters of a host you already know. */
 @container rail (min-width: 196px) {
-  .badge-live,
+  .node-object .node-tail,
+  .node-member .node-tail {
+    display: block;
+  }
+}
+
+/* sm — 196px. The in-flight word returns. 152px of elastic, and knowing
+   whether this ends in a session beats twenty more characters of a host you
+   already know. */
+@container rail (min-width: 196px) {
   .badge-test {
     display: inline-flex;
   }
 }
 
 /*
- * md and up. The host and the database have their own line at every width, so
- * there is no threshold at which they appear: the tiers that used to reveal
- * them bought horizontal room the second line now supplies outright.
+ * xs, under 196px: the address and the engine mark go, and the action group
+ * keeps only its last button.
  *
- * What width still buys is the state badge's column. Above 440 it is given a
- * fixed width so the words line up down the right edge across every row, which
- * is the one vertical alignment worth keeping once the text is stacked.
+ * At 170px the rail is 47 and the actions are 60, which would leave a name
+ * sixty pixels wide — the row would be a control strip with a caption. The
+ * menu button survives alone because it is the one that opens everything else,
+ * including the two that just left.
+ */
+.detail,
+.engine {
+  display: none;
+}
+
+.acts .act:not(:last-child) {
+  display: none;
+}
+
+@container rail (min-width: 196px) {
+  .detail,
+  .engine {
+    display: flex;
+  }
+
+  .acts .act:not(:last-child) {
+    display: flex;
+  }
+}
+
+/*
+ * md and up. What width still buys is the state badge's column. Above 440 it
+ * is given a fixed width so the words line up down the right edge across every
+ * row, which is the one vertical alignment left to keep once the row is a
+ * single line.
  */
 @container rail (min-width: 440px) {
   .badge {
@@ -1143,10 +1619,10 @@ mark {
 
 /*
  * The field a query matched keeps its room while the query is running, so the
- * marked substring is never the part that gets ellipsised. Both fields are on
- * the row at every width now that they have a line of their own, so this no
- * longer has to reveal anything — it only stops the matched one from being the
- * first thing the other one squeezes.
+ * marked substring is never the part that gets ellipsised. This matters more
+ * now that the address shares its line with the name and shrinks four times as
+ * fast: without it, searching for a hostname is how you make that hostname the
+ * first thing to disappear.
  */
 .row[data-hit~='host'] .host {
   flex-shrink: 0;
@@ -1156,6 +1632,87 @@ mark {
 .row[data-hit~='database'] .db {
   flex-shrink: 0;
   max-width: 100%;
+}
+
+/* ------------------------------------------------- the tree, high contrast */
+
+/*
+ * The object hues are already brightened for high contrast in `tokens.css`, so
+ * nothing here touches them. What does need saying is everything built from a
+ * `color-mix` against `transparent`, which high contrast flattens until it is
+ * at or near invisible: the indent guides, the NOT NULL dot, and the tail.
+ * Each one gets a value that does not depend on perceived opacity.
+ */
+body.vscode-high-contrast,
+body.vscode-high-contrast-light {
+  --guide: var(--ct);
+}
+
+body.vscode-high-contrast .node,
+body.vscode-high-contrast-light .node {
+  border-left-width: 4px;
+  padding-left: calc(4px + (var(--lvl) - 1) * var(--indent));
+  border-bottom: 1px solid var(--ct);
+}
+
+body.vscode-high-contrast .node-tail,
+body.vscode-high-contrast-light .node-tail {
+  color: var(--fg-dim);
+}
+
+body.vscode-high-contrast .node-notnull,
+body.vscode-high-contrast-light .node-notnull {
+  background: var(--fg);
+}
+
+body.vscode-high-contrast .node.is-cursor:focus-visible,
+body.vscode-high-contrast-light .node.is-cursor:focus-visible {
+  outline-width: 2px;
+}
+
+/* ------------------------------------------------ the tree, forced colours */
+
+/*
+ * Here the object hues are surrendered to the OS entirely, and this is the
+ * moment `ObjectIcon` earns its keep: every mark still reads, because every
+ * mark was drawn as a distinct silhouette rather than as a coloured square.
+ * A table is a framed grid, a view is two offset panes, a trigger is a bolt,
+ * and none of that needed the hue.
+ *
+ * Fighting the system palette with `forced-color-adjust: none` on a decorative
+ * icon is precisely what makes a webview look wrong inside an OS that has been
+ * told to stop using colour, so nothing here does.
+ */
+@media (forced-colors: active) {
+  .oi {
+    color: CanvasText;
+  }
+
+  /* The guides go rather than render at full strength: `CanvasText` on a 1px
+     rule every ten pixels is a hatched block, not a hint. Indentation alone
+     carries the level, which is what a forced palette leaves us. */
+  .node::before {
+    background-image: none;
+  }
+
+  .node {
+    border-bottom: 1px solid CanvasText;
+  }
+
+  .node-notnull {
+    background: CanvasText;
+  }
+
+  .node:hover {
+    background: Highlight;
+    color: HighlightText;
+  }
+
+  .node:hover .oi,
+  .node:hover .node-tail,
+  .node:hover .node-note-glyph {
+    color: HighlightText;
+  }
 }
 
 /* ------------------------------------------------------- high contrast */
@@ -1224,8 +1781,8 @@ body.vscode-high-contrast-light .badge {
   border-color: currentColor;
 }
 
-body.vscode-high-contrast .env-prod .badge-live,
-body.vscode-high-contrast-light .env-prod .badge-live {
+body.vscode-high-contrast .badge,
+body.vscode-high-contrast-light .badge {
   background: transparent;
   color: var(--env-ink);
 }

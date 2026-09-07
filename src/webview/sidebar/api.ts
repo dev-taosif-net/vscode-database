@@ -29,6 +29,16 @@ export function post(message: SidebarWebviewMessage): void {
  */
 export interface PersistedSidebar {
   scrollTop?: number;
+  /**
+   * Which nodes are open, by global key.
+   *
+   * It joins scroll position here for the same reason: the host has no reader
+   * for it, and a tree that forgot what was open every time the sidebar was
+   * collapsed would make a deep hierarchy unusable. Keeping it out of the
+   * host's memento also keeps the node key convention in one file — the host
+   * never builds a key and so can never build one differently.
+   */
+  expanded?: Readonly<Record<string, true>>;
 }
 
 export function readPersisted(): PersistedSidebar {

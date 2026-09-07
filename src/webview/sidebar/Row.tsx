@@ -6,10 +6,34 @@ import { EngineMark } from '../primitives/EngineMark';
 import { post } from './api';
 import { fullHost, segments, splitHost } from './host';
 import { H } from './model';
-import { cursorStore, useIsCursor, useIsSelected, useRow, useSession } from './state';
+import {
+  connectionKey,
+  cursorStore,
+  toggleExpanded,
+  useIsCursor,
+  useIsSelected,
+  useRow,
+  useSession
+} from './state';
 
 /**
- * One connection, 22px, at every width and in every state.
+ * One connection, 22px, one line, at every width and in every state.
+ *
+ * The second line has gone. It carried the host and the database on every row,
+ * which is exactly what the footer readout carries in full for the row the
+ * cursor is on, so the panel was paying twelve pixels a row to repeat a strip
+ * it already draws. In a 560px sidebar that is the difference between thirteen
+ * connections and twenty.
+ *
+ * The rail lost a slot as well. The engine mark sat between the state glyph
+ * and the name — the position the eye lands on — answering a question nobody
+ * scanning a list is asking, in a full-colour gradient at 16px. It is now the
+ * last thing on the row, where a column of engine marks is still scannable and
+ * competes with nothing. That leaves three slots before the name instead of
+ * five and puts it at x=47, which is also what repairs the indent: a folder
+ * inside this connection starts at 57, one `--indent` to the right, where
+ * before it started at 57 against a parent at 70 and the tree stepped
+ * backwards at its first level.
  *
  * Every prop here is a primitive and every one of them is stable for the life
  * of the row, which is the whole point: scrolling by one pixel changes nothing
@@ -34,8 +58,14 @@ export const Row = memo(function Row(props: {
   needle: string;
   /** The `data-hit` attribute value: a space-separated subset of "name host database". */
   hit: string;
+  /** True once there is a session to read a catalogue through. */
+  expandable: boolean;
+  expanded: boolean;
+  /** Whether this connection browses by schema. Read by the context menu. */
+  schemaMode: boolean;
 }) {
   const { id, top, pinned, showBadge, level, posinset, setsize, needle, hit } = props;
+  const { expandable, expanded, schemaMode } = props;
   const row = useRow(id);
   const session = useSession(id);
   const cursor = useIsCursor(id);
@@ -72,6 +102,10 @@ export const Row = memo(function Row(props: {
     classes.push('is-selected');
   }
 
+  if (expandable) {
+    classes.push('is-expandable');
+  }
+
   return (
     <div
       className={classes.join(' ')}
@@ -80,6 +114,7 @@ export const Row = memo(function Row(props: {
       aria-posinset={posinset}
       aria-setsize={setsize}
       aria-selected={selected}
+      aria-expanded={expandable ? expanded : undefined}
       aria-busy={flight || undefined}
       aria-label={accessibleName(row, state, session?.failure)}
       data-id={id}
@@ -88,10 +123,11 @@ export const Row = memo(function Row(props: {
       // drawn inside the webview cannot escape the panel's bounds and would be
       // clipped by the sidebar at every width that matters; this one is a real
       // workbench menu, positioned, themed and keyboard-driven by VS Code. The
-      // two `dbConnection` keys are read by the `webview/context` `when`
-      // clauses in the manifest, which is what makes one entry say Connect and
-      // the next row's say Disconnect.
-      data-vscode-context={contextFor(id, state, pinned)}
+      // three `db*` keys are read by the `webview/context` `when` clauses in
+      // the manifest, which is what makes one entry say Connect and the next
+      // row's say Disconnect, and one say Enable Schema Focused Mode and the
+      // next say Disable.
+      data-vscode-context={contextFor(id, state, pinned, schemaMode)}
       // Roving tabindex: the cursor row is the tree's single tab stop and
       // every other item is -1, so Tab crosses the whole list in one press
       // the way a tree does. The row has no controls of its own to tab
@@ -104,20 +140,122 @@ export const Row = memo(function Row(props: {
       }}
       onClick={() => {
         cursorStore.setState((s) => (s.cursorId === id ? s : { ...s, cursorId: id }));
-        // The tree this replaced opened the editor on a single click, and the
-        // keyboard model opens it on Enter, so the two paths stay identical.
-        post({ type: 'open', id });
+        /*
+         * A connected row is a container and opens; a saved row is a leaf and
+         * opens the editor, which is what it did before there was anything
+         * inside it.
+         *
+         * This is the one phase-1 gesture phase 2 changes, and the change is
+         * forced: a row that both expands and opens an editor on one click can
+         * do neither predictably. Editing a connected connection moved to Edit
+         * Connection on the right-click menu, which is where the explorer's own
+         * specification put it.
+         */
+        if (expandable) {
+          toggleExpanded(connectionKey(id));
+        } else {
+          post({ type: 'open', id });
+        }
       }}
     >
-      <StateGlyph state={state} readOnly={row.readOnly} />
-      <span className="engine" aria-hidden="true">
-        <EngineMark driver={row.driver} size={16} />
+      {/* Always drawn, hidden when there is nothing to open, so the chevron
+          column lines up with the group headings above and the folders below.
+          A twistie that appears only on connected rows would make the whole
+          left rail jog by eighteen pixels as sessions come and go. */}
+      <span
+        className={`twistie twistie-node${expanded ? '' : ' is-collapsed'}${
+          expandable ? '' : ' is-hidden'
+        }`}
+        aria-hidden="true"
+      >
+        <Codicon name="chevron-down" />
       </span>
+      <StateGlyph state={state} readOnly={row.readOnly} />
       <NameRun row={row} label={label} showBadge={showBadge} needle={needle} />
+      {/* The elastic gap. Everything after it is a fixed column against the
+          right edge, so the actions can be positioned over that column without
+          the row's own layout knowing they exist. */}
+      <span className="pad" />
       <StateBadge state={state} />
+      <span className="engine" aria-hidden="true">
+        <EngineMark driver={row.driver} size={14} />
+      </span>
+      <RowActions id={id} state={state} />
     </div>
   );
 });
+
+/**
+ * The three buttons that appear on the row under the pointer.
+ *
+ * Every action on a connection used to be on the right-click menu and nowhere
+ * else, which is a discoverable-by-nobody design: the two things people do all
+ * day — open a session and edit the profile — took a gesture you have to be
+ * told about. These are the same two, plus the menu itself, in three positions
+ * that do not move between states, so the first slot is always "the session
+ * thing" whatever the session is currently doing.
+ *
+ * They are `aria-hidden` and never tab stops, and that is deliberate rather
+ * than an oversight. The row is a `treeitem` under a roving tabindex, so a
+ * focusable control inside it would put three extra stops between one row and
+ * the next and break the tree's keyboard model. Nothing here is reachable only
+ * by mouse: the context menu is a complete, keyboard-driven superset of it,
+ * and the row's `aria-label` already announces state.
+ */
+function RowActions({ id, state }: { id: string; state: ConnectionState }) {
+  const flight = state === 'connecting' || state === 'testing';
+
+  return (
+    <span className="acts" aria-hidden="true">
+      {state === 'connected' ? (
+        <Action icon="debug-disconnect" title="Disconnect" run={() => post({ type: 'disconnect', id })} />
+      ) : flight ? (
+        <Action icon="stop-circle" title="Cancel" run={() => post({ type: 'cancel', id })} />
+      ) : (
+        <Action icon="plug" title="Connect" run={() => post({ type: 'connect', id })} />
+      )}
+      <Action icon="edit" title="Edit Connection" run={() => post({ type: 'open', id })} />
+      <Action icon="ellipsis" title="More Actions…" run={openMenu} />
+    </span>
+  );
+}
+
+function Action({ icon, title, run }: { icon: string; title: string; run: (el: HTMLElement) => void }) {
+  return (
+    <button
+      type="button"
+      className="act"
+      tabIndex={-1}
+      title={title}
+      // The row's own click expands it or opens the editor. Neither is what
+      // was asked for here, and a row that did both on one press would do
+      // neither predictably.
+      onClick={(event) => {
+        event.stopPropagation();
+        run(event.currentTarget);
+      }}
+    >
+      <Codicon name={icon} />
+    </button>
+  );
+}
+
+/**
+ * Reopens the row's own context menu under the button.
+ *
+ * There is no message for "show the menu" and there should not be: the menu is
+ * built by the workbench from the `when` clauses in the manifest, out of the
+ * `data-vscode-context` payload on the row this button sits in. Re-dispatching
+ * a `contextmenu` event lets it bubble to that row and the workbench answers it
+ * exactly as it answers a right-click, which is the point — one menu,
+ * described in one place, with no second copy to drift.
+ */
+function openMenu(el: HTMLElement): void {
+  const box = el.getBoundingClientRect();
+  el.dispatchEvent(
+    new MouseEvent('contextmenu', { bubbles: true, clientX: box.left, clientY: box.bottom })
+  );
+}
 
 /**
  * Four silhouettes — disc, ring, triangle, arc — chosen to stay separable at
@@ -152,18 +290,17 @@ function StateGlyph({ state, readOnly }: { state: ConnectionState; readOnly: boo
 }
 
 /**
- * The run, in two lines: the name, and under it the address it names.
+ * The name, then the address it names, on one line.
  *
- * The name owns the first line alone, so it ellipsises only when it is genuinely
- * too long for the panel rather than because a host and a database were bidding
- * for the same 170 pixels. The second line carries the two facts that identify
- * the target, at a smaller size and a dimmer ink, so the pair reads as a
- * subtitle rather than as two more columns.
+ * The name is 13px at full ink and shrinks last; the detail is 10.5px, dim, and
+ * shrinks four times as fast, so pressure takes the address a character at a
+ * time and never touches the name until the address is gone. Within the address
+ * the order is unchanged from when it had a line of its own — the domain suffix
+ * evaporates first, then the port, then the host truncates from whichever end
+ * keeps the part that differs.
  *
- * Every field is in the DOM on every row, and the stylesheet alone decides what
- * is visible. Dropping a field in JavaScript when it will not fit is what
- * destroys the vertical scan the list is read by — a field present on some rows
- * and absent on others makes the eye read a hundred rows of prose.
+ * Every field is still in the DOM on every row and the stylesheet still decides
+ * what is visible, with one deliberate exception below.
  */
 function NameRun({
   row,
@@ -178,18 +315,29 @@ function NameRun({
 }) {
   const parts = splitHost(row);
 
+  /*
+   * The one field this component drops rather than styles away.
+   *
+   * A connection called PeopleDeskMatador pointing at a database called
+   * PeopleDeskMatador spends a third of the row saying its own name twice, and
+   * on a realistic estate that is most rows — the name is usually chosen from
+   * the database. The rule against hiding fields in JavaScript is about the
+   * vertical scan, and it holds for the columns the eye runs down: the rail,
+   * the mark, the left edge of the name. This is trailing prose after the
+   * name, and a repetition there is not a column, it is noise.
+   */
+  const database = row.database.toLowerCase() === label.toLowerCase() ? '' : row.database;
+
   return (
-    <span className="run">
-      <span className="run-primary">
-        {/* A pinned or flat row has no header above it saying where it lives,
-            so it carries the environment itself — the rule the tree already
-            applied when grouping was off. */}
-        {showBadge ? <span className="env-badge">{environmentMeta(row.environment).short}</span> : null}
-        <span className="name">
-          <Marked text={label} needle={needle} />
-        </span>
+    <>
+      {/* A pinned or flat row has no header above it saying where it lives, so
+          it carries the environment itself — the rule the tree already applied
+          when grouping was off. */}
+      {showBadge ? <span className="env-badge">{environmentMeta(row.environment).short}</span> : null}
+      <span className="name">
+        <Marked text={label} needle={needle} />
       </span>
-      <span className="run-detail">
+      <span className="detail">
         <span className="host mono">
           <span className="host-head">
             <Marked text={parts.head} needle={needle} />
@@ -199,26 +347,36 @@ function NameRun({
           </span>
           <span className="host-port">{parts.port}</span>
         </span>
-        <span className="sep" aria-hidden="true" />
-        <span className="db">
-          <Marked text={row.database} needle={needle} />
-        </span>
+        {database ? (
+          <>
+            <span className="sep" aria-hidden="true" />
+            <span className="db">
+              <Marked text={database} needle={needle} />
+            </span>
+          </>
+        ) : null}
       </span>
-    </span>
+    </>
   );
 }
 
 /**
- * Saved carries no badge, and that is an encoding rather than an omission.
- * Seventy-eight of eighty-four rows are saved; eighty-four badges of which
- * seventy-eight say the same word is 38px of ink per row competing with the
- * name and telling you nothing. The absence reads only because the other three
- * states reliably produce a mark.
+ * Only the two states a glyph cannot finish the sentence for get a word.
+ *
+ * Saved never did, and the argument was always about arithmetic: on a
+ * realistic estate seventy-eight of eighty-four rows are saved, and
+ * seventy-eight badges saying the same thing is 38px of ink per row that tells
+ * you nothing. Connected now joins it, because four other marks already say
+ * connected. What is left is failure, which needs prose, and the two in-flight
+ * kinds, which need to say which one is in flight — only one of them ends in a
+ * session, and a row reporting the wrong one tells the user the opposite of
+ * what is about to happen.
  */
 function StateBadge({ state }: { state: ConnectionState }) {
-  if (state === 'connected') {
-    return <span className="badge badge-live">LIVE</span>;
-  }
+  // Connected carries no word either, and for the same reason saved does not.
+  // A filled disc, a bright tick over the group ribbon, a bolder name and a
+  // chevron that now opens are four marks already saying it; LIVE was a fifth,
+  // 38px wide, on every row anybody actually uses.
   if (state === 'failed') {
     return <span className="badge badge-fail">FAIL</span>;
   }
@@ -262,12 +420,18 @@ function Marked({ text, needle }: { text: string; needle: string }) {
  * looked up host-side, because the menu is built from `when` clauses before any
  * command runs.
  */
-function contextFor(id: string, state: ConnectionState, pinned: boolean): string {
+function contextFor(
+  id: string,
+  state: ConnectionState,
+  pinned: boolean,
+  schemaMode: boolean
+): string {
   return JSON.stringify({
     webviewSection: 'connection',
     connectionId: id,
     dbConnectionLive: state === 'connected',
     dbConnectionPinned: pinned,
+    dbSchemaMode: schemaMode,
     preventDefaultContextMenuItems: true
   });
 }

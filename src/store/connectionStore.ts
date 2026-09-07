@@ -1,4 +1,5 @@
 import * as vscode from 'vscode';
+import { ExplorerMode, FavouriteRef, favouriteKey } from '../shared/catalog';
 import {
   ConnectionProfile,
   DriverKind,
@@ -10,6 +11,8 @@ import {
 
 const PROFILES_KEY = 'databaseTools.profiles.v1';
 const FAVOURITES_KEY = 'databaseTools.favourites.v1';
+const MODE_KEY = 'databaseTools.explorerMode.v1';
+const OBJECT_FAVOURITES_KEY = 'databaseTools.objectFavourites.v1';
 
 /**
  * Owns the connection list and the credentials that go with it.
@@ -60,6 +63,19 @@ export class ConnectionStore {
    * as a change the editor would offer to save.
    */
   private pinned: Set<string>;
+  /**
+   * Which connections browse by schema rather than by object type, and which
+   * objects each connection has pinned.
+   *
+   * Both live beside the profiles for the same reason favourites do: they are
+   * readings of a connection rather than properties of it. Putting the explorer
+   * mode on `ConnectionProfile` would make switching to schema-focused mode
+   * rewrite `updatedAt`, sort the connection to the top of "Recently updated",
+   * and show up in the editor as an unsaved change to a connection nobody
+   * edited.
+   */
+  private modes: Record<string, ExplorerMode>;
+  private objectPins: Record<string, FavouriteRef[]>;
 
   constructor(private readonly context: vscode.ExtensionContext) {
     const stored = context.globalState.get<ConnectionProfile[]>(PROFILES_KEY, []);
@@ -69,6 +85,11 @@ export class ConnectionStore {
     // so the set is filtered on the way in rather than trusted.
     const known = new Set(this.profiles.map((p) => p.id));
     this.pinned = new Set(favourites.filter((id) => known.has(id)));
+    this.modes = prune(context.globalState.get<Record<string, ExplorerMode>>(MODE_KEY, {}), known);
+    this.objectPins = prune(
+      context.globalState.get<Record<string, FavouriteRef[]>>(OBJECT_FAVOURITES_KEY, {}),
+      known
+    );
 
     // A credential written in another window is written to the same keychain,
     // so the cached answer for it has to be dropped rather than trusted.
@@ -146,6 +167,8 @@ export class ConnectionStore {
   async remove(id: string): Promise<void> {
     this.profiles = this.profiles.filter((p) => p.id !== id);
     this.pinned.delete(id);
+    delete this.modes[id];
+    delete this.objectPins[id];
     this.presenceEpoch++;
     this.secretPresence.delete(id);
     this.presenceReads.delete(id);
@@ -182,6 +205,70 @@ export class ConnectionStore {
 
   private async flushFavourites(): Promise<void> {
     await this.context.globalState.update(FAVOURITES_KEY, [...this.pinned]);
+  }
+
+  /* ------------------------------------------------------------- explorer */
+
+  /** How this connection arranges its children. General unless told otherwise. */
+  explorerMode(id: string): ExplorerMode {
+    return this.modes[id] === 'schema' ? 'schema' : 'general';
+  }
+
+  async setExplorerMode(id: string, mode: ExplorerMode): Promise<void> {
+    if (!this.get(id) || this.explorerMode(id) === mode) {
+      return;
+    }
+    if (mode === 'general') {
+      // The default is absence rather than a stored 'general', so the map holds
+      // only the connections that differ from it and never grows to one entry
+      // per profile.
+      delete this.modes[id];
+    } else {
+      this.modes[id] = mode;
+    }
+    await this.context.globalState.update(MODE_KEY, this.modes);
+    this.onDidChangeEmitter.fire();
+  }
+
+  /** The objects pinned under this connection, in the order they were pinned. */
+  objectFavourites(id: string): FavouriteRef[] {
+    return this.objectPins[id] ?? [];
+  }
+
+  isObjectFavourite(id: string, ref: FavouriteRef): boolean {
+    const key = favouriteKey(ref);
+    return (this.objectPins[id] ?? []).some((held) => favouriteKey(held) === key);
+  }
+
+  /**
+   * Pins or unpins one object.
+   *
+   * Pins are appended rather than sorted, because the order somebody pinned
+   * things in is information — the four tables at the top of the list are the
+   * four they reached for first — and re-sorting alphabetically on every pin
+   * would move a row the user is about to click.
+   */
+  async setObjectFavourite(id: string, ref: FavouriteRef, on: boolean): Promise<void> {
+    if (!this.get(id)) {
+      return;
+    }
+    const key = favouriteKey(ref);
+    const held = this.objectPins[id] ?? [];
+    const has = held.some((entry) => favouriteKey(entry) === key);
+    if (has === on) {
+      return;
+    }
+    const next = on
+      ? [...held, { kind: ref.kind, schema: ref.schema, name: ref.name }]
+      : held.filter((entry) => favouriteKey(entry) !== key);
+
+    if (next.length === 0) {
+      delete this.objectPins[id];
+    } else {
+      this.objectPins[id] = next;
+    }
+    await this.context.globalState.update(OBJECT_FAVOURITES_KEY, this.objectPins);
+    this.onDidChangeEmitter.fire();
   }
 
   /** The stored secret, or undefined when there is none to read. */
@@ -421,4 +508,22 @@ function randomId(): string {
     bytes[i] = Math.floor(Math.random() * 256);
   }
   return Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('');
+}
+
+/**
+ * Drops entries whose profile is gone.
+ *
+ * A per-profile map can outlive the profile it is keyed by when a delete fails
+ * halfway, exactly as the favourites set can, so both are filtered on the way
+ * in rather than trusted. Without it, deleting a connection and creating
+ * another that happens to reuse the id would inherit the first one's pins.
+ */
+function prune<T>(map: Record<string, T>, known: ReadonlySet<string>): Record<string, T> {
+  const out: Record<string, T> = {};
+  for (const id of Object.keys(map ?? {})) {
+    if (known.has(id)) {
+      out[id] = map[id];
+    }
+  }
+  return out;
 }

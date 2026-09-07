@@ -86,11 +86,21 @@ export function GroupHeader(props: {
       >
         <Codicon name={collapsed ? 'chevron-right' : 'chevron-down'} />
       </button>
+      {/*
+        The slot is always here and only production draws in it.
+
+        A disc in the environment's own hue, four pixels from a badge in the
+        same hue, four pixels from a ribbon in the same hue, is the third mark
+        in forty pixels saying one word — and it is the word already spelled
+        out beside it. Production keeps its shield because production is the
+        one heading where a fourth signal is worth its ink.
+
+        The slot survives the discs because the badge is a column: 16 + 5 puts
+        it at x=47, the same left edge as the name on every row below it. An
+        empty span is what keeps that edge true on three headings out of four.
+      */}
       <span className="head-glyph" aria-hidden="true">
-        {/* Production is the only heading with a different shape. A missing
-            icon would read as a rendering fault; a different one reads as a
-            different kind of place. */}
-        <Codicon name={environment === 'prod' ? 'shield' : 'circle-filled'} />
+        {environment === 'prod' ? <Codicon name="shield" /> : null}
       </span>
       <span className="head-badge">{meta.short}</span>
       <span className="head-count">{countText(count, open)}</span>

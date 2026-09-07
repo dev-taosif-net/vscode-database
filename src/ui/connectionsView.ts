@@ -1,4 +1,5 @@
 import * as vscode from 'vscode';
+import { CatalogService } from '../catalog/catalogService';
 import { ConnectionManager } from '../connections/connectionManager';
 import { ConnectionStore } from '../store/connectionStore';
 import {
@@ -10,6 +11,7 @@ import {
   SidebarWebviewMessage,
   SortOrder
 } from '../shared/sidebar';
+import { ObjectPageRequest } from '../shared/catalog';
 import { ConnectionProfile, ENVIRONMENTS, EnvironmentId } from '../types';
 
 const GROUPED_KEY = 'databaseTools.view.grouped';
@@ -50,7 +52,8 @@ export class ConnectionsView implements vscode.WebviewViewProvider, vscode.Dispo
   constructor(
     private readonly context: vscode.ExtensionContext,
     private readonly store: ConnectionStore,
-    private readonly manager: ConnectionManager
+    private readonly manager: ConnectionManager,
+    private readonly catalog: CatalogService
   ) {
     const memento = context.globalState;
     this.grouped = memento.get<boolean>(GROUPED_KEY, true);
@@ -65,7 +68,11 @@ export class ConnectionsView implements vscode.WebviewViewProvider, vscode.Dispo
     // attempt — once when `busyKind` turned on and once when it turned off.
     this.disposables.push(
       this.store.onDidChange(() => void this.postState()),
-      this.manager.onDidChange(() => void this.postSessions())
+      this.manager.onDidChange(() => void this.postSessions()),
+      // A dropped session or an explicit Refresh empties the tree below a
+      // connection. The panel is told rather than left holding rows it can no
+      // longer act on, and it re-asks for whatever is still expanded.
+      this.catalog.onDidInvalidate((profileId) => void this.send({ type: 'catalogCleared', profileId }))
     );
 
     void vscode.commands.executeCommand('setContext', 'databaseTools.grouped', this.grouped);
@@ -161,9 +168,99 @@ export class ConnectionsView implements vscode.WebviewViewProvider, vscode.Dispo
         await this.context.globalState.update(COLLAPSED_KEY, [...this.collapsed]);
         return;
 
+      case 'loadCatalog':
+        await this.loadCatalog(message.profileId);
+        return;
+
+      case 'loadNode':
+        await this.loadNode(message);
+        return;
+
+      case 'loadMembers':
+        await this.loadMembers(message.profileId, message.node, message.ref);
+        return;
+
+      case 'searchObjects':
+        await this.searchObjects(message.query);
+        return;
+
       default:
         return;
     }
+  }
+
+  /* ------------------------------------------------------------- explorer */
+
+  /*
+   * Four handlers, one shape.
+   *
+   * Each answers exactly the request it was given, addressed by the node key
+   * that came in, and each reports its own failure to that node rather than to
+   * the panel at large. A folder that cannot be read says so on itself and
+   * leaves the rest of the tree alone — which matters most on the connection
+   * where it is most likely, a production login with rights to four schemas out
+   * of forty.
+   */
+
+  private async loadCatalog(profileId: string): Promise<void> {
+    try {
+      const summary = await this.catalog.summary(profileId);
+      await this.send({ type: 'catalog', profileId, summary });
+    } catch (error) {
+      await this.send({ type: 'catalogError', profileId, message: reason(error) });
+    }
+  }
+
+  private async loadNode(request: ObjectPageRequest): Promise<void> {
+    try {
+      const page = await this.catalog.page({ ...request, limit: request.limit || this.catalog.pageSize() });
+      await this.send({ type: 'objects', ...page });
+    } catch (error) {
+      await this.send({
+        type: 'nodeError',
+        profileId: request.profileId,
+        node: request.node,
+        message: reason(error)
+      });
+    }
+  }
+
+  private async loadMembers(
+    profileId: string,
+    node: string,
+    ref: { kind: ObjectPageRequest['kind']; schema: string; name: string }
+  ): Promise<void> {
+    try {
+      const members = await this.catalog.members(profileId, ref);
+      await this.send({ type: 'members', profileId, node, members });
+    } catch (error) {
+      await this.send({ type: 'nodeError', profileId, node, message: reason(error) });
+    }
+  }
+
+  /**
+   * Asks every open connection at once.
+   *
+   * The connections are searched in parallel and each answer is posted the
+   * moment it lands, so a fast local database does not wait behind a slow
+   * remote one. A connection that fails is skipped in silence: the panel is
+   * already showing the matches it found locally, and an error strip per
+   * unreachable server would bury them.
+   */
+  private async searchObjects(query: string): Promise<void> {
+    const open = this.manager.activeIds();
+    await Promise.all(
+      open.map(async (profileId) => {
+        try {
+          const answer = await this.catalog.search(profileId, query);
+          if (answer.objects.length > 0) {
+            await this.send({ type: 'searchAnswer', ...answer });
+          }
+        } catch {
+          // Deliberately quiet. See above.
+        }
+      })
+    );
   }
 
   /* -------------------------------------------------------------- public */
@@ -306,7 +403,7 @@ export class ConnectionsView implements vscode.WebviewViewProvider, vscode.Dispo
     }
 
     const state: SidebarState = {
-      rows: profiles.map((profile) => rowFor(profile, this.store.isFavourite(profile.id))),
+      rows: profiles.map((profile) => rowFor(profile, this.store)),
       selectedId: this.selectedId ?? null,
       grouped: this.grouped,
       sort: this.sort,
@@ -445,7 +542,7 @@ export class ConnectionsView implements vscode.WebviewViewProvider, vscode.Dispo
  * none of them credential-adjacent — a bug in the panel cannot leak a login
  * name it was never sent.
  */
-function rowFor(profile: ConnectionProfile, favourite: boolean): ConnectionRow {
+function rowFor(profile: ConnectionProfile, store: ConnectionStore): ConnectionRow {
   return {
     id: profile.id,
     name: profile.name,
@@ -454,9 +551,11 @@ function rowFor(profile: ConnectionProfile, favourite: boolean): ConnectionRow {
     host: profile.host,
     port: profile.port,
     database: profile.database,
-    favourite,
+    favourite: store.isFavourite(profile.id),
     readOnly: profile.readOnly,
-    updatedAt: profile.updatedAt
+    updatedAt: profile.updatedAt,
+    mode: store.explorerMode(profile.id),
+    pins: store.objectFavourites(profile.id)
   };
 }
 
@@ -465,6 +564,16 @@ function describe(total: number, open: number): string {
     return '';
   }
   return open > 0 ? `${total} · ${open} open` : String(total);
+}
+
+/**
+ * A failure as a row can say it: one sentence, no stack, no driver preamble.
+ * The output channel already has the whole thing; a tree row has forty
+ * characters.
+ */
+function reason(error: unknown): string {
+  const message = error instanceof Error ? error.message : String(error);
+  return message.split(/\r?\n/)[0].trim() || 'The server did not answer.';
 }
 
 function coerceSort(value: string | undefined): SortOrder {

@@ -1,5 +1,6 @@
 import { RefObject } from 'react';
 import { GroupHeader, PinnedHeader } from './GroupHeader';
+import { ResultsHeader } from './TreeRow';
 import { FlatItem } from './model';
 
 /**
@@ -29,10 +30,11 @@ export function StickyHeader(props: {
 }): JSX.Element | null {
   const { item, overlayRef } = props;
 
-  // `owner` yields a header index or -1, so a row or the no-match card only
-  // reaches here if the geometry is wrong. Drawing nothing beats naming the
-  // wrong environment, which is worse than no sticky header at all.
-  if (item === null || item.kind === 'row' || item.kind === 'nomatch') {
+  // `owner` yields a header index or -1, so anything that is not one of the
+  // three headers only reaches here if the geometry is wrong. Drawing nothing
+  // beats naming the wrong environment, which is worse than no sticky header
+  // at all.
+  if (item === null || (item.kind !== 'group' && item.kind !== 'pinned' && item.kind !== 'results')) {
     return null;
   }
 
@@ -54,6 +56,20 @@ export function StickyHeader(props: {
             overlay
           />
         </>
+      ) : item.kind === 'results' ? (
+        // A search across four servers puts `dbo.Customer` in four sections.
+        // The connection each result belongs to is the fact that distinguishes
+        // them, so it is the one heading that must never scroll away.
+        <ResultsHeader
+          gkey={item.key}
+          top={0}
+          label={item.label}
+          count={item.count}
+          capped={item.capped}
+          posinset={1}
+          setsize={1}
+          overlay
+        />
       ) : (
         <PinnedHeader count={item.count} top={0} posinset={1} setsize={1} overlay />
       )}

@@ -8,6 +8,11 @@ mouse. `docs/ui-architecture.md` covers the connection editor, which is the
 other webview. The two share a token layer, a store implementation and two
 primitives, and nothing else.
 
+`docs/object-explorer.md` covers what a connection opens into — the object
+tree phase 2 added inside this same panel. Everything below is the list itself,
+and the two documents share the virtualizer, the geometry model and the
+keyboard model described here.
+
 ## Why it is not a tree
 
 A `TreeItem` is a label, a description, one icon and a tooltip, drawn by the
@@ -63,18 +68,15 @@ Drawn at 260px, which is the canonical width.
 ├──────────────────────────────────────────────────────────┤
 │  ⌕ Name, host, database                              ⨯   │  search band, 32px, never scrolls
 ├──────────────────────────────────────────────────────────┤
-│  ⌄ 📌 PINNED  2                                          │  section header, 24px, sticky
-│▌  ●  ⛁  PROD billing-write                      LIVE     │  a pinned row keeps its own ribbon
-│▌        sql-prod-01 · billing                            │
-│▌ ⌄ 🛡  PROD    9 · 1                                     │  group header, riskiest group first
-│▌  ○🔒 ⛁  billing                                         │
-│▌        sql-prod-01 · billing                            │
-│▌  ●🔒 ⛁  billing-reports                        LIVE     │
-│▌        sql-prod-01 · billing_reports                    │
-│▏ ⌄ ●   QA      18                                        │
-│▏  △  🐘 analytics                               FAIL     │
-│▏        pg-qa-3 · analytics                             ░│  the scroller — the only thing
-│                                                          │  that scrolls
+│  ⌄    PINNED  2                                          │  section header, 22px, sticky
+│▌  ●   PROD billing-write   sql-prod-01            ⛁      │  a pinned row keeps its own ribbon
+│▌ ⌄ 🛡 PROD    9 · 1                                      │  group header, riskiest group first
+│▌  ○🔒 billing              sql-prod-01            ⛁      │
+│▌  ●🔒 billing-reports      sql-prod-01 · reports  ⛁      │
+│▏ ⌄    QA      18                                         │
+│▏  △   analytics            pg-qa-3        FAIL    🐘     │
+│▏  ○   sandbox         ⟨ ⚯  ✎  …  on the row under the ⟩ ░│  the scroller — the only thing
+│                       ⟨       pointer only        ⟩      │  that scrolls
 ├──────────────────────────────────────────────────────────┤
 │▌ 🛡 billing-reports · read-only                  Close   │  production band, 18px, present
 ├──────────────────────────────────────────────────────────┤  only while a prod session is open
@@ -86,12 +88,15 @@ The search band and the footer hold still; only the scroller moves. That is the
 same rule the editor follows for the same reason — the thing you use to find a
 row must not be a thing you have to scroll back to.
 
-Every row is the same 34px at every width, in every state, in every tier: two
-lines, the name at 13px over the host and database at 10.5px. It was one 22px
-line — `list.rowHeight`, the value the workbench gives the Explorer — and the
-stack is what a name, a host and a database need to stop bidding for the same
-170 pixels. What did not change is that the height is *fixed*, and that is the
-property the whole design is built on. It removes the hardest problem in a
+Every row is the same 22px at every width, in every state, in every tier —
+`list.rowHeight`, the value the workbench gives the Explorer. It was 34 for a
+while, carrying the name at 13px over the host and database at 10.5px, and that
+second line was removed for two reasons. It repeated, on all eighty-four rows,
+what the footer readout already prints in full for the one row the cursor is
+on; and twelve pixels a row is the difference between thirteen connections
+visible in a 560px sidebar and twenty. What did not change is that the height is
+*fixed*, and that is the property the whole design is built on. It removes the
+hardest problem in a
 resizable panel: there
 is no `ResizeObserver` on width, no measured probe row, no `getComputedStyle`
 handshake, no breakpoint hysteresis, and no pair of constants that CSS and
@@ -100,20 +105,37 @@ JavaScript can disagree about while the sash is being dragged.
 **The slot ruler.** Identical on every row, at every width, in every state.
 
 ```
- x=0  3    8         24  28        44   52                    W-16  W-8
-  ┌───┬─────┬──────────┬───┬────────┬────┬──────────────────────┬─────┐
-  │ ▏ │     │  state   │   │ engine │    │  name · host · db    │ badge│
-  └───┴─────┴──────────┴───┴────────┴────┴──────────────────────┴─────┘
-    3   5px     16px     4px  16px    8      elastic run          38+8
+ x=0  3    8        22   26        42   47              W-70  W-30  W-16 W-8
+  ┌───┬─────┬─────────┬────┬────────┬────┬───────────────┬─────┬─────┬────┐
+  │ ▏ │     │ twistie │    │ state  │    │ name · address│badge│engin│    │
+  └───┴─────┴─────────┴────┴────────┴────┴───────────────┴─────┴─────┴────┘
+    3   5px     14px    4px   16px   5px      elastic      38+6  14+6   8+8
 
-  ribbon 0..3, state glyph at x=8, engine mark at x=28, text begins at x=52.
+  ribbon 0..3, twistie at x=8, state glyph at x=26, text begins at x=47.
   right: 8px pad + 8px of scrollbar-gutter: stable.
-  elastic = W − 68.   170px → 102     260px → 192     500px → 432
+  elastic = W − 105.  170px → 65     260px → 155     500px → 395
 ```
 
-The left rail is a fixed 44px and nothing ever moves it. That is what makes the
+The left rail is a fixed 47px and nothing ever moves it. That is what makes the
 glyph column a column rather than a ragged edge, and the whole first reading
 depends on it.
+
+It was 44px with text at 52 while a connection was a leaf. Phase 2 made a
+connection a container, and a container needs a chevron — 14px with a 4px
+margin, the same as an environment heading's, so the two land in one column
+along with every folder below them. It is drawn on every connection whether or
+not that connection has anything to open, because a chevron column that
+appeared only on connected rows would jog the entire rail by eighteen pixels
+every time a session opened or closed.
+
+That made the rail 62 with text at 70, and 70 was wrong. A folder inside a
+connection begins at `8 + (2−1)×10 + 14 + 4 + 16 + 5 = 57`, so the first level
+of the tree stepped *backwards* by thirteen pixels — a child's name to the left
+of its parent's. The slot that went is the engine mark, which had the position
+the eye lands on and used it to answer a question nobody scanning a list is
+asking. It is now the last thing on the row, where the marks still form a
+column and compete with nothing, and 47 puts a folder exactly one `--indent`
+to the right of the connection that holds it.
 
 `scrollbar-gutter: stable` reserves the 8px rather than overlaying it, because a
 scrollbar that appears the moment the list outgrows the viewport reflows every
@@ -157,9 +179,9 @@ the database, then the state badge at the right edge.
 ### The type ramp
 
 Nothing is sized in `em`, and the sidebar never reads `--vscode-font-size`.
-That is deliberate and load-bearing: the row is a hard 34px and a font that
+That is deliberate and load-bearing: the row is a hard 22px and a font that
 followed the user's editor settings would clip it, while the virtualizer's
-offsets would still say 34 — geometry that is truthful about a row that is
+offsets would still say 22 — geometry that is truthful about a row that is
 visibly wrong. The workbench's own tree does exactly this: its rows are a fixed
 height regardless of `editor.fontSize` and follow `window.zoomLevel` only, which scales
 the whole webview uniformly and keeps the ratio. `sidebar.css` carries that
@@ -270,7 +292,9 @@ src/webview/sidebar/index.tsx
         │   │   ├── StateGlyph      disc / ring / triangle / arc, plus the lock
         │   │   ├── EngineMark      the existing primitive, size 16, no plate
         │   │   ├── NameRun         env badge? · name · host head+tail · db
-        │   │   └── StateBadge      LIVE / FAIL / TEST / nothing
+        │   │   ├── StateBadge      FAIL / CONN / TEST / nothing
+        │   │   ├── EngineMark      the vendor mark, trailing, 14px
+        │   │   └── RowActions      session · edit · menu, pointer row only
         │   └── NoMatch             kind: 'nomatch'
         │
         └── Footer
@@ -285,13 +309,28 @@ props on the `FlatItem`, including the `open` count that makes a header say
 `18 · 2 open`, so a session change re-renders at most the headers whose number
 actually moved rather than every header on screen.
 
-A row draws no controls. It carried a hover rail of inline buttons — the
-session action, edit, pin — and they are gone: they appeared only on the row
-under the pointer, they were `tabindex="-1"` and so never in the tab order,
-and the stylesheet dropped them one by one as the panel narrowed. Every one of
-them was already on the right-click menu, which is reachable at every width,
-from the keyboard, and without hunting for a target 20px wide. Hovering a row
-now changes its ground and nothing else.
+A row draws three controls, on the row under the pointer and on the cursor row
+while the list has focus: the session action, Edit Connection, and the menu.
+
+They were removed once, and the reasons were good ones — they were never in the
+tab order, and the stylesheet dropped them one at a time as the panel narrowed,
+while the right-click menu carried all of them at every width. What that
+argument missed is that a menu you have to be told about is not an affordance.
+Connecting and editing are the two things anybody does with this panel all day,
+and both took a gesture with no visible cue anywhere in the view.
+
+So they are back, on stricter terms. They are absolutely positioned over the
+row's right end rather than laid out in it, so no column reflows as the pointer
+crosses eighty rows and the name column holds at the pixel. They are three
+fixed positions whose meaning does not change with state, so the first slot is
+always the session action whether it currently says Connect, Disconnect or
+Cancel. They remain `tabindex="-1"` and `aria-hidden`, because a focusable
+control inside a `treeitem` under a roving tabindex would put three extra stops
+between one row and the next; the menu is still the complete keyboard path, and
+the third button is how you reach it without a right-click. Below 196px only
+that third button survives — at 170px the rail is 47 and three buttons are 60,
+which would leave the name sixty pixels and turn the row into a control strip
+with a caption.
 
 The menu is a workbench menu rather than one drawn in the page, because a
 page-drawn menu cannot escape the panel's bounds and would be clipped by the
@@ -510,7 +549,7 @@ tick():
     persistScroll(top)                                   // throttled to 250ms
 ```
 
-Scrolling a 34px row by three pixels writes one transform and nothing else.
+Scrolling a 22px row by three pixels writes one transform and nothing else.
 Crossing a row boundary re-renders `VirtualList`, and React reconciles about
 thirty keyed elements whose props are all unchanged primitives and bails on
 every one. `OVERSCAN` is 8 — 176px above and below, cheap insurance against a
@@ -524,7 +563,7 @@ const virtual = geom.items.length > VIRTUALIZE_ABOVE;
 ```
 
 Below it, `first = 0` and `last = n − 1`: the whole list is in the DOM. 120
-items at 34px is 4,080px, about six viewports of six-node rows — roughly 720
+items at 22px is 2,640px, about four viewports of six-node rows — roughly 720
 nodes, which costs nothing. Everything else is identical in both modes:
 absolute positioning inside the spacer, the overlay header, the ribbons, the
 explicit `aria-setsize`. There is one geometry model and one sticky mechanism to
@@ -673,16 +712,22 @@ where a missing word costs something. The placeholder shortens to `Filter`.
 gain per pixel in the system: a state word beats twenty more characters of a
 host you already know.
 
-The host and the database sit on the second line separated by a 1px × 10px
+The host and the database sit after the name, separated by a 1px × 10px
 vertical hairline rather than a middot — at 10.5px a hairline is a lighter mark
-and gives the eye a rule to run down instead of a speck to jump over.
+and gives the eye a rule to run down instead of a speck to jump over. The
+database is dropped outright when it matches the connection name, which on a
+real estate is most rows: a name is usually chosen from the database it points
+at, and `PeopleDeskMatador · PeopleDeskMatador` spends a third of the row
+saying one thing twice. That is the one field the component drops rather than
+styles away, and the exception holds because the rule it breaks is about the
+columns the eye runs down, not about trailing prose.
 
 **lg.** The badge takes a fixed 46px column, so the state words line up down the
 right edge across every row. That is the one vertical alignment worth keeping
 once the text itself is stacked.
 
-**The row is 34px in every tier. Extra width buys room inside the two lines,
-never a third one.** That is the line that does not move.
+**The row is 22px in every tier. Extra width buys columns, never a second
+line.** That is the line that does not move.
 
 ### The shrink order
 
@@ -838,11 +883,11 @@ the top.
 | key | on a row | on a section header |
 |---|---|---|
 | `↓` / `↑` | move the cursor one visible item, headers included | same |
-| `←` | move to the owning header | collapse if expanded, else move to the previous header |
-| `→` | nothing | expand if collapsed, else move to the first child |
+| `←` | collapse if expanded, else move to the parent | collapse if expanded, else move to the previous header |
+| `→` | expand if collapsed, else move to the first child | expand if collapsed, else move to the first child |
 | `Home` / `End` | first / last visible item | same |
 | `PageDown` / `PageUp` | one viewport of items | same |
-| `Enter` | open the connection editor | toggle |
+| `Enter` | expand a connected connection; open the editor on a saved one | toggle |
 | `Space` | connect if closed, disconnect if open, cancel if in flight | toggle |
 | `Delete` | `delete`; the host shows its own modal confirmation | — |
 | `Shift+F10`, `ContextMenu` | nothing; the browser turns both into a `contextmenu` event and the workbench menu follows from the row's `data-vscode-context` | — |
@@ -857,6 +902,14 @@ database where type-ahead would only match a prefix of the name. From the box,
 match, and `Escape` clears the query and returns focus to the list.
 `Ctrl/Cmd+F` and the title-bar Search action both focus the box and select its
 contents.
+
+Phase 2 changed one gesture here and one on the mouse, and both for the same
+reason: a connection is now a container. `←` and `→` walk the object tree
+inside it rather than only its section heading, and `Enter` — like a click —
+opens a connected connection instead of its editor, because a row that did both
+on one action could do neither predictably. A saved connection is still a leaf
+and still opens its editor. Editing a connected one moved to Edit Connection on
+its right-click menu. `docs/object-explorer.md` has the rest.
 
 **Accessible names** are composed exactly the way
 `ConnectionTreeItem.accessibilityInformation` composed them — `` `${name},
@@ -925,14 +978,18 @@ src/ui/connectionsView.ts         the WebviewViewProvider: CSP, nonce, badge,
 src/webview/
   state/store.ts                  shared with the editor, unchanged
   primitives/{Codicon,EngineMark}.tsx    reused unchanged
+  primitives/ObjectIcon.tsx       the object explorer's twelve marks
   sidebar/
     index.tsx                     mount
     api.ts                        acquireVsCodeApi typed to the sidebar's union;
-                                  scrollTop, the only thing the panel persists
-    state.ts                      listStore, sessionStore, cursorStore and the
-                                  four stable-selector hooks
+                                  scrollTop and expansion, the two things the
+                                  panel persists for itself
+    state.ts                      listStore, sessionStore, cursorStore,
+                                  catalogStore, expandedStore, hitsStore, the
+                                  four stable-selector hooks and the loader
     model.ts                      H, FlatItem, heightOf, measure, indexAt,
-                                  matchRow, compare, flatten
+                                  parentOf, matchRow, compare, flatten, Want
+    fuzzy.ts                      the matcher and the query parser
     host.ts                       splitHost, fullHost, segments
     Sidebar.tsx                   shell, host messages, the keyboard model, focus
     SearchBand.tsx
@@ -941,6 +998,8 @@ src/webview/
     StickyHeader.tsx              the aria-hidden overlay and its click proxies
     GroupHeader.tsx               group and pinned headers
     Row.tsx                       StateGlyph, NameRun, StateBadge
+    TreeRow.tsx                   folder, schema, object, member, note, results
+                                  — see docs/object-explorer.md
     Footer.tsx                    ProductionBand, Counts, Readout
     EmptyState.tsx                the rebuilt viewsWelcome
   styles/tokens.css               the shared hues, radii, motion, .sr-only,

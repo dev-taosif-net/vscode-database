@@ -40,12 +40,17 @@ interface NoMatchProps {
 export const NOMATCH_ID = 'nomatch';
 
 /**
- * An empty scroller would read as "there are no connections". There are; they
- * are filtered out, and saying so is the whole difference. It is a real item in
+ * An empty scroller would read as "there is nothing here". There is; it is
+ * filtered out, and saying so is the whole difference. It is a real item in
  * the flattened list, so it is a real tree item with a real position, and it
  * takes the roving tabindex like anything else the cursor can land on — when it
  * is showing it is the only thing in the tree, so there is nothing else to hold
  * it.
+ *
+ * It says "Nothing matches" rather than "No connection matches", because since
+ * phase 2 the same query is run against every open connection's objects as
+ * well, and a card that named only connections would be claiming the search was
+ * narrower than it was.
  */
 export function NoMatch({ query, top }: NoMatchProps): JSX.Element {
   const cursor = useIsCursor(NOMATCH_ID);
@@ -61,7 +66,7 @@ export function NoMatch({ query, top }: NoMatchProps): JSX.Element {
       tabIndex={cursor ? 0 : -1}
     >
       <Codicon name="info" />
-      <p>No connection matches “{query}”</p>
+      <p>Nothing matches “{query}”</p>
       <button
         type="button"
         onClick={() => listStore.setState((s) => (s.query === '' ? s : { ...s, query: '' }))}

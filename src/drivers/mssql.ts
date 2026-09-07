@@ -73,6 +73,13 @@ class MssqlSession implements DriverSession {
     return rows.map((r) => String(r.name));
   }
 
+  async query<T = Record<string, unknown>>(sql: string, params?: unknown[]): Promise<T[]> {
+    if (this.closed) {
+      throw new DriverError('The connection is closed.', 'ECLOSED', undefined, undefined);
+    }
+    return (await query(this.connection, sql, params)) as T[];
+  }
+
   async close(): Promise<void> {
     if (this.closed) {
       return;
@@ -223,7 +230,11 @@ function connectOnce(connection: Connection, signal?: AbortSignal): Promise<void
   });
 }
 
-function query(connection: Connection, sql: string): Promise<Array<Record<string, unknown>>> {
+function query(
+  connection: Connection,
+  sql: string,
+  params?: unknown[]
+): Promise<Array<Record<string, unknown>>> {
   const { Request } = load();
   return new Promise((resolve, reject) => {
     const rows: Array<Record<string, unknown>> = [];
@@ -234,6 +245,12 @@ function query(connection: Connection, sql: string): Promise<Array<Record<string
         resolve(rows);
       }
     });
+    // Bound, never interpolated. Every catalog statement takes a schema or an
+    // object name straight from the tree, and a tree row is a string the server
+    // gave us — but it is a string that came back through a webview, and the
+    // one place a quoted identifier must never be reassembled by hand is a
+    // predicate. `addParameter` is what keeps `'; DROP` a table name.
+    (params ?? []).forEach((value, i) => addParameter(request, `p${i}`, value));
     request.on('row', (columns: Array<{ value: unknown; metadata: { colName: string } }>) => {
       const row: Record<string, unknown> = {};
       for (const column of columns) {
@@ -243,6 +260,28 @@ function query(connection: Connection, sql: string): Promise<Array<Record<string
     });
     connection.execSql(request);
   });
+}
+
+/**
+ * The TDS type for a JavaScript value.
+ *
+ * `Int` rather than `BigInt` for numbers, because every number the catalog
+ * binds is an offset or a row limit and neither approaches 2^31; and `NVarChar`
+ * rather than `VarChar` for strings, because a schema or an object name in SQL
+ * Server is `sysname`, which is `nvarchar(128)`, and binding it as ASCII would
+ * quietly fail to match anything outside it.
+ */
+function addParameter(request: import('tedious').Request, name: string, value: unknown): void {
+  const { TYPES } = load();
+  if (typeof value === 'number') {
+    request.addParameter(name, Number.isInteger(value) ? TYPES.Int : TYPES.Float, value);
+    return;
+  }
+  if (typeof value === 'boolean') {
+    request.addParameter(name, TYPES.Bit, value);
+    return;
+  }
+  request.addParameter(name, TYPES.NVarChar, value === null || value === undefined ? null : String(value));
 }
 
 /**

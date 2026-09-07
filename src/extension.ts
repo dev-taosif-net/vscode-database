@@ -1,8 +1,10 @@
 import * as vscode from 'vscode';
+import { CatalogService } from './catalog/catalogService';
 import { ConnectionManager } from './connections/connectionManager';
 import { ConnectionStore } from './store/connectionStore';
 import { ConnectionsPanel } from './ui/connectionsPanel';
 import { ConnectionsView } from './ui/connectionsView';
+import { ObjectCommands } from './ui/objectCommands';
 import { ConnectionStatusBar } from './ui/statusBar';
 import { ConnectionProfile, environmentLabel } from './types';
 
@@ -15,18 +17,21 @@ import { ConnectionProfile, environmentLabel } from './types';
 type CommandTarget = string | { connectionId?: unknown } | undefined;
 
 /**
- * Phase 1: everything up to and including an open connection. Nothing here
- * runs a query. Activation does no work beyond wiring, and neither driver is
- * loaded until the first connection is opened.
+ * Phase 1 opened a connection; phase 2 browses what is inside it. Activation
+ * still does no work beyond wiring: neither driver is loaded until the first
+ * connection is opened, and the catalog reads nothing until a connection in the
+ * tree is actually expanded.
  */
 export function activate(context: vscode.ExtensionContext): void {
   const output = vscode.window.createOutputChannel('Database Tools', { log: true });
   const store = new ConnectionStore(context);
   const manager = new ConnectionManager(store, output);
+  const catalog = new CatalogService(store, manager, output);
   const statusBar = new ConnectionStatusBar(store, manager);
-  const view = new ConnectionsView(context, store, manager);
+  const view = new ConnectionsView(context, store, manager, catalog);
 
-  context.subscriptions.push(output, store, manager, statusBar, view);
+  context.subscriptions.push(output, store, manager, catalog, statusBar, view);
+  context.subscriptions.push(...new ObjectCommands(store, catalog, output).register());
 
   // No `retainContextWhenHidden`. It costs thirty to sixty megabytes for a view
   // many people have open at startup, and it buys nothing here: grouping, sort
@@ -173,6 +178,43 @@ export function activate(context: vscode.ExtensionContext): void {
       if (profile) {
         await vscode.env.clipboard.writeText(`${profile.host}${profile.port ? `:${profile.port}` : ''}`);
       }
+    }),
+
+    /*
+     * The explorer's two connection-level actions.
+     *
+     * Schema-focused mode is deliberately not a toolbar toggle. A toolbar
+     * button applies to the view, and this applies to one connection: the
+     * estate that needs schema mode is the forty-schema ERP database, and the
+     * three little service databases beside it in the same list do not. Two
+     * commands rather than one that flips, because a menu item has to say what
+     * it will do before you click it, and `when` clauses are how a menu chooses
+     * between them.
+     */
+
+    vscode.commands.registerCommand('databaseTools.enableSchemaMode', async (target?: CommandTarget) => {
+      const id = targetId(target);
+      if (id) {
+        await store.setExplorerMode(id, 'schema');
+      }
+    }),
+
+    vscode.commands.registerCommand('databaseTools.disableSchemaMode', async (target?: CommandTarget) => {
+      const id = targetId(target);
+      if (id) {
+        await store.setExplorerMode(id, 'general');
+      }
+    }),
+
+    /**
+     * Re-reads one connection's catalog, or every connection's.
+     *
+     * It empties the cache and nothing more. The tree asks again for the
+     * folders that are actually on screen, so refreshing a connection with
+     * forty schemas and one folder open is one query rather than forty.
+     */
+    vscode.commands.registerCommand('databaseTools.refreshCatalog', (target?: CommandTarget) => {
+      catalog.invalidate(targetId(target));
     })
   );
 

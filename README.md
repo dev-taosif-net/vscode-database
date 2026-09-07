@@ -5,10 +5,40 @@ built for large enterprise estates: thousands of objects, many schemas, many
 environments. Lazy loading everywhere, aggressive metadata caching, streamed
 row-capped fetches, near-zero startup cost.
 
-## Status: phase 1, connections
+## Status: phase 2, the object explorer
 
-This release covers everything up to and including an open connection. It does
-not run queries yet.
+Phase 1 covered everything up to and including an open connection. Phase 2
+opens that connection up: every object in it, browsable and searchable. It
+still does not run queries — the actions that need a result grid produce SQL in
+an editor instead, and say so.
+
+### The object explorer
+
+A connected connection expands in place, in the same single-column sidebar. See
+[docs/object-explorer.md](docs/object-explorer.md).
+
+- Tables, views, procedures, functions, triggers, sequences, types and
+  synonyms, each with its count read before a single row is.
+- Two arrangements, saved per connection from its right-click menu: object
+  types under the connection, or a schema level in between. Large estates want
+  the second; the three service databases beside them do not.
+- Tables and views open into their columns, with the primary and foreign keys
+  marked; procedures and functions open into their parameters.
+- Favourites: pin any object to the top of its connection.
+- Search across every open connection at once, by name, schema or type.
+  `sales.customer`, `proc:customer` and `sequences` all mean what they look
+  like. What the panel already holds is fuzzy-matched on the keystroke; the
+  servers are asked a moment later, so the answer is not limited to the folders
+  you happened to have opened.
+- Colourful marks with a distinct silhouette each, so the set survives a
+  high-contrast theme, a forced palette and colour vision deficiency.
+- Right-click an object for Open Definition, Select Top 100, Generate CRUD,
+  Execute, Script As ALTER, Copy Name and Copy Full Name. Each opens an
+  editable SQL document; nothing is executed yet.
+- Five hundred objects at a time, cached for five minutes, nothing read until
+  it is opened, and the whole subtree dropped the moment a session closes.
+
+### Connections
 
 - A connection editor in its own editor tab: identity down the left, the
   connection details beside it, a summary that never scrolls away, and a sticky
@@ -87,6 +117,10 @@ screen and colour vision deficiency.
 | Database: Connect to a Database | |
 | Database: Disconnect | |
 | Database: Disconnect All | |
+| Database: Refresh Objects | |
+
+The object explorer's own actions are on the right-click menu of the row they
+act on, so they are hidden from the palette, where there would be no row.
 
 Inside the editor: `Ctrl+Enter` connects, `Ctrl+S` saves, `Alt+T` tests, and
 `Escape` cancels a running attempt.
@@ -106,6 +140,12 @@ Press `F5` to launch a second VS Code window with the extension loaded.
 the first connection, so activation loads neither one.
 
 ## Not in this release
+
+- Query execution and a result grid. Every explorer action that would need one
+  writes its statement into an editor instead: Select Top 100, Generate CRUD
+  and Execute produce SQL that is complete and correct for the object it came
+  from, and you run it with whatever you already use. When the grid lands,
+  Execute becomes a verb and none of that SQL has to change.
 
 Designed and stored on the profile, but not yet acting:
 

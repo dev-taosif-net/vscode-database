@@ -13,6 +13,15 @@
  * keeps the message small: two hundred rows of ten fields, not two hundred
  * profiles of forty.
  */
+import {
+  CatalogSummary,
+  ExplorerMode,
+  FavouriteRef,
+  MemberList,
+  ObjectPage,
+  ObjectPageRequest,
+  SearchAnswer
+} from './catalog';
 import { DriverKind, EnvironmentId } from '../types';
 
 /**
@@ -55,6 +64,18 @@ export interface ConnectionRow {
   /** Profile-level intent. The session's own answer is on `SessionFacts`. */
   readOnly: boolean;
   updatedAt: number;
+  /**
+   * How this connection arranges its children, and which of its objects are
+   * pinned.
+   *
+   * Both are here rather than in a message of their own because both change the
+   * *shape* of the tree, which is exactly what this projection is for: the
+   * panel rebuilds its flattened index from `rows`, and a mode switch or a new
+   * pin has to rebuild it. The volatile half of a row still lives on
+   * `SessionUpdate`, and nothing about a session belongs here.
+   */
+  mode: ExplorerMode;
+  pins: FavouriteRef[];
 }
 
 /** The volatile half, sent on its own so a connect never rebuilds the index. */
@@ -102,7 +123,29 @@ export type SidebarHostMessage =
   /** Fold or unfold every environment at once. */
   | { type: 'collapseAll'; on: boolean }
   /** The editor moved; bring that row into view and select it. */
-  | { type: 'reveal'; id: string };
+  | { type: 'reveal'; id: string }
+  /*
+   * The explorer's half of the contract.
+   *
+   * Every one of these carries the profile id and the node key the request was
+   * made under, and the panel matches them before merging. A tree that expanded
+   * three folders while a slow query was in flight must not pour that query's
+   * five hundred rows into whichever folder happens to be open when it lands.
+   */
+  /** A connection's counts and schema list, or why they could not be read. */
+  | { type: 'catalog'; profileId: string; summary: CatalogSummary }
+  | { type: 'catalogError'; profileId: string; message: string }
+  /** One folder's rows, cumulative: `objects` is the whole folder, not a page. */
+  | ({ type: 'objects' } & ObjectPage)
+  | ({ type: 'members' } & MemberList)
+  | { type: 'nodeError'; profileId: string; node: string; message: string }
+  /** Server-side matches, merged into whatever the panel already found. */
+  | ({ type: 'searchAnswer' } & SearchAnswer)
+  /**
+   * The catalog for this connection is no longer valid — it disconnected, or
+   * Refresh was used. An empty id means every connection.
+   */
+  | { type: 'catalogCleared'; profileId: string };
 
 export type SidebarWebviewMessage =
   | { type: 'ready' }
@@ -120,4 +163,20 @@ export type SidebarWebviewMessage =
    * own count label did.
    */
   | { type: 'filtered'; on: boolean; matched: number }
-  | { type: 'collapse'; environment: EnvironmentId; on: boolean };
+  | { type: 'collapse'; environment: EnvironmentId; on: boolean }
+  /**
+   * A connection was expanded and has no summary yet. Separate from `connect`
+   * because expanding something already open must not re-authenticate, and
+   * separate from `loadNode` because the counts are one query for the whole
+   * connection rather than one per folder.
+   */
+  | { type: 'loadCatalog'; profileId: string }
+  /** A folder was opened, or its `Load more` row was pressed. */
+  | ({ type: 'loadNode' } & ObjectPageRequest)
+  /** An object was expanded: its columns, or its parameters. */
+  | { type: 'loadMembers'; profileId: string; node: string; ref: FavouriteRef }
+  /**
+   * Ask every open connection for matches. The panel has already matched what
+   * it holds; this is for the rest of a database it has never read.
+   */
+  | { type: 'searchObjects'; query: string };
