@@ -138,7 +138,14 @@ function PasswordField() {
           autoComplete="off"
           onChange={(event) => {
             const next = event.target.value;
-            update((state) => ({ ...state, secret: next }));
+            // An empty box is untouched, not "forget the stored one". Undefined
+            // is the value that never travels, and the box ends up empty either
+            // way, so nothing on screen moves. Typing a character and deleting
+            // it again used to leave `''` behind, which the host reads as an
+            // instruction to clear the keychain — a stored password thrown away
+            // by a backspace, with the editor never having said so. Clearing it
+            // on purpose is the button underneath, which says what it does.
+            update((state) => ({ ...state, secret: next === '' ? undefined : next }));
           }}
         />
         <button

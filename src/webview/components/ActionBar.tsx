@@ -30,6 +30,11 @@ export function commitPastedString(store: EditorStore): AppState {
   return store.getState();
 }
 
+const selDirty = (state: AppState) => isDirty(effective(state));
+const selValid = (state: AppState) => isValid(effective(state));
+const selBusy = (state: AppState) => Boolean(state.draft && state.host.busy === state.draft.id);
+const selProduction = (state: AppState) => state.draft?.environment === 'prod';
+
 /**
  * The sticky footer. Connect is last and accented because it is the one that
  * opens a session; Save is primary because it is the one that keeps the work.
@@ -43,11 +48,11 @@ export function ActionBar() {
   const fresh = useSelect(isNew);
   // Measured on the draft a press would act on, so a pasted string lights the
   // buttons that are about to use it.
-  const dirty = useSelect((state) => isDirty(effective(state)));
-  const valid = useSelect((state) => isValid(effective(state)));
-  const busy = useSelect((state) => Boolean(state.draft && state.host.busy === state.draft.id));
+  const dirty = useSelect(selDirty);
+  const valid = useSelect(selValid);
+  const busy = useSelect(selBusy);
   const connected = useSelect(isConnected);
-  const production = useSelect((state) => state.draft?.environment === 'prod');
+  const production = useSelect(selProduction);
 
   const send = (type: 'save' | 'test' | 'connect') => {
     const state = commitPastedString(store);

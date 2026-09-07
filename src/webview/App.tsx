@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { HostMessage } from '../shared/protocol';
 import {
+  AppState,
   applyHostMessage,
   effective,
   isDirty,
@@ -27,13 +28,17 @@ import { Panel } from './primitives/Panel';
 import { Segmented } from './primitives/Segmented';
 import { Codicon } from './primitives/Codicon';
 
+const selDirty = (state: AppState) => isDirty(effective(state));
+const selHasDraft = (state: AppState) => Boolean(state.draft);
+const selEnvironment = (state: AppState) => state.draft?.environment;
+
 export function App() {
   useHostMessages();
   useDirtyReporting();
   useShortcuts();
 
-  const hasDraft = useSelect((state) => Boolean(state.draft));
-  const environment = useSelect((state) => state.draft?.environment);
+  const hasDraft = useSelect(selHasDraft);
+  const environment = useSelect(selEnvironment);
 
   if (!hasDraft) {
     return <EmptyState />;
@@ -133,7 +138,7 @@ function useHostMessages(): void {
 function useDirtyReporting(): void {
   // A string in the paste box is work the action bar will use, so leaving the
   // connection would lose it and the host has to ask.
-  const dirty = useSelect((state) => isDirty(effective(state)));
+  const dirty = useSelect(selDirty);
   useEffect(() => {
     post({ type: 'dirty', dirty });
   }, [dirty]);

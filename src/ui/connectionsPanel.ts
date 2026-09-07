@@ -48,6 +48,13 @@ export class ConnectionsPanel {
   private readonly busy = new Set<string>();
   /** Set once the panel is gone, so nothing posts into a dead webview. */
   private disposed = false;
+  /**
+   * A redraw the page has not been told about because its tab was not on top.
+   * Null when the page is up to date. `reload` is sticky: a hidden panel that
+   * was told to reload must still reload when it comes back, even if a plain
+   * redraw was asked for after it.
+   */
+  private deferred: { reload: boolean } | null = null;
   private pending: ConnectionProfile | undefined;
   /** Whether the editor has typed changes the user would lose. */
   private dirty = false;
@@ -122,7 +129,20 @@ export class ConnectionsPanel {
         });
       }),
       this.store.onDidChange(() => void this.postState()),
-      this.manager.onDidChange(() => void this.postState())
+      this.manager.onDidChange(() => void this.postState()),
+      // A tab in the background is redrawn when it comes forward and not
+      // before. The page keeps its DOM either way, so nothing is rebuilt; what
+      // is saved is the state message itself, and this editor is sent one on
+      // every store and manager event in the window whether or not anybody is
+      // looking at it.
+      this.panel.onDidChangeViewState(() => {
+        if (!this.panel.visible || !this.deferred) {
+          return;
+        }
+        const { reload } = this.deferred;
+        this.deferred = null;
+        void this.postState(reload);
+      })
     );
   }
 
@@ -600,6 +620,21 @@ export class ConnectionsPanel {
       ? 'New connection'
       : selected?.name || 'Connection';
 
+    const storedSelection = this.isPending(this.selectedId) ? undefined : this.selectedId;
+    if (storedSelection && storedSelection !== this.announced) {
+      this.announced = storedSelection;
+      ConnectionsPanel.selectionEmitter.fire(storedSelection);
+    }
+
+    // Everything above this line is what the window sees from outside the tab:
+    // the tab's own title, and the selection the sidebar follows. Those happen
+    // whether or not the page is on screen. The message below is the only part
+    // that can wait.
+    if (!this.panel.visible) {
+      this.deferred = { reload: reload || (this.deferred?.reload ?? false) };
+      return;
+    }
+
     const hasSecret: Record<string, boolean> = {};
     await Promise.all(
       profiles.map(async (p) => {
@@ -610,12 +645,6 @@ export class ConnectionsPanel {
     const results: Record<string, AttemptResult> = {};
     for (const [id, result] of this.results) {
       results[id] = result;
-    }
-
-    const storedSelection = this.isPending(this.selectedId) ? undefined : this.selectedId;
-    if (storedSelection && storedSelection !== this.announced) {
-      this.announced = storedSelection;
-      ConnectionsPanel.selectionEmitter.fire(storedSelection);
     }
 
     const state: EditorState = {
