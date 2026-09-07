@@ -153,8 +153,6 @@ export interface EnvironmentMeta {
   full: string;
   /** One line naming the guard, so the banner never relies on its colour. */
   guard: string;
-  /** The long form, for a tooltip or a note. */
-  hint: string;
 }
 
 export const ENVIRONMENTS: ReadonlyArray<EnvironmentMeta> = [
@@ -163,32 +161,28 @@ export const ENVIRONMENTS: ReadonlyArray<EnvironmentMeta> = [
     label: 'Development',
     short: 'DEV',
     full: 'Development',
-    guard: 'Safe to experiment. No extra guards.',
-    hint: 'No extra guards. Metadata is cached for the whole session so the object tree opens instantly.'
+    guard: 'Safe to experiment. No extra guards.'
   },
   {
     id: 'qa',
     label: 'QA',
     short: 'QA',
     full: 'Quality Assurance',
-    guard: 'Confirmation required for destructive statements.',
-    hint: 'An UPDATE or DELETE with no WHERE clause asks for confirmation before it runs.'
+    guard: 'Confirmation required for destructive statements.'
   },
   {
     id: 'uat',
     label: 'UAT',
     short: 'UAT',
     full: 'User Acceptance Testing',
-    guard: 'The same guard as QA, and query history is tracked.',
-    hint: 'The same guard as QA, and the environment name goes into the query history.'
+    guard: 'The same guard as QA, and query history is tracked.'
   },
   {
     id: 'prod',
     label: 'Production',
     short: 'PROD',
     full: 'Production',
-    guard: 'Connecting asks for confirmation first.',
-    hint: 'Sessions open read-only, connecting asks for confirmation, no credential is kept by default, and schema changes are refused until the session is switched to read-write.'
+    guard: 'Connecting asks for confirmation first.'
   }
 ];
 
@@ -261,25 +255,4 @@ export function transportLabel(profile: ConnectionProfile): string {
     return profile.encrypt === 'mandatory' ? 'TLS required' : 'TLS optional';
   }
   return `SSL ${profile.sslMode}`;
-}
-
-export function authLabel(profile: ConnectionProfile): string {
-  if (profile.driver === 'mssql') {
-    switch (profile.mssqlAuth) {
-      case 'sql':
-        return 'SQL login';
-      case 'entra-mfa':
-        return 'Entra MFA';
-      case 'ntlm':
-        return 'Windows NTLM';
-    }
-  }
-  switch (profile.pgAuth) {
-    case 'password':
-      return 'SCRAM';
-    case 'certificate':
-      return 'Client cert';
-    default:
-      return 'No credential';
-  }
 }

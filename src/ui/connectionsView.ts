@@ -117,10 +117,6 @@ export class ConnectionsView implements vscode.WebviewViewProvider, vscode.Dispo
         await this.postState();
         return;
 
-      case 'select':
-        this.selectedId = message.id;
-        return;
-
       case 'open':
         this.selectedId = message.id;
         await vscode.commands.executeCommand('databaseTools.openConnections', message.id);
@@ -142,19 +138,6 @@ export class ConnectionsView implements vscode.WebviewViewProvider, vscode.Dispo
         await vscode.commands.executeCommand('databaseTools.deleteConnection', message.id);
         return;
 
-      case 'duplicate': {
-        const copy = await this.store.duplicate(message.id);
-        if (copy) {
-          this.selectedId = copy.id;
-          await vscode.commands.executeCommand('databaseTools.openConnections', copy.id);
-        }
-        return;
-      }
-
-      case 'favourite':
-        await this.store.setFavourite(message.id, message.on);
-        return;
-
       case 'new':
         await vscode.commands.executeCommand('databaseTools.newConnection');
         return;
@@ -167,14 +150,6 @@ export class ConnectionsView implements vscode.WebviewViewProvider, vscode.Dispo
         this.matched = message.matched;
         void vscode.commands.executeCommand('setContext', 'databaseTools.filtered', message.on);
         this.updateChrome();
-        return;
-
-      case 'grouped':
-        await this.setGrouped(message.on);
-        return;
-
-      case 'sort':
-        await this.setSort(message.value);
         return;
 
       case 'collapse':

@@ -106,15 +106,12 @@ export type SidebarHostMessage =
 
 export type SidebarWebviewMessage =
   | { type: 'ready' }
-  | { type: 'select'; id: string }
   /** Open the connection editor on this row. */
   | { type: 'open'; id: string }
   | { type: 'connect'; id: string }
   | { type: 'disconnect'; id: string }
   | { type: 'cancel'; id: string }
   | { type: 'delete'; id: string }
-  | { type: 'duplicate'; id: string }
-  | { type: 'favourite'; id: string; on: boolean }
   | { type: 'new' }
   /**
    * Whether anything is filtered, and how much survived. `matched` is here
@@ -123,6 +120,4 @@ export type SidebarWebviewMessage =
    * own count label did.
    */
   | { type: 'filtered'; on: boolean; matched: number }
-  | { type: 'grouped'; on: boolean }
-  | { type: 'sort'; value: SortOrder }
   | { type: 'collapse'; environment: EnvironmentId; on: boolean };

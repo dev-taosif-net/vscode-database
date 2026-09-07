@@ -44,8 +44,7 @@ export type HostMessage =
   | ({ type: 'state' } & EditorState)
   | { type: 'databases'; profileId: string; databases: string[] }
   | { type: 'patch'; profileId: string; patch: Partial<ConnectionProfile> }
-  | { type: 'probe'; profileId: string; result: ProbeResult }
-  | { type: 'focusSearch' };
+  | { type: 'probe'; profileId: string; result: ProbeResult };
 
 /** A draft as the editor holds it, with the typed password kept apart. */
 export interface DraftPayload {

@@ -1,7 +1,7 @@
 import { createContext, useCallback, useContext } from 'react';
 import { EditorState, HostMessage, ProbeResult } from '../../shared/protocol';
-import { ConnectionProfile } from '../../types';
-import { ParsedConnection, defaultPortFor, parseConnectionString } from '../lib/connectionString';
+import { ConnectionProfile, defaultPort } from '../../types';
+import { ParsedConnection, parseConnectionString } from '../lib/connectionString';
 import { PersistedUi, readPersisted, writePersisted } from './vscode';
 import { Store, createStore, useStoreSelector } from './store';
 
@@ -249,7 +249,7 @@ export function applyParsed(state: AppState, parsed: ParsedConnection, mode: App
   // A port carried over from the other engine would be wrong, and the
   // string did not mention one.
   if (switched && patch.port === undefined && patch.driver) {
-    patch.port = defaultPortFor(patch.driver);
+    patch.port = defaultPort(patch.driver);
   }
 
   const draft: ConnectionProfile = {
@@ -418,10 +418,6 @@ export function isValid(state: AppState): boolean {
 
 export function portInvalid(port: number | null | undefined): boolean {
   return port !== null && port !== undefined && (!Number.isInteger(port) || port < 1 || port > 65535);
-}
-
-export function isBusy(state: AppState): boolean {
-  return Boolean(state.draft && state.host.busy === state.draft.id);
 }
 
 export function isConnected(state: AppState): boolean {

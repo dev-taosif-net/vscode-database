@@ -1,6 +1,6 @@
 import { applyParsed, effective, isNew, isValid, useSelect, useUpdate } from '../state/editor';
-import { defaultPortFor, parseConnectionString } from '../lib/connectionString';
-import { ConnectionProfile } from '../../types';
+import { parseConnectionString } from '../lib/connectionString';
+import { ConnectionProfile, defaultPort } from '../../types';
 import { Codicon } from '../primitives/Codicon';
 import { Button } from '../primitives/Button';
 
@@ -127,7 +127,7 @@ interface ReadingProps {
  * set of them would only raise the question of how the two differ.
  */
 function Reading({ engine, hasSecret, kept, resolved, savedAs, ready }: ReadingProps) {
-  const port = resolved.port ?? defaultPortFor(resolved.driver);
+  const port = resolved.port ?? defaultPort(resolved.driver);
   const authName =
     resolved.driver === 'mssql'
       ? { sql: 'SQL Server login', 'entra-mfa': 'Microsoft Entra ID', ntlm: 'Windows NTLM' }[resolved.mssqlAuth]

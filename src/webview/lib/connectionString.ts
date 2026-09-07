@@ -1,4 +1,4 @@
-import { ConnectionProfile, DriverKind, SslMode } from '../../types';
+import { ConnectionProfile, SslMode } from '../../types';
 
 export interface ParsedConnection {
   patch: Partial<ConnectionProfile>;
@@ -376,6 +376,3 @@ function finishPostgres(out: PgAccumulator): ParsedConnection {
   return { patch: out.patch, secret: out.secret, properties: out.properties, engine: 'PostgreSQL' };
 }
 
-export function defaultPortFor(driver: DriverKind): number {
-  return driver === 'mssql' ? 1433 : 5432;
-}

@@ -735,16 +735,6 @@ body {
   text-overflow: ellipsis;
 }
 
-.auth {
-  display: none;
-  flex: none;
-  font-size: 10.5px;
-  color: var(--fg-dim);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
 /* The matched substring, in the tree's own highlight colour. No background:
    eighty-four highlighted cells with grounds of their own would be a second
    selection channel competing with the real one. */
@@ -1190,12 +1180,6 @@ mark {
 @container rail (min-width: 560px) {
   .run {
     grid-template-columns: auto minmax(76px, 1fr) 26% 19% 92px;
-  }
-
-  .auth {
-    grid-column: 5;
-    display: block;
-    text-align: right;
   }
 }
 

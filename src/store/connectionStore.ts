@@ -158,10 +158,6 @@ export class ConnectionStore {
     return this.pinned.has(id);
   }
 
-  favourites(): string[] {
-    return [...this.pinned];
-  }
-
   async setFavourite(id: string, on: boolean): Promise<void> {
     if (!this.get(id) || this.pinned.has(id) === on) {
       return;
