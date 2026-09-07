@@ -22,6 +22,17 @@ export type AttemptResult =
 interface ActiveConnection {
   session: DriverSession;
   info: ConnectionInfo;
+  /**
+   * What opened it, kept so the pool can open a second session to the same
+   * place without asking again.
+   *
+   * Holding a credential in memory for the life of a connection is not a new
+   * exposure: the driver holding the socket has held the same value since it
+   * opened, and the alternative is a password box appearing the first time
+   * somebody presses Run on a connection that is already open. It is dropped
+   * with the session, in `disconnect`.
+   */
+  secrets: ConnectSecrets;
 }
 
 /**
@@ -154,6 +165,26 @@ export class ConnectionManager implements vscode.Disposable {
     return this.attempt(profile, true, secretOverride);
   }
 
+  /**
+   * Opens another session to a connection that is already open.
+   *
+   * The pool asks for these. It is deliberately not `connect`: it registers
+   * nothing, fires no change event, skips the production confirmation the user
+   * has already answered, and never prompts — a session opened behind a Run
+   * must not put a password box in front of somebody. It refuses when the
+   * connection is not open, because a second session to a server nobody has
+   * connected to is a connection nobody authorised.
+   */
+  async openAuxiliary(profileId: string): Promise<DriverSession> {
+    const entry = this.active.get(profileId);
+    const profile = this.store.get(profileId);
+    if (!entry || !profile) {
+      throw new Error('The connection is not open.');
+    }
+    const opened = await this.driverFor(profile).open(profile, entry.secrets);
+    return opened.session;
+  }
+
   async disconnect(profileId: string): Promise<void> {
     const entry = this.active.get(profileId);
     if (!entry) {
@@ -245,7 +276,7 @@ export class ConnectionManager implements vscode.Disposable {
       if (previous) {
         await previous.session.close();
       }
-      this.active.set(profile.id, { session: opened.session, info });
+      this.active.set(profile.id, { session: opened.session, info, secrets });
       this.output.info(
         `Connected ${profile.name} (${profile.driver}) in ${opened.latencyMs} ms as ${opened.principal}`
       );

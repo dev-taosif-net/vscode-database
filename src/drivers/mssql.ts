@@ -1,6 +1,45 @@
-import type { Connection, ConnectionConfiguration } from 'tedious';
+import type { Connection, ConnectionConfiguration, Request as TediousRequest } from 'tedious';
 import { ConnectionProfile, defaultPort } from '../types';
-import { ConnectSecrets, Driver, DriverError, DriverSession, OpenResult } from './types';
+import { CellValue, ColumnMeta } from '../shared/query';
+import { encodeCell, kindOfSqlType } from '../exec/encode';
+import { ConnectSecrets, Driver, DriverError, DriverSession, OpenResult, RowSink, StreamOutcome } from './types';
+
+/**
+ * Rows handed to the sink at a time.
+ *
+ * Small enough that the first screenful appears while the server is still
+ * producing, large enough that a four-million-row read is four thousand calls
+ * rather than four million. The number is a judgement; anything between about
+ * a hundred and a few thousand behaves the same.
+ */
+const CHUNK = 500;
+
+/**
+ * A column as tedious describes it.
+ *
+ * Declared here rather than imported: `ColumnMetadata` lives in a token parser
+ * module inside the package rather than on its public surface, and reaching
+ * into `tedious/lib/...` for a shape this file uses four fields of would tie
+ * the build to the package's internal layout.
+ */
+interface TediousColumn {
+  colName?: string;
+  type?: { name?: string };
+  dataLength?: number;
+  precision?: number;
+  scale?: number;
+}
+
+/**
+ * `PRINT`, `RAISERROR` below the error threshold and `SET STATISTICS IO` all
+ * arrive as connection-level messages rather than on the request that caused
+ * them, so the session routes them to whatever is streaming at the time. A
+ * session runs one statement at a time, so "at the time" is unambiguous.
+ */
+interface MessageRoute {
+  message(level: 'info' | 'error', text: string, line?: number): void;
+  noteError(text: string, line?: number): void;
+}
 
 type TediousModule = typeof import('tedious');
 
@@ -52,6 +91,17 @@ export class MssqlDriver implements Driver {
 
 class MssqlSession implements DriverSession {
   private closed = false;
+  /**
+   * The request in flight, so `cancelCurrent` can name it.
+   *
+   * `request.cancel()` rather than `connection.cancel()` because it says which
+   * request it means. The connection-level call cancels whatever happens to be
+   * running, which on a session shared between a grid and anything else is a
+   * race the user would lose exactly once, silently.
+   */
+  private current: TediousRequest | undefined;
+  /** Where connection-level messages go while a statement is streaming. */
+  private route: MessageRoute | undefined;
 
   constructor(
     readonly profileId: string,
@@ -62,6 +112,17 @@ class MssqlSession implements DriverSession {
     });
     this.connection.on('end', () => {
       this.closed = true;
+    });
+    this.connection.on('infoMessage', (info: { message?: string; lineNumber?: number }) => {
+      if (info.message) {
+        this.route?.message('info', info.message, info.lineNumber);
+      }
+    });
+    this.connection.on('errorMessage', (error: { message?: string; lineNumber?: number }) => {
+      if (error.message) {
+        this.route?.message('error', error.message, error.lineNumber);
+        this.route?.noteError(error.message, error.lineNumber);
+      }
     });
   }
 
@@ -80,11 +141,133 @@ class MssqlSession implements DriverSession {
     return (await query(this.connection, sql, params)) as T[];
   }
 
+  stream(sql: string, params: unknown[] | undefined, sink: RowSink): Promise<StreamOutcome> {
+    if (this.closed) {
+      return Promise.reject(new DriverError('The connection is closed.', 'ECLOSED', undefined, undefined));
+    }
+    const { Request } = load();
+
+    return new Promise<StreamOutcome>((resolve, reject) => {
+      let buffer: CellValue[][] = [];
+      let setOpen = false;
+      let truncated = false;
+      let cancelled = false;
+      /** The last error the server reported, for its line number. */
+      let lastError: { message: string; line?: number } | undefined;
+
+      const flush = () => {
+        if (buffer.length) {
+          sink.rows(buffer);
+          buffer = [];
+        }
+      };
+
+      const request = new Request(sql, (error) => {
+        this.current = undefined;
+        this.route = undefined;
+        flush();
+        if (setOpen) {
+          sink.complete();
+          setOpen = false;
+        }
+        if (error) {
+          if (isCancellation(error)) {
+            // Reaching the ceiling cancels the request too, so the two are
+            // told apart by which one asked: a truncated read is not a
+            // cancelled one, and the grid says something different about each.
+            resolve({ cancelled: !truncated, truncated });
+            return;
+          }
+          const wrapped = toDriverError(error);
+          if (lastError?.line !== undefined) {
+            wrapped.line = lastError.line;
+          }
+          reject(wrapped);
+          return;
+        }
+        resolve({ cancelled, truncated });
+      });
+
+      (params ?? []).forEach((value, i) => addParameter(request, `p${i}`, value));
+
+      this.route = {
+        message: (level, text, line) => sink.message(level, text, line),
+        noteError: (text, line) => {
+          lastError = { message: text, line };
+        }
+      };
+
+      request.on('columnMetadata', (columns) => {
+        // A second metadata message means a second result set. The first one
+        // has to be closed before the second one opens, or every set after the
+        // first pours its rows into the set before it.
+        flush();
+        if (setOpen) {
+          sink.complete();
+        }
+        sink.columns(normalizeColumns(columns).map(toColumnMeta));
+        setOpen = true;
+      });
+
+      request.on('row', (columns: Array<{ value: unknown }>) => {
+        if (truncated) {
+          return;
+        }
+        if (sink.wants() <= 0) {
+          // The ceiling is reached by stopping the read rather than by having
+          // rewritten the statement, so what did come back is what the user
+          // actually asked for.
+          truncated = true;
+          flush();
+          this.cancelCurrent();
+          return;
+        }
+        buffer.push(columns.map((column) => encodeCell(column.value)));
+        if (buffer.length >= CHUNK) {
+          flush();
+        }
+      });
+
+      const done = (rowCount: number | undefined) => {
+        flush();
+        if (setOpen) {
+          sink.complete();
+          setOpen = false;
+        } else if (rowCount !== undefined) {
+          // No columns, so this was an INSERT, UPDATE, DELETE or a DDL
+          // statement and the count is rows affected rather than rows read.
+          sink.complete(rowCount);
+        }
+      };
+
+      request.on('done', (rowCount?: number) => done(rowCount));
+      request.on('doneInProc', (rowCount?: number) => done(rowCount));
+      request.on('doneProc', (rowCount?: number) => done(rowCount));
+
+      this.current = request;
+      this.connection.execSql(request);
+    });
+  }
+
+  cancelCurrent(): void {
+    const request = this.current;
+    if (!request) {
+      return;
+    }
+    try {
+      request.cancel();
+    } catch {
+      // A request that has already settled throws rather than no-opping, and a
+      // cancel arriving a moment late is not a failure worth reporting.
+    }
+  }
+
   async close(): Promise<void> {
     if (this.closed) {
       return;
     }
     this.closed = true;
+    this.current = undefined;
     await new Promise<void>((resolve) => {
       this.connection.once('end', () => resolve());
       this.connection.close();
@@ -321,4 +504,67 @@ function coerce(value: string): unknown {
   }
   const n = Number(value);
   return value !== '' && Number.isFinite(n) ? n : value;
+}
+
+/**
+ * The rendered type of a column, as somebody would write it in a `CREATE`.
+ *
+ * `dataLength` is bytes rather than characters, so the wide types are halved:
+ * an `nvarchar(200)` reports 400 and printing that would be wrong in the one
+ * place a person is most likely to copy it from. `-1` and `65535` are both how
+ * the protocol says `max`.
+ */
+function mssqlTypeName(meta: TediousColumn): string {
+  const raw = String(meta.type?.name ?? 'unknown');
+  const name = raw.toLowerCase();
+  const length = meta.dataLength;
+  const precision = meta.precision;
+  const scale = meta.scale;
+
+  if (name === 'decimal' || name === 'numeric' || name === 'money' || name === 'smallmoney') {
+    return precision === undefined ? name : `${name}(${precision},${scale ?? 0})`;
+  }
+  if (name === 'datetime2' || name === 'datetimeoffset' || name === 'time') {
+    return scale === undefined ? name : `${name}(${scale})`;
+  }
+  if (length === undefined) {
+    return name;
+  }
+  if (length === -1 || length === 65535) {
+    return `${name}(max)`;
+  }
+  const wide = name.startsWith('n') && name !== 'numeric';
+  const chars = wide ? Math.floor(length / 2) : length;
+  return /char|binary/.test(name) ? `${name}(${chars})` : name;
+}
+
+function toColumnMeta(meta: TediousColumn): ColumnMeta {
+  const type = mssqlTypeName(meta);
+  return { name: String(meta.colName ?? ''), type, kind: kindOfSqlType(type) };
+}
+
+/**
+ * tedious hands the column list either way round depending on
+ * `useColumnNames`, which is off here — but the typing admits both, and a
+ * driver that trusted the array form would break the day somebody set it.
+ */
+function normalizeColumns(columns: unknown): TediousColumn[] {
+  if (Array.isArray(columns)) {
+    return columns as TediousColumn[];
+  }
+  return Object.values((columns ?? {}) as Record<string, TediousColumn>);
+}
+
+/**
+ * Whether a request failed because it was cancelled rather than because it was
+ * wrong. tedious reports the attention signal as an ordinary request error, so
+ * a cancelled query would otherwise be filed as a failure and the rows already
+ * on screen thrown away.
+ */
+function isCancellation(error: unknown): boolean {
+  const code = (error as { code?: string })?.code;
+  if (code) {
+    return code === 'ECANCEL';
+  }
+  return /cancell?ed/i.test((error as { message?: string })?.message ?? '');
 }

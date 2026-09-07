@@ -1,0 +1,108 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>
+* { box-sizing: border-box; }
+body { margin: 0; }
+a { color: #4daafc; text-decoration: none; }
+a:hover { color: #4daafc; text-decoration: underline; }
+.cp { font-family: "Segoe WPC", "Segoe UI", system-ui, -apple-system, sans-serif; font-size: 13px; line-height: 1.4; -webkit-font-smoothing: antialiased; }
+.mono { font-family: Consolas, "Cascadia Mono", "Courier New", monospace; }
+.num { font-variant-numeric: tabular-nums; }
+.cap { font-size: 10.5px; font-weight: 600; letter-spacing: .09em; text-transform: uppercase; color: #7a7a7a; }
+.sr { height: 22px; display: flex; align-items: center; gap: 7px; padding: 0 9px; white-space: nowrap; font-size: 12.5px; }
+.si { width: 15px; display: flex; justify-content: center; flex-shrink: 0; }
+.k { color: #569cd6; } .s { color: #ce9178; } .n { color: #b5cea8; } .c { color: #6a9955; } .id { color: #9cdcfe; } .f { color: #dcdcaa; }
+</style>
+</helmet>
+
+<div class="cp" style="width:880px;height:600px;display:flex;flex-direction:column;gap:16px;padding:18px;background:#141414;color:#cccccc;overflow:hidden">
+
+  <div style="display:flex;flex-direction:column;gap:7px">
+    <span class="cap">The join predicate the index already knows</span>
+    <div style="position:relative;height:266px;background:#1f1f1f;border:1px solid #2b2b2b;border-radius:3px;overflow:hidden">
+      <div style="display:flex;padding:10px 0 0">
+        <div class="mono num" style="width:44px;text-align:right;padding-right:12px;font-size:13px;line-height:19px;color:#6e7681"><div>8</div><div>9</div><div>10</div><div style="color:#cccccc">11</div></div>
+        <div class="mono" style="flex:1;font-size:13px;line-height:19px">
+          <div><span class="k">SELECT</span> <span class="id">c</span>.<span class="id">Name</span>, <span class="f">SUM</span>(<span class="id">o</span>.<span class="id">Total</span>) <span class="k">AS</span> <span class="id">Revenue</span></div>
+          <div><span class="k">FROM</span> <span class="id">dbo</span>.<span class="id">Customer</span> <span class="k">AS</span> <span class="id">c</span></div>
+          <div><span class="k">JOIN</span> <span class="id">dbo</span>.<span class="id">[Order]</span> <span class="k">AS</span> <span class="id">o</span></div>
+          <div style="background:#232323"><span style="padding-left:28px"></span><span class="k">ON</span> <span style="display:inline-block;width:1px;height:15px;background:#cccccc;vertical-align:-3px"></span></div>
+        </div>
+      </div>
+
+      <div style="position:absolute;left:104px;top:96px;display:flex;box-shadow:0 4px 14px rgba(0,0,0,.6)">
+        <div style="width:340px;background:#202020;border:1px solid #454545;border-right:none;border-radius:3px 0 0 3px;padding:2px 0">
+          <div class="sr" style="background:#04395e;color:#ffffff">
+            <span class="si" style="color:#7fa7c4"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M6.6 9.4a2.6 2.6 0 0 0 3.7 0l2-2a2.6 2.6 0 0 0-3.7-3.7l-.6.6"/><path d="M9.4 6.6a2.6 2.6 0 0 0-3.7 0l-2 2a2.6 2.6 0 0 0 3.7 3.7l.6-.6"/></svg></span>
+            <span class="mono" style="font-size:12px">o.CustomerId = c.CustomerId</span>
+            <span style="flex:1"></span><span style="font-size:10.5px;color:#b8cee0">foreign key</span>
+          </div>
+          <div class="sr">
+            <span class="si" style="color:#4d9de0"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="2.6" y="4.4" width="10.8" height="7.2" rx="1.2"/><path d="M6.2 4.4v7.2"/></svg></span>
+            <span class="mono" style="font-size:12px">o.CustomerId</span><span style="flex:1"></span><span class="mono" style="font-size:10.5px;color:#8b8b8b">int</span>
+          </div>
+          <div class="sr">
+            <span class="si" style="color:#4d9de0"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="2.6" y="4.4" width="10.8" height="7.2" rx="1.2"/><path d="M6.2 4.4v7.2"/></svg></span>
+            <span class="mono" style="font-size:12px">c.CustomerId</span><span style="flex:1"></span><span class="mono" style="font-size:10.5px;color:#8b8b8b">int identity</span>
+          </div>
+          <div class="sr">
+            <span class="si" style="color:#4d9de0"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="2.6" y="4.4" width="10.8" height="7.2" rx="1.2"/><path d="M6.2 4.4v7.2"/></svg></span>
+            <span class="mono" style="font-size:12px">o.OrderDate</span><span style="flex:1"></span><span class="mono" style="font-size:10.5px;color:#8b8b8b">datetime2</span>
+          </div>
+          <div class="sr">
+            <span class="si" style="color:#c586c0"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M2.8 8h10.4M8 3.4v9.2"/></svg></span>
+            <span class="mono" style="font-size:12px">CASE</span><span style="flex:1"></span><span style="font-size:10.5px;color:#8b8b8b">keyword</span>
+          </div>
+          <div class="sr">
+            <span class="si" style="color:#d9a441"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="2.6" y="2.8" width="10.8" height="10.4" rx="1.4"/><path d="M5.4 6.4h5.2M5.4 9.2h3.2"/></svg></span>
+            <span class="mono" style="font-size:12px">o.&lt;column&gt; = c.&lt;column&gt;</span><span style="flex:1"></span><span style="font-size:10.5px;color:#8b8b8b">snippet</span>
+          </div>
+        </div>
+
+        <div style="width:286px;background:#252526;border:1px solid #454545;border-radius:0 3px 3px 0;padding:9px 11px;display:flex;flex-direction:column;gap:6px">
+          <div class="mono" style="font-size:11.5px;color:#e7e7e7">FK_Order_Customer</div>
+          <div class="mono" style="font-size:11px;color:#9cdcfe;line-height:1.6">dbo.Order.CustomerId<br>&nbsp;&nbsp;&#8594; dbo.Customer.CustomerId</div>
+          <div style="font-size:11.5px;color:#8b8b8b;line-height:1.55;margin-top:2px">Enforced and trusted. One column, so the predicate is complete as written.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div style="display:flex;flex-direction:column;gap:7px">
+    <span class="cap">Signature help on a procedure</span>
+    <div style="position:relative;height:118px;background:#1f1f1f;border:1px solid #2b2b2b;border-radius:3px;overflow:hidden">
+      <div style="position:absolute;left:44px;top:12px;right:14px;background:#252526;border:1px solid #454545;border-radius:3px;padding:8px 11px;box-shadow:0 4px 14px rgba(0,0,0,.6)">
+        <div style="display:flex;align-items:baseline;gap:9px">
+          <div class="mono" style="font-size:12px;flex:1;line-height:1.6">
+            <span class="f">usp_GetCustomer</span>(<span class="id">@CustomerId</span> <span style="color:#4ec9b0">int</span>, <span style="background:rgba(0,120,212,.3);color:#ffffff;border-radius:2px;padding:0 2px">@IncludeOrders <span style="color:#7fd6c6">bit</span> = <span class="n">0</span></span>, <span class="id">@AsOfDate</span> <span style="color:#4ec9b0">datetime2</span> = <span class="k">NULL</span>, <span class="id">@Status</span> <span style="color:#4ec9b0">varchar</span>(<span class="n">20</span>) = <span class="s">&#39;Active&#39;</span>)
+          </div>
+          <span class="num" style="font-size:11px;color:#8b8b8b;flex-shrink:0">2 of 4</span>
+        </div>
+        <div style="font-size:11.5px;color:#8b8b8b;margin-top:6px">Include the customer&#39;s orders in the second result set.</div>
+      </div>
+      <div style="display:flex;padding:76px 0 0">
+        <div class="mono num" style="width:44px;text-align:right;padding-right:12px;font-size:13px;line-height:19px;color:#cccccc">24</div>
+        <div class="mono" style="flex:1;font-size:13px;line-height:19px">
+          <span class="k">EXEC</span> <span class="id">dbo</span>.<span class="f">usp_GetCustomer</span> <span class="n">10421</span>, <span style="display:inline-block;width:1px;height:15px;background:#cccccc;vertical-align:-3px"></span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div style="display:grid;grid-template-columns:auto 1fr;column-gap:18px;row-gap:5px;font-size:11.5px;padding-top:2px">
+    <span class="mono" style="color:#9cdcfe">SELECT c.</span><span style="color:#8b8b8b">columns of whatever <span class="mono">c</span> aliases, and only those</span>
+    <span class="mono" style="color:#9cdcfe">FROM dbo.</span><span style="color:#8b8b8b">objects in <span class="mono">dbo</span>, tables and views before table functions</span>
+    <span class="mono" style="color:#9cdcfe">JOIN … ON</span><span style="color:#8b8b8b">the foreign-key predicate first, then the columns in scope</span>
+    <span class="mono" style="color:#9cdcfe">uspgc</span><span style="color:#8b8b8b">finds <span class="mono">usp_GetCustomer</span> — the explorer&#39;s own matcher, reused</span>
+  </div>
+</div>
+</x-dc>
+</body>
+</html>

@@ -21,17 +21,24 @@ const host = {
 };
 
 /**
- * The two webviews: the connection editor in a tab, and the connections list in
- * the sidebar. Each is a browser, so each is bundled for the browser with React
- * linked in. They are separate entry points rather than one shared bundle
- * because the sidebar is resolved on startup and the editor is not: sharing a
- * bundle would make opening the sidebar pay for a form nobody has asked for.
+ * The four webviews. Each is a browser, so each is bundled for the browser with
+ * React linked in, and each is its own entry point rather than one shared
+ * bundle — because a surface should not pay for a surface nobody opened.
+ *
+ * The split is by what the surface costs rather than by how many there are.
+ * `sidebar` is resolved at startup, so it carries neither the connection form
+ * nor the grid. `panels` holds the object details and query history views,
+ * which also live in the side bar and also have no grid in them. `workspace`
+ * is the one that carries the virtualised grid, the plan renderer and the
+ * export menu, and it is loaded only when somebody actually runs something.
  */
 /** @type {import('esbuild').BuildOptions} */
 const webview = {
   entryPoints: {
     editor: 'src/webview/index.tsx',
-    sidebar: 'src/webview/sidebar/index.tsx'
+    sidebar: 'src/webview/sidebar/index.tsx',
+    workspace: 'src/webview/workspace/index.tsx',
+    panels: 'src/webview/panels/index.tsx'
   },
   bundle: true,
   outdir: 'dist/webview',
@@ -47,7 +54,12 @@ const webview = {
 
 /** @type {import('esbuild').BuildOptions} */
 const styles = {
-  entryPoints: ['src/webview/styles/editor.css', 'src/webview/styles/sidebar.css'],
+  entryPoints: [
+    'src/webview/styles/editor.css',
+    'src/webview/styles/sidebar.css',
+    'src/webview/styles/workspace.css',
+    'src/webview/styles/panels.css'
+  ],
   bundle: true,
   outdir: 'dist/webview',
   // The codicon font ships beside these files and is linked from each page, so

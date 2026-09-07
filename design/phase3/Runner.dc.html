@@ -1,0 +1,175 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>
+* { box-sizing: border-box; }
+body { margin: 0; }
+a { color: #4daafc; text-decoration: none; }
+a:hover { color: #4daafc; text-decoration: underline; }
+.cp { font-family: "Segoe WPC", "Segoe UI", system-ui, -apple-system, sans-serif; font-size: 13px; line-height: 1.4; -webkit-font-smoothing: antialiased; }
+.mono { font-family: Consolas, "Cascadia Mono", "Courier New", monospace; }
+.num { font-variant-numeric: tabular-nums; }
+.in { height: 28px; width: 100%; background: #313131; color: #cccccc; border: 1px solid #3c3c3c; border-radius: 2px; padding: 0 9px; font: inherit; font-size: 13px; display: flex; align-items: center; }
+.in-f { border-color: #0078d4; outline: 1px solid #0078d4; outline-offset: -2px; }
+.plab { display: flex; align-items: baseline; gap: 8px; margin-bottom: 6px; }
+.pname { font-size: 13px; color: #e7e7e7; }
+.pmeta { font-size: 11px; color: #8b8b8b; }
+.req { font-size: 10px; font-weight: 600; letter-spacing: .04em; color: #e5a054; }
+.sec { font-size: 11px; font-weight: 600; letter-spacing: .09em; text-transform: uppercase; color: #9d9d9d; }
+.cell { padding: 0 8px; height: 22px; display: flex; align-items: center; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; border-right: 1px solid #232323; font-size: 12px; }
+.hcell { padding: 0 8px; height: 24px; display: flex; align-items: center; white-space: nowrap; border-right: 1px solid #333333; font-size: 12px; background: #252526; }
+.ic { display: flex; align-items: center; justify-content: center; width: 26px; height: 26px; border-radius: 4px; color: #cccccc; }
+</style>
+</helmet>
+
+<div class="cp" style="width:1080px;height:800px;display:flex;flex-direction:column;background:#1f1f1f;color:#cccccc;overflow:hidden">
+
+  <div style="height:35px;flex-shrink:0;display:flex;align-items:stretch;background:#181818;border-bottom:1px solid #2b2b2b">
+    <div style="display:flex;align-items:center;gap:7px;padding:0 10px 0 12px;background:#1f1f1f;color:#ffffff;border-top:1px solid #0078d4;border-right:1px solid #2b2b2b">
+      <span style="display:flex;color:#a97fe0"><svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.2"><rect x="2.4" y="2.4" width="11.2" height="11.2" rx="2.6"/><path d="M6.6 5.6l4.2 2.4-4.2 2.4z" fill="currentColor" stroke="none"/></svg></span>
+      <span>usp_GetCustomer [Run]</span>
+      <span style="display:flex;color:#cccccc;margin-left:3px"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><path d="M4.2 4.2l7.6 7.6M11.8 4.2l-7.6 7.6"/></svg></span>
+    </div>
+    <div style="flex:1"></div>
+    <div style="display:flex;align-items:center;gap:1px;padding:0 8px">
+      <span class="ic" style="color:#4ec98a"><svg width="17" height="17" viewBox="0 0 16 16" fill="currentColor"><path d="M4.6 3.2l7.6 4.8-7.6 4.8z"/></svg></span>
+      <span class="ic"><svg width="17" height="17" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><circle cx="3.4" cy="8" r=".9" fill="currentColor" stroke="none"/><circle cx="8" cy="8" r=".9" fill="currentColor" stroke="none"/><circle cx="12.6" cy="8" r=".9" fill="currentColor" stroke="none"/></svg></span>
+    </div>
+  </div>
+
+  <div style="flex-shrink:0;display:flex;align-items:center;gap:10px;padding:14px 18px 12px;border-bottom:1px solid #2b2b2b">
+    <span style="display:flex;color:#a97fe0"><svg width="22" height="22" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.15"><rect x="2.4" y="2.4" width="11.2" height="11.2" rx="2.6"/><path d="M6.6 5.6l4.2 2.4-4.2 2.4z" fill="currentColor" stroke="none"/></svg></span>
+    <div>
+      <div style="font-size:16px;font-weight:600;color:#e7e7e7">dbo.usp_GetCustomer</div>
+      <div style="font-size:11px;color:#8b8b8b;margin-top:2px">Stored procedure · 4 parameters · <a href="#">Open definition</a></div>
+    </div>
+    <div style="flex:1"></div>
+    <span style="display:flex;align-items:center;gap:6px;height:24px;padding:0 9px;border-radius:12px;background:rgba(63,184,79,.13);border:1px solid rgba(63,184,79,.36);font-size:12px;color:#57c76a">
+      <span style="width:7px;height:7px;border-radius:50%;background:#3fb84f"></span>Dev-Matador · AdventureWorks
+    </span>
+  </div>
+
+  <div style="flex-shrink:0;padding:14px 18px 0">
+    <div style="display:flex;align-items:center;gap:9px;margin-bottom:13px">
+      <span class="sec">Parameters</span>
+      <span style="flex:1;height:1px;background:#2b2b2b"></span>
+    </div>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;column-gap:28px;row-gap:18px">
+
+      <div>
+        <div class="plab"><span class="pname">Customer Id</span><span class="req">REQUIRED</span><span style="flex:1"></span><span class="mono pmeta">int</span></div>
+        <div class="in in-f num" style="justify-content:flex-start">10421<span style="width:1px;height:15px;background:#cccccc;margin-left:1px"></span></div>
+      </div>
+
+      <div>
+        <div class="plab"><span class="pname">Include Orders</span><span style="flex:1"></span><span class="mono pmeta">bit · default 0</span></div>
+        <div style="display:flex;align-items:center;gap:9px;height:28px">
+          <span style="width:16px;height:16px;border-radius:3px;background:#0078d4;display:flex;align-items:center;justify-content:center;flex-shrink:0">
+            <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="#ffffff" stroke-width="1.9"><path d="M3.6 8.4l2.8 2.8 6-6.4"/></svg>
+          </span>
+          <span style="font-size:13px">Include the customer&#39;s orders</span>
+        </div>
+      </div>
+
+      <div>
+        <div class="plab"><span class="pname">As Of Date</span><span style="flex:1"></span><span class="mono pmeta">datetime2 · nullable</span></div>
+        <div style="display:flex;align-items:center;gap:12px">
+          <div class="in mono num" style="flex:1">2025-02-12 00:00:00</div>
+          <span style="display:flex;align-items:center;gap:7px;flex-shrink:0">
+            <span style="width:16px;height:16px;border-radius:3px;border:1px solid #6b6b6b;flex-shrink:0"></span>
+            <span class="mono" style="font-size:12px;color:#9d9d9d">NULL</span>
+          </span>
+        </div>
+      </div>
+
+      <div>
+        <div class="plab"><span class="pname">Status</span><span style="flex:1"></span><span class="mono pmeta">varchar(20) · default &#39;Active&#39;</span></div>
+        <div class="in" style="justify-content:space-between">
+          <span>Active</span>
+          <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="#9d9d9d" stroke-width="1.5"><path d="M4.5 6.5L8 10l3.5-3.5"/></svg>
+        </div>
+        <div style="font-size:11px;color:#8b8b8b;margin-top:5px">Three values, from the column&#39;s check constraint.</div>
+      </div>
+    </div>
+  </div>
+
+  <div style="flex-shrink:0;padding:18px 18px 0">
+    <div style="border:1px solid #2b2b2b;border-radius:4px;overflow:hidden">
+      <div style="display:flex;align-items:center;gap:7px;height:30px;padding:0 11px;background:#202020;border-bottom:1px solid #2b2b2b">
+        <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M5 6.5L8 9.5l3-3"/></svg>
+        <span style="font-size:12px;color:#cccccc">Preview the statement</span>
+        <span style="flex:1"></span>
+        <span style="font-size:11px;color:#8b8b8b">Values are bound as parameters, never concatenated</span>
+      </div>
+      <div class="mono" style="padding:10px 13px;font-size:12.5px;line-height:19px;background:#1a1a1a">
+        <div><span style="color:#569cd6">EXEC</span> <span style="color:#9cdcfe">dbo</span>.<span style="color:#dcdcaa">usp_GetCustomer</span></div>
+        <div><span style="padding-left:24px"></span><span style="color:#9cdcfe">@CustomerId</span>&nbsp;&nbsp;&nbsp;&nbsp;= <span style="color:#9cdcfe">@p0</span>,<span style="color:#6a9955">&nbsp;&nbsp;&nbsp;-- 10421</span></div>
+        <div><span style="padding-left:24px"></span><span style="color:#9cdcfe">@IncludeOrders</span> = <span style="color:#9cdcfe">@p1</span>,<span style="color:#6a9955">&nbsp;&nbsp;&nbsp;-- 1</span></div>
+        <div><span style="padding-left:24px"></span><span style="color:#9cdcfe">@AsOfDate</span>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;= <span style="color:#9cdcfe">@p2</span>,<span style="color:#6a9955">&nbsp;&nbsp;&nbsp;-- 2025-02-12 00:00:00</span></div>
+        <div><span style="padding-left:24px"></span><span style="color:#9cdcfe">@Status</span>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;= <span style="color:#9cdcfe">@p3</span>;<span style="color:#6a9955">&nbsp;&nbsp;&nbsp;-- 'Active'</span></div>
+      </div>
+    </div>
+  </div>
+
+  <div style="flex-shrink:0;display:flex;align-items:center;gap:12px;padding:14px 18px">
+    <span style="font-size:11px;color:#8b8b8b">Arguments are remembered for this procedure on this connection, never across connections.</span>
+    <div style="flex:1"></div>
+    <span style="display:flex;align-items:center;gap:8px;height:30px;padding:0 15px;border-radius:3px;background:#0078d4;color:#ffffff;font-size:13px">
+      <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M4.6 3.2l7.6 4.8-7.6 4.8z"/></svg>Execute
+      <span style="color:#cde4f7;font-size:11px;margin-left:3px">F5</span>
+    </span>
+  </div>
+
+  <div style="flex:1;min-height:0;display:flex;flex-direction:column;background:#181818;border-top:1px solid #2b2b2b">
+    <div style="height:32px;flex-shrink:0;display:flex;align-items:stretch;padding:0 14px;gap:16px">
+      <div style="display:flex;align-items:center;border-bottom:1px solid #e7e7e7"><span style="font-size:11px;font-weight:600;letter-spacing:.07em;text-transform:uppercase;color:#e7e7e7">Results</span></div>
+      <div style="display:flex;align-items:center"><span style="font-size:11px;letter-spacing:.07em;text-transform:uppercase;color:#8b8b8b">Messages</span></div>
+      <div style="display:flex;align-items:center;gap:5px"><span style="font-size:11px;letter-spacing:.07em;text-transform:uppercase;color:#8b8b8b">Output parameters</span><span class="num" style="font-size:10px;padding:0 5px;height:15px;display:flex;align-items:center;border-radius:7px;background:#3c3c3c;color:#cccccc">2</span></div>
+      <div style="display:flex;align-items:center"><span style="font-size:11px;letter-spacing:.07em;text-transform:uppercase;color:#8b8b8b">Return value</span></div>
+      <div style="flex:1"></div>
+      <div style="display:flex;align-items:center;gap:6px">
+        <span style="font-size:11px;padding:0 8px;height:20px;display:flex;align-items:center;border-radius:3px;background:#313131;border:1px solid #0078d4;color:#e7e7e7">Result 1 · 1 row</span>
+        <span style="font-size:11px;padding:0 8px;height:20px;display:flex;align-items:center;border-radius:3px;background:#252526;border:1px solid #3c3c3c;color:#9d9d9d">Result 2 · 7 rows</span>
+      </div>
+    </div>
+
+    <div style="flex:1;min-height:0;background:#1f1f1f;display:flex;flex-direction:column">
+      <div style="display:grid;grid-template-columns:40px 92px 200px 240px 116px 150px 1fr;border-bottom:1px solid #333333;flex-shrink:0">
+        <div class="hcell"></div>
+        <div class="hcell" style="justify-content:flex-end">CustomerId</div>
+        <div class="hcell">Name</div>
+        <div class="hcell">Email</div>
+        <div class="hcell" style="justify-content:flex-end">TotalOrders</div>
+        <div class="hcell">LastOrderDate</div>
+        <div class="hcell" style="border-right:none">Status</div>
+      </div>
+      <div class="num" style="display:grid;grid-template-columns:40px 92px 200px 240px 116px 150px 1fr">
+        <div class="cell" style="justify-content:flex-end;color:#6e7681;background:#232323">1</div>
+        <div class="cell" style="justify-content:flex-end">10421</div>
+        <div class="cell">Adeyemi Logistics</div>
+        <div class="cell">ops@adeyemi.example</div>
+        <div class="cell" style="justify-content:flex-end">7</div>
+        <div class="cell mono">2025-02-09 14:26</div>
+        <div class="cell" style="border-right:none">Active</div>
+      </div>
+      <div style="flex:1"></div>
+      <div style="height:26px;flex-shrink:0;display:flex;align-items:center;gap:16px;padding:0 12px;border-top:1px solid #2b2b2b;background:#181818;font-size:11px;color:#9d9d9d">
+        <span class="num">2 result sets · 8 rows</span>
+        <span class="num">96 ms</span>
+        <span class="num">@RowsMatched = 7 · @LastSeen = 2025-02-09 14:26</span>
+        <div style="flex:1"></div>
+        <span class="num">return value 0</span>
+      </div>
+    </div>
+  </div>
+</div>
+</x-dc>
+</body>
+</html>

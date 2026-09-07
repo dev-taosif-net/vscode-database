@@ -1,4 +1,4 @@
-import { KINDS, OBJECT_KINDS, ObjectKind } from '../../shared/catalog';
+import { KINDS, OBJECT_KINDS, ObjectKind } from './catalog';
 
 /**
  * The matcher behind the search box.
@@ -14,6 +14,12 @@ import { KINDS, OBJECT_KINDS, ObjectKind } from '../../shared/catalog';
  * Every function here runs on every candidate on every keystroke, so there is
  * no allocation in the hot path beyond the position array, and the array is
  * only built once a match is certain.
+ *
+ * It lives in `shared/` rather than beside the sidebar because phase 3's
+ * completion provider ranks with it too. Two rankings for one estate is two
+ * rankings that disagree: `uspgc` has to find `usp_GetCustomer` in the editor
+ * exactly as it does in the tree, or the tool has two different ideas of what
+ * the user meant.
  */
 
 export interface Match {

@@ -1,0 +1,207 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>
+* { box-sizing: border-box; }
+body { margin: 0; }
+a { color: #4daafc; text-decoration: none; }
+a:hover { color: #4daafc; text-decoration: underline; }
+.cp { font-family: "Segoe WPC", "Segoe UI", system-ui, -apple-system, sans-serif; font-size: 13px; line-height: 1.4; -webkit-font-smoothing: antialiased; }
+.mono { font-family: Consolas, "Cascadia Mono", "Courier New", monospace; }
+.num { font-variant-numeric: tabular-nums; }
+.cap { font-size: 10.5px; font-weight: 600; letter-spacing: .09em; text-transform: uppercase; color: #7a7a7a; }
+.tile { background: #1f1f1f; border: 1px solid #2b2b2b; border-radius: 3px; display: flex; flex-direction: column; overflow: hidden; }
+.tabs { height: 28px; flex-shrink: 0; display: flex; align-items: stretch; gap: 13px; padding: 0 11px; background: #181818; border-bottom: 1px solid #2b2b2b; }
+.tab { display: flex; align-items: center; font-size: 10.5px; font-weight: 600; letter-spacing: .07em; text-transform: uppercase; color: #8b8b8b; }
+.tab-on { color: #e7e7e7; border-bottom: 1px solid #e7e7e7; }
+.cell { padding: 0 8px; height: 21px; display: flex; align-items: center; overflow: hidden; white-space: nowrap; border-right: 1px solid #232323; font-size: 11.5px; }
+.hcell { padding: 0 8px; height: 22px; display: flex; align-items: center; gap: 4px; white-space: nowrap; border-right: 1px solid #333333; font-size: 11.5px; color: #cccccc; background: #252526; }
+.foot { flex-shrink: 0; display: flex; align-items: center; gap: 12px; padding: 0 10px; height: 26px; border-top: 1px solid #2b2b2b; background: #181818; font-size: 11px; color: #9d9d9d; }
+.btn { display: inline-flex; align-items: center; gap: 6px; height: 23px; padding: 0 10px; border-radius: 3px; font-size: 11.5px; white-space: nowrap; }
+.btn-p { background: #0078d4; color: #ffffff; }
+.btn-s { background: #313131; border: 1px solid #3c3c3c; color: #cccccc; }
+.btn-d { background: #262626; border: 1px solid #333333; color: #6b6b6b; }
+</style>
+</helmet>
+
+<div class="cp" style="width:1180px;height:940px;display:grid;grid-template-columns:1fr 1fr;grid-template-rows:repeat(3, 1fr);gap:20px;padding:20px;background:#141414;color:#cccccc;overflow:hidden">
+
+  <!-- 1 streaming -->
+  <div style="display:flex;flex-direction:column;gap:7px;min-height:0">
+    <span class="cap">Streaming</span>
+    <div class="tile" style="flex:1;min-height:0">
+      <div style="height:2px;flex-shrink:0;background:#2b2b2b;overflow:hidden"><div style="width:38%;height:100%;background:#0078d4"></div></div>
+      <div class="tabs"><span class="tab tab-on">Results</span><span class="tab">Messages</span><span class="tab">Plan</span><span style="flex:1"></span><span class="tab" style="color:#4daafc;letter-spacing:0;text-transform:none;font-weight:400">Rows are painted as they arrive</span></div>
+      <div style="display:grid;grid-template-columns:32px 78px 1fr 128px;border-bottom:1px solid #333333;flex-shrink:0">
+        <div class="hcell"></div><div class="hcell" style="justify-content:flex-end">OrderId</div><div class="hcell">Customer</div><div class="hcell" style="justify-content:flex-end;border-right:none">Total</div>
+      </div>
+      <div class="num" style="display:grid;grid-template-columns:32px 78px 1fr 128px;flex:1;align-content:start">
+        <div class="cell" style="justify-content:flex-end;color:#6e7681;background:#232323">1</div><div class="cell" style="justify-content:flex-end">884102</div><div class="cell">Adeyemi Logistics</div><div class="cell" style="justify-content:flex-end;border-right:none">12,480.00</div>
+        <div class="cell" style="justify-content:flex-end;color:#6e7681;background:#232323">2</div><div class="cell" style="justify-content:flex-end">884103</div><div class="cell">Cheng Metals</div><div class="cell" style="justify-content:flex-end;border-right:none">1,209.55</div>
+        <div class="cell" style="justify-content:flex-end;color:#6e7681;background:#232323">3</div><div class="cell" style="justify-content:flex-end">884104</div><div class="cell">Eastgate Provisions</div><div class="cell" style="justify-content:flex-end;border-right:none">84,010.20</div>
+        <div class="cell" style="justify-content:flex-end;color:#6e7681;background:#232323">4</div><div class="cell" style="justify-content:flex-end">884105</div><div class="cell">Ganesh Textiles</div><div class="cell" style="justify-content:flex-end;border-right:none">2,996.00</div>
+        <div class="cell" style="justify-content:flex-end;color:#6e7681;background:#232323">5</div><div class="cell" style="justify-content:flex-end">884106</div><div class="cell">Ilkeston Foundry</div><div class="cell" style="justify-content:flex-end;border-right:none">40,118.75</div>
+        <div class="cell" style="background:#232323"></div><div class="cell"><span style="width:44px;height:8px;border-radius:2px;background:#2e2e2e"></span></div><div class="cell"><span style="width:112px;height:8px;border-radius:2px;background:#2e2e2e"></span></div><div class="cell" style="border-right:none;justify-content:flex-end"><span style="width:60px;height:8px;border-radius:2px;background:#2e2e2e"></span></div>
+      </div>
+      <div class="foot">
+        <span style="display:flex;align-items:center;gap:6px;color:#4daafc"><svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M13.4 8a5.4 5.4 0 1 1-1.7-3.9"/><path d="M13.4 2.6v3h-3"/></svg>Streaming</span>
+        <span class="num" style="color:#cccccc">18,402 rows</span><span class="num">6.2 s</span>
+        <div style="flex:1"></div>
+        <span class="btn btn-s"><svg width="11" height="11" viewBox="0 0 16 16" fill="currentColor"><rect x="4" y="4" width="8" height="8" rx="1"/></svg>Stop</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- 2 cancelled -->
+  <div style="display:flex;flex-direction:column;gap:7px;min-height:0">
+    <span class="cap">Cancelled</span>
+    <div class="tile" style="flex:1;min-height:0">
+      <div class="tabs"><span class="tab tab-on">Results</span><span class="tab">Messages</span><span class="tab">Plan</span></div>
+      <div style="display:grid;grid-template-columns:44px 78px 1fr 128px;border-bottom:1px solid #333333;flex-shrink:0">
+        <div class="hcell"></div><div class="hcell" style="justify-content:flex-end">OrderId</div><div class="hcell">Customer</div><div class="hcell" style="justify-content:flex-end;border-right:none">Total</div>
+      </div>
+      <div class="num" style="display:grid;grid-template-columns:44px 78px 1fr 128px;flex:1;align-content:start">
+        <div class="cell" style="justify-content:flex-end;color:#6e7681;background:#232323">41,204</div><div class="cell" style="justify-content:flex-end">925311</div><div class="cell">Vermeulen Bloemen</div><div class="cell" style="justify-content:flex-end;border-right:none">318.40</div>
+        <div class="cell" style="justify-content:flex-end;color:#6e7681;background:#232323">41,205</div><div class="cell" style="justify-content:flex-end">925312</div><div class="cell">Wan&#380;yna Chemicals</div><div class="cell" style="justify-content:flex-end;border-right:none">7,740.00</div>
+        <div class="cell" style="justify-content:flex-end;color:#6e7681;background:#232323">41,206</div><div class="cell" style="justify-content:flex-end">925313</div><div class="cell">Ximenes Pescados</div><div class="cell" style="justify-content:flex-end;border-right:none">1,004.25</div>
+        <div class="cell" style="justify-content:flex-end;color:#6e7681;background:#232323">41,207</div><div class="cell" style="justify-content:flex-end">925314</div><div class="cell">Yilmaz Makina</div><div class="cell" style="justify-content:flex-end;border-right:none">22,860.00</div>
+        <div class="cell" style="justify-content:flex-end;color:#6e7681;background:#232323">41,208</div><div class="cell" style="justify-content:flex-end">925315</div><div class="cell">Zorzi Vetro</div><div class="cell" style="justify-content:flex-end;border-right:none">560.90</div>
+        <div style="grid-column:1 / -1;padding:12px 10px 0;font-size:11.5px;color:#8b8b8b;line-height:1.6">
+          The rows already fetched stay on screen. Throwing them away is the one thing a person who cancels a long query never wants.
+        </div>
+      </div>
+      <div class="foot" style="background:rgba(224,138,60,.10);border-top-color:rgba(224,138,60,.3)">
+        <span style="display:flex;align-items:center;gap:6px;color:#e5a054"><svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><circle cx="8" cy="8" r="5.6"/><path d="M4.4 4.4l7.2 7.2"/></svg>Cancelled after 41,208 rows</span>
+        <span class="num">12.4 s</span>
+        <div style="flex:1"></div>
+        <span class="btn btn-s">Run again</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- 3 error -->
+  <div style="display:flex;flex-direction:column;gap:7px;min-height:0">
+    <span class="cap">Server error, mapped to its line</span>
+    <div class="tile" style="flex:1;min-height:0">
+      <div style="flex-shrink:0;display:flex;background:#1f1f1f;border-bottom:1px solid #2b2b2b;padding:7px 0">
+        <div class="mono num" style="width:38px;text-align:right;padding-right:10px;font-size:12px;line-height:18px;color:#6e7681"><div>11</div><div style="color:#cccccc">12</div><div>13</div></div>
+        <div class="mono" style="flex:1;font-size:12px;line-height:18px">
+          <div><span style="color:#569cd6">FROM</span> <span style="color:#9cdcfe">dbo</span>.<span style="color:#9cdcfe">[Order]</span> <span style="color:#569cd6">AS</span> <span style="color:#9cdcfe">o</span></div>
+          <div style="background:#232323"><span style="color:#569cd6">WHERE</span> <span style="color:#9cdcfe">o</span>.<span style="color:#9cdcfe;text-decoration:underline wavy #f14c4c;text-underline-offset:3px">CustmerId</span> = <span style="color:#b5cea8">10421</span></div>
+          <div><span style="color:#569cd6">ORDER BY</span> <span style="color:#9cdcfe">o</span>.<span style="color:#9cdcfe">OrderDate</span> <span style="color:#569cd6">DESC</span>;</div>
+        </div>
+      </div>
+      <div class="tabs"><span class="tab">Results</span><span class="tab tab-on" style="color:#ff7a66;border-bottom-color:#ff7a66">Messages</span><span class="tab">Plan</span></div>
+      <div style="flex:1;min-height:0;padding:11px 12px;display:flex;flex-direction:column;gap:9px">
+        <div style="display:flex;gap:9px">
+          <span style="display:flex;flex-shrink:0;color:#ff7a66;margin-top:1px"><svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><circle cx="8" cy="8" r="5.8"/><path d="M5.6 5.6l4.8 4.8M10.4 5.6l-4.8 4.8"/></svg></span>
+          <div class="mono" style="font-size:12px;line-height:18px">
+            <div style="color:#8b8b8b">Msg 207, Level 16, State 1, Line 12</div>
+            <div style="color:#f48771">Invalid column name &#39;CustmerId&#39;.</div>
+          </div>
+        </div>
+        <div style="display:flex;gap:8px">
+          <span class="btn btn-s"><svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M2.6 8h9M8 4.6L11.4 8 8 11.4"/></svg>Go to line 12</span>
+          <span class="btn btn-s">Copy message</span>
+        </div>
+        <div style="font-size:11.5px;color:#8b8b8b;line-height:1.6;margin-top:auto">
+          Nothing is validated before it runs. The only thing underlined is what the server actually rejected.
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 4 fetch ceiling -->
+  <div style="display:flex;flex-direction:column;gap:7px;min-height:0">
+    <span class="cap">Fetch ceiling</span>
+    <div class="tile" style="flex:1;min-height:0">
+      <div class="tabs"><span class="tab tab-on">Results</span><span class="tab">Messages</span><span class="tab">Plan</span></div>
+      <div style="display:grid;grid-template-columns:44px 78px 1fr 128px;border-bottom:1px solid #333333;flex-shrink:0">
+        <div class="hcell"></div><div class="hcell" style="justify-content:flex-end">OrderId</div><div class="hcell">Customer</div><div class="hcell" style="justify-content:flex-end;border-right:none">Total</div>
+      </div>
+      <div class="num" style="display:grid;grid-template-columns:44px 78px 1fr 128px;flex:1;align-content:start">
+        <div class="cell" style="justify-content:flex-end;color:#6e7681;background:#232323">998</div><div class="cell" style="justify-content:flex-end">886044</div><div class="cell">Rasmussen Kolding</div><div class="cell" style="justify-content:flex-end;border-right:none">905.10</div>
+        <div class="cell" style="justify-content:flex-end;color:#6e7681;background:#232323">999</div><div class="cell" style="justify-content:flex-end">886045</div><div class="cell">Sorokin Hydraulics</div><div class="cell" style="justify-content:flex-end;border-right:none">17,220.00</div>
+        <div class="cell" style="justify-content:flex-end;color:#6e7681;background:#232323">1,000</div><div class="cell" style="justify-content:flex-end">886046</div><div class="cell">Tan Boon Seng Trading</div><div class="cell" style="justify-content:flex-end;border-right:none">3,442.80</div>
+        <div style="grid-column:1 / -1;border-top:1px solid #2b2b2b;padding:12px 10px;display:flex;flex-direction:column;gap:9px">
+          <div style="font-size:12px;color:#cccccc">Fetched <span class="num">1,000</span> rows. The server has more.</div>
+          <div style="display:flex;gap:8px">
+            <span class="btn btn-p">Fetch 1,000 more</span>
+            <span class="btn btn-s">Fetch all…</span>
+            <span class="btn btn-s">Export instead</span>
+          </div>
+          <div style="font-size:11.5px;color:#8b8b8b;line-height:1.6">
+            The ceiling is <span class="mono" style="font-size:11px">databaseTools.rowsPerFetch</span>. It is the difference between running <span class="mono" style="font-size:11px">SELECT * FROM Orders</span> and losing the window.
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 5 sort honesty -->
+  <div style="display:flex;flex-direction:column;gap:7px;min-height:0">
+    <span class="cap">Sorting a query the user wrote</span>
+    <div class="tile" style="flex:1;min-height:0">
+      <div class="tabs"><span class="tab tab-on">Results</span><span class="tab">Messages</span><span class="tab">Plan</span></div>
+      <div style="display:grid;grid-template-columns:44px 78px 1fr 128px;border-bottom:1px solid #333333;flex-shrink:0">
+        <div class="hcell"></div><div class="hcell" style="justify-content:flex-end">OrderId</div>
+        <div class="hcell" style="color:#ffffff;background:#2d2d30">Customer<svg width="10" height="10" viewBox="0 0 16 16" fill="none" stroke="#4daafc" stroke-width="1.8" style="transform:rotate(180deg)"><path d="M4 6.4L8 10l4-3.6"/></svg></div>
+        <div class="hcell" style="justify-content:flex-end;border-right:none">Total</div>
+      </div>
+      <div style="flex-shrink:0;display:flex;align-items:center;gap:9px;padding:7px 10px;background:rgba(232,180,69,.09);border-bottom:1px solid rgba(232,180,69,.28)">
+        <span style="display:flex;flex-shrink:0;color:#e8b445"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><circle cx="8" cy="8" r="5.8"/><path d="M8 5v3.6M8 10.6v.2"/></svg></span>
+        <span style="font-size:11.5px;color:#cccccc">Sorted within <span class="num">1,000</span> fetched rows, not the whole result. <a href="#">Add ORDER BY and re-run</a></span>
+      </div>
+      <div class="num" style="display:grid;grid-template-columns:44px 78px 1fr 128px;flex:1;align-content:start">
+        <div class="cell" style="justify-content:flex-end;color:#6e7681;background:#232323">1</div><div class="cell" style="justify-content:flex-end">884102</div><div class="cell">Adeyemi Logistics</div><div class="cell" style="justify-content:flex-end;border-right:none">12,480.00</div>
+        <div class="cell" style="justify-content:flex-end;color:#6e7681;background:#232323">2</div><div class="cell" style="justify-content:flex-end">885417</div><div class="cell">Braga &amp; Co</div><div class="cell" style="justify-content:flex-end;border-right:none">440.00</div>
+        <div class="cell" style="justify-content:flex-end;color:#6e7681;background:#232323">3</div><div class="cell" style="justify-content:flex-end">884103</div><div class="cell">Cheng Metals</div><div class="cell" style="justify-content:flex-end;border-right:none">1,209.55</div>
+        <div class="cell" style="justify-content:flex-end;color:#6e7681;background:#232323">4</div><div class="cell" style="justify-content:flex-end">886011</div><div class="cell">Dvo&#345;&#225;k Instruments</div><div class="cell" style="justify-content:flex-end;border-right:none">88.00</div>
+        <div style="grid-column:1 / -1;padding:11px 10px 0;font-size:11.5px;color:#8b8b8b;line-height:1.6">
+          A table data view sorts on the server and is exact. This is the other case, and it is labelled rather than hidden.
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 6 guards -->
+  <div style="display:flex;flex-direction:column;gap:7px;min-height:0">
+    <span class="cap">Guards, before anything is sent</span>
+    <div class="tile" style="flex:1;min-height:0;padding:14px;gap:12px">
+      <div style="border:1px solid rgba(240,86,63,.4);border-radius:4px;background:rgba(240,86,63,.09);padding:12px">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:7px">
+          <span style="display:flex;color:#ff7a66"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M8 1.9l5.4 2.1v4.3c0 3.3-2.2 5.8-5.4 6.8-3.2-1-5.4-3.5-5.4-6.8V4z"/><path d="M8 6v3M8 11v.2"/></svg></span>
+          <span style="font-size:13px;color:#e7e7e7">Ledger-Core is Production</span>
+          <span style="flex:1"></span>
+          <span style="display:inline-flex;align-items:center;gap:5px;height:18px;padding:0 7px;border-radius:9px;background:rgba(240,86,63,.18);font-size:10px;font-weight:600;color:#ff7a66"><span style="width:5px;height:5px;border-radius:50%;background:#f0563f"></span>PROD</span>
+        </div>
+        <div style="font-size:12px;color:#cccccc;line-height:1.6">Batch 2 of 3 contains an <span class="mono" style="font-size:11px;color:#f48771">UPDATE dbo.Ledger</span> on line 14. It will change rows on <span class="mono" style="font-size:11px">sql-prod-04 · Ledger</span>.</div>
+        <div style="display:flex;gap:8px;margin-top:11px">
+          <span class="btn btn-s">Cancel</span>
+          <span class="btn" style="background:#a83226;color:#ffffff">Run it anyway</span>
+        </div>
+      </div>
+
+      <div style="border:1px solid #2b2b2b;border-radius:4px;background:#181818;padding:12px">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:7px">
+          <span style="display:flex;color:#8e97ad"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="3.4" y="7" width="9.2" height="6.2" rx="1.2"/><path d="M5.6 7V5.2a2.4 2.4 0 0 1 4.8 0V7"/></svg></span>
+          <span style="font-size:13px;color:#e7e7e7">This connection is read-only</span>
+        </div>
+        <div style="font-size:12px;color:#cccccc;line-height:1.6">PostgreSQL enforces it on the session. SQL Server has no session switch, so the batch is read before it is sent, and refused by name.</div>
+        <div style="display:flex;gap:8px;margin-top:11px">
+          <span class="btn btn-s">Open the connection</span>
+          <span class="btn btn-d">Run</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+</x-dc>
+</body>
+</html>

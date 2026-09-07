@@ -19,7 +19,7 @@ import { EnvironmentId } from '../../types';
 // `import type`, so this module stays free of React and can be exercised
 // on its own by a plain Node harness.
 import type { IconMark } from '../primitives/ObjectIcon';
-import { ParsedQuery, fuzzy, isObjectQuery, parseQuery } from './fuzzy';
+import { ParsedQuery, fuzzy, isObjectQuery, parseQuery } from '../../shared/fuzzy';
 
 /**
  * The order environments are always listed in: Development, QA, UAT,

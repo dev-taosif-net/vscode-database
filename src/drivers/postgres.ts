@@ -1,9 +1,14 @@
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import type { Client, ClientConfig } from 'pg';
+import type { Client, ClientConfig, FieldDef, Query, QueryResult } from 'pg';
 import { ConnectionProfile, defaultPort } from '../types';
-import { ConnectSecrets, Driver, DriverError, DriverSession, OpenResult } from './types';
+import { CellValue, ColumnMeta } from '../shared/query';
+import { encodeCell, kindOfSqlType } from '../exec/encode';
+import { ConnectSecrets, Driver, DriverError, DriverSession, OpenResult, RowSink, StreamOutcome } from './types';
+
+/** Rows handed to the sink at a time. See the same constant in `mssql.ts`. */
+const CHUNK = 500;
 
 type PgModule = typeof import('pg');
 
@@ -26,13 +31,14 @@ export class PostgresDriver implements Driver {
 
   async open(profile: ConnectionProfile, secrets: ConnectSecrets, signal?: AbortSignal): Promise<OpenResult> {
     const started = Date.now();
-    let client: Client;
+    let opened: Opened;
 
     try {
-      client = await this.connectWithSslPolicy(profile, secrets, signal);
+      opened = await this.connectWithSslPolicy(profile, secrets, signal);
     } catch (error) {
       throw toDriverError(error);
     }
+    const client = opened.client;
 
     try {
       let readOnlyApplied = false;
@@ -48,7 +54,7 @@ export class PostgresDriver implements Driver {
       const latencyMs = Date.now() - started;
       const row = result.rows[0];
       return {
-        session: new PostgresSession(profile.id, client),
+        session: new PostgresSession(profile.id, client, opened.config),
         serverVersion: shortVersion(row?.version ?? ''),
         principal: row?.principal ?? profile.user,
         latencyMs,
@@ -69,7 +75,7 @@ export class PostgresDriver implements Driver {
     profile: ConnectionProfile,
     secrets: ConnectSecrets,
     signal?: AbortSignal
-  ): Promise<Client> {
+  ): Promise<Opened> {
     const negotiates = profile.sslMode === 'prefer' || profile.sslMode === 'allow';
     const first = profile.sslMode === 'allow' ? false : buildSsl(profile, secrets);
 
@@ -99,9 +105,10 @@ export class PostgresDriver implements Driver {
     secrets: ConnectSecrets,
     ssl: ClientConfig['ssl'],
     signal?: AbortSignal
-  ): Promise<Client> {
+  ): Promise<Opened> {
     const { Client: PgClient } = load();
-    const client = new PgClient(buildConfig(profile, secrets, ssl));
+    const config = buildConfig(profile, secrets, ssl);
+    const client = new PgClient(config);
 
     if (signal?.aborted) {
       throw abortError();
@@ -110,7 +117,7 @@ export class PostgresDriver implements Driver {
     const connecting = client.connect();
     if (!signal) {
       await connecting;
-      return client;
+      return { client, config };
     }
 
     // `client.end()` alone does not stop a connection that has not finished
@@ -139,16 +146,40 @@ export class PostgresDriver implements Driver {
         }
       );
     });
-    return client;
+    return { client, config };
   }
+}
+
+/**
+ * A live client and the settings it was opened with.
+ *
+ * The config travels with the client because a cancel has to open a second
+ * socket to the same place, with the same TLS, and rebuilding it from the
+ * profile would rebuild the wrong one: `prefer` and `allow` negotiate, so the
+ * transport that ended up being used is not always the one the profile asks
+ * for.
+ */
+interface Opened {
+  client: Client;
+  config: ClientConfig;
 }
 
 class PostgresSession implements DriverSession {
   private closed = false;
+  /**
+   * The query in flight, so `cancelCurrent` can name it.
+   *
+   * node-postgres only cancels a query it can prove is the client's active
+   * one, which is the right check: cancelling by process id alone would kill
+   * whatever the backend had moved on to.
+   */
+  private current: Query | undefined;
 
   constructor(
     readonly profileId: string,
-    private readonly client: Client
+    private readonly client: Client,
+    /** Kept so a cancel can open a second socket with the same settings. */
+    private readonly config: ClientConfig
   ) {
     this.client.on('end', () => {
       this.closed = true;
@@ -180,17 +211,247 @@ class PostgresSession implements DriverSession {
     }
   }
 
+  stream(sql: string, params: unknown[] | undefined, sink: RowSink): Promise<StreamOutcome> {
+    if (this.closed) {
+      return Promise.reject(new DriverError('The connection is closed.', 'ECLOSED', undefined, undefined));
+    }
+    const { Query: PgQuery } = load();
+
+    return new Promise<StreamOutcome>((resolve, reject) => {
+      let buffer: CellValue[][] = [];
+      let truncated = false;
+      let cancelled = false;
+      /** The result object the rows arriving now belong to. */
+      let openResult: unknown;
+      const seen = new Set<unknown>();
+
+      const flush = () => {
+        if (buffer.length) {
+          sink.rows(buffer);
+          buffer = [];
+        }
+      };
+
+      // `rowMode: 'array'` is the whole reason this is cheap: the driver hands
+      // back a positional array rather than building an object with one key per
+      // column per row, which is what the grid wants anyway.
+      const query = new PgQuery({ text: sql, values: params, rowMode: 'array' } as never) as Query;
+
+      // Attached before submitting, deliberately. node-postgres decides whether
+      // to accumulate every row in memory by counting `row` listeners at the
+      // moment the row description arrives; with one attached it accumulates
+      // nothing, which is the difference between streaming and buffering the
+      // whole answer twice.
+      query.on('row', (row: unknown[], result: unknown) => {
+        if (truncated) {
+          return;
+        }
+        if (result !== openResult) {
+          flush();
+          if (openResult) {
+            sink.complete();
+          }
+          openResult = result;
+          seen.add(result);
+          sink.columns(fieldsOf(result).map(toColumnMeta));
+        }
+        if (sink.wants() <= 0) {
+          truncated = true;
+          flush();
+          this.cancelCurrent();
+          return;
+        }
+        buffer.push((row ?? []).map(encodeCell));
+        if (buffer.length >= CHUNK) {
+          flush();
+        }
+      });
+
+      query.on('error', (error: unknown) => {
+        this.current = undefined;
+        flush();
+        if (openResult) {
+          sink.complete();
+          openResult = undefined;
+        }
+        if (isCancellation(error)) {
+          // See the same distinction in `mssql.ts`: hitting the fetch ceiling
+          // cancels the statement, and that is not the user cancelling it.
+          resolve({ cancelled: !truncated, truncated });
+          return;
+        }
+        const wrapped = toDriverError(error);
+        const position = Number((error as { position?: string }).position);
+        if (Number.isFinite(position) && position > 0) {
+          // PostgreSQL reports a character offset rather than a line, so the
+          // line is counted here — the only place that still has the text.
+          wrapped.line = sql.slice(0, position - 1).split('\n').length;
+        }
+        reject(wrapped);
+      });
+
+      query.on('end', (results: unknown) => {
+        this.current = undefined;
+        flush();
+        if (openResult) {
+          sink.complete();
+          openResult = undefined;
+        }
+        // A multi-statement script hands back one result per statement, and
+        // the ones that produced no rows were never announced above. They are
+        // still answers — an UPDATE's row count is the whole answer — so each
+        // is closed out here in the order the server ran them.
+        for (const result of Array.isArray(results) ? results : [results]) {
+          if (seen.has(result)) {
+            continue;
+          }
+          const fields = fieldsOf(result);
+          if (fields.length) {
+            sink.columns(fields.map(toColumnMeta));
+            sink.complete();
+          } else {
+            sink.complete((result as QueryResult | undefined)?.rowCount ?? 0);
+          }
+        }
+        resolve({ cancelled, truncated });
+      });
+
+      this.current = query;
+      this.client.query(query as never);
+    });
+  }
+
+  cancelCurrent(): void {
+    const query = this.current;
+    if (!query || this.closed) {
+      return;
+    }
+    const { Client: PgClient } = load();
+    try {
+      // The protocol's own out-of-band cancel: a second socket carrying the
+      // backend's process id and secret key, both captured at startup. It
+      // needs no login and no permission on the target session, which
+      // `pg_cancel_backend` does — and it is not in the published typings,
+      // which is why the call is declared rather than imported.
+      const canceller = new PgClient(this.config) as unknown as {
+        cancel(client: Client, query: Query): void;
+      };
+      canceller.cancel(this.client, query);
+      return;
+    } catch {
+      // Fall through to the SQL path.
+    }
+    void this.cancelBySql();
+  }
+
+  /**
+   * The fallback, for a server that will not take a CancelRequest.
+   *
+   * It needs a login and it needs the caller to be allowed to signal the
+   * target backend, so it can fail where the protocol cancel would not. It is
+   * second for that reason rather than first.
+   */
+  private async cancelBySql(): Promise<void> {
+    const pid = (this.client as unknown as { processID?: number }).processID;
+    if (!pid) {
+      return;
+    }
+    const { Client: PgClient } = load();
+    const side = new PgClient(this.config);
+    try {
+      await side.connect();
+      await side.query('SELECT pg_cancel_backend($1)', [pid]);
+    } catch {
+      // Nothing useful to say: the query either stops or it does not, and the
+      // grid already shows that it is still running.
+    } finally {
+      await side.end().catch(() => undefined);
+    }
+  }
+
   async close(): Promise<void> {
     if (this.closed) {
       return;
     }
     this.closed = true;
+    this.current = undefined;
     await this.client.end().catch(() => undefined);
   }
 
   isClosed(): boolean {
     return this.closed;
   }
+}
+
+/**
+ * The rendered type of a column.
+ *
+ * PostgreSQL sends an oid rather than a name, so the name comes from the
+ * driver's own builtin table, inverted once. `dataTypeModifier` carries the
+ * length or the precision and scale, in the encoding the catalog uses: four
+ * bytes of header for the character types, and precision in the high sixteen
+ * bits for numeric.
+ */
+const OID_NAMES = new Map<number, string>();
+
+function pgTypeName(field: FieldDef): string {
+  if (OID_NAMES.size === 0) {
+    const builtins = (load() as unknown as { types?: { builtins?: Record<string, number> } }).types?.builtins ?? {};
+    for (const [name, oid] of Object.entries(builtins)) {
+      OID_NAMES.set(oid, FRIENDLY[name] ?? name.toLowerCase());
+    }
+  }
+  const base = OID_NAMES.get(field.dataTypeID) ?? `oid:${field.dataTypeID}`;
+  const modifier = field.dataTypeModifier;
+  if (modifier === undefined || modifier < 0) {
+    return base;
+  }
+  if (base === 'numeric') {
+    const precision = (modifier - 4) >> 16;
+    const scale = (modifier - 4) & 0xffff;
+    return `numeric(${precision},${scale})`;
+  }
+  if (base === 'varchar' || base === 'char' || base === 'bpchar') {
+    return `${base}(${modifier - 4})`;
+  }
+  if (base.startsWith('time') || base === 'interval') {
+    return `${base}(${modifier})`;
+  }
+  return base;
+}
+
+/**
+ * The handful of builtin names that would otherwise be printed in a spelling
+ * nobody writes. Everything else is the catalog's own name lower-cased, which
+ * is what `\d` prints too.
+ */
+const FRIENDLY: Record<string, string> = {
+  INT2: 'smallint',
+  INT4: 'integer',
+  INT8: 'bigint',
+  FLOAT4: 'real',
+  FLOAT8: 'double precision',
+  BOOL: 'boolean',
+  TIMESTAMPTZ: 'timestamptz',
+  TIMETZ: 'timetz'
+};
+
+function toColumnMeta(field: FieldDef): ColumnMeta {
+  const type = pgTypeName(field);
+  return { name: field.name, type, kind: kindOfSqlType(type) };
+}
+
+function fieldsOf(result: unknown): FieldDef[] {
+  return ((result as { fields?: FieldDef[] } | undefined)?.fields ?? []) as FieldDef[];
+}
+
+/**
+ * PostgreSQL answers a CancelRequest by failing the statement with 57014,
+ * `query_canceled`. That is a cancellation and not a fault, so the rows
+ * already delivered are kept and the execution is filed as cancelled.
+ */
+function isCancellation(error: unknown): boolean {
+  return (error as { code?: string })?.code === '57014';
 }
 
 function buildConfig(

@@ -14,7 +14,7 @@ import { GroupHeader, PinnedHeader } from './GroupHeader';
 import { Row } from './Row';
 import { StickyHeader } from './StickyHeader';
 import { FolderRow, MemberRow, NoteRow, ObjectRow, ResultsHeader, SchemaRow } from './TreeRow';
-import { parseQuery } from './fuzzy';
+import { parseQuery } from '../../shared/fuzzy';
 import {
   CatalogMap,
   FlatItem,

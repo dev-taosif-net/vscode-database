@@ -5,12 +5,65 @@ built for large enterprise estates: thousands of objects, many schemas, many
 environments. Lazy loading everywhere, aggressive metadata caching, streamed
 row-capped fetches, near-zero startup cost.
 
-## Status: phase 2, the object explorer
+It is built on the workbench rather than beside it. SQL is written in VS Code's
+own editor, the toolbar is a real editor title menu, IntelliSense is a real
+completion provider, and every webview follows your theme and makes no network
+request of any kind.
+
+## Status: phase 3, the query workspace
 
 Phase 1 covered everything up to and including an open connection. Phase 2
-opens that connection up: every object in it, browsable and searchable. It
-still does not run queries — the actions that need a result grid produce SQL in
-an editor instead, and say so.
+opened that connection up: every object in it, browsable and searchable. Phase
+3 runs statements against it — a query editor bound to a connection, a result
+grid that streams, a table data view, an execution form for a stored
+procedure, object details with real dependency tracking, and execution plans
+for both engines.
+
+### The query workspace
+
+See [docs/query-workspace.md](docs/query-workspace.md).
+
+- SQL is written in the workbench's own editor, not in a bundled copy of one.
+  Your vim mode, your Copilot, your find widget, your font settings and your
+  keybindings all keep working, and a query tab costs what a text buffer costs.
+- Run with F5 or Ctrl+Enter; a selection wins over the document. Results appear
+  in one panel that follows whichever tab you are on, so a thousand tabs cost a
+  thousand text buffers rather than a thousand iframes.
+- Rows stream as the server produces them and stop at a fetch ceiling you can
+  raise. Nothing collects a hundred million rows into an array: the host keeps
+  a window and spills the rest to disk, and the grid holds only what it draws.
+- A virtualised grid on both axes, with resizable and server-sortable columns,
+  cell and range selection, copy as TSV, CSV, JSON, Markdown or INSERT
+  statements, and export to CSV, TSV, JSON, SQL, Markdown or a real `.xlsx`
+  with real dates in it.
+- Sorting a query you wrote sorts only the rows that were fetched, and the
+  header says so. A table data view sorts on the server and is exact.
+- Cancel means cancel: SQL Server gets an attention signal on the request,
+  PostgreSQL gets the protocol's own CancelRequest down a second socket, and
+  the rows already fetched stay on screen.
+- `Customer [Data]` opens a table without writing any SQL, paged by key rather
+  than by offset — so page five thousand costs what page one costs. The row
+  count in the corner is the estimate from statistics, never a `COUNT(*)`.
+- `usp_GetCustomer [Run]` generates an execution form from the parameter list,
+  with a NULL checkbox on every nullable parameter, values bound rather than
+  concatenated, and output parameters and the return value in their own tabs.
+- IntelliSense over the live catalog: schemas, objects, columns, aliases and
+  keywords, ranked by what the caret is inside. After `ON`, the first
+  suggestion is the whole foreign-key predicate.
+- Object details with computed badges — PK, FK, Identity, Clustered, Heap,
+  Temporal, Partitioned, Unlogged, Materialized — and Depends On / Used By from
+  real dependency tracking. Where PostgreSQL cannot answer, the fallback is a
+  text search and every row it finds is labelled as one.
+- Execution plans for both engines, as an operator tree with cost shares, plus
+  the three warnings that explain most bad plans.
+- Query history per connection that keeps failures and redacts anything that
+  set a credential, and saved queries as ordinary `.sql` files you can diff and
+  review.
+- A read-only connection refuses writes by name, and production asks again
+  before anything is written — consenting to look at production is not
+  consenting to change it.
+- Execution runs on its own sessions, so a four-minute scan never freezes the
+  explorer, the details panel or IntelliSense.
 
 ### The object explorer
 
@@ -32,9 +85,10 @@ A connected connection expands in place, in the same single-column sidebar. See
   you happened to have opened.
 - Colourful marks with a distinct silhouette each, so the set survives a
   high-contrast theme, a forced palette and colour vision deficiency.
-- Right-click an object for Open Definition, Select Top 100, Generate CRUD,
-  Execute, Script As ALTER, Copy Name and Copy Full Name. Each opens an
-  editable SQL document; nothing is executed yet.
+- Right-click an object for View Data, Select Top 100, Select Top 1000, Run…,
+  Generate CRUD, Script As CREATE / ALTER / DROP, View Dependencies, Compare
+  With, Show Details, Copy Name and Copy Full Name. Since phase 3 these end in
+  rows rather than in a buffer.
 - Five hundred objects at a time, cached for five minutes, nothing read until
   it is opened, and the whole subtree dropped the moment a session closes.
 
@@ -114,16 +168,30 @@ screen and colour vision deficiency.
 | --- | --- |
 | Database: Connections: Open | `Ctrl+Alt+D` |
 | Database: Connections: New | |
+| Database: New Query | |
+| Database: Run | `F5`, `Ctrl+Enter` |
+| Database: Run Current Statement | `Ctrl+Shift+Enter` |
+| Database: Cancel | `Ctrl+Alt+.` |
+| Database: Explain Plan | `Ctrl+L` |
+| Database: Format SQL | `Shift+Alt+F` |
 | Database: Connect to a Database | |
 | Database: Disconnect | |
 | Database: Disconnect All | |
 | Database: Refresh Objects | |
 
 The object explorer's own actions are on the right-click menu of the row they
-act on, so they are hidden from the palette, where there would be no row.
+act on, so they are hidden from the palette, where there would be no row. The
+query actions appear on the editor title bar of any SQL tab bound to a
+connection.
 
-Inside the editor: `Ctrl+Enter` connects, `Ctrl+S` saves, `Alt+T` tests, and
-`Escape` cancels a running attempt.
+`Ctrl+Shift+F` also formats, but only while the caret is inside a bound SQL
+editor. Everywhere else in the window it is still Search: Find in Files, which
+is one of the six shortcuts everybody has in their fingers and not one worth
+taking. `Shift+Alt+F` is the workbench's own format key and is bound
+unconditionally, which is also what makes Format On Save work.
+
+Inside the connection editor: `Ctrl+Enter` connects, `Ctrl+S` saves, `Alt+T`
+tests, and `Escape` cancels a running attempt.
 
 ## Building
 
@@ -141,17 +209,26 @@ the first connection, so activation loads neither one.
 
 ## Not in this release
 
-- Query execution and a result grid. Every explorer action that would need one
-  writes its statement into an editor instead: Select Top 100, Generate CRUD
-  and Execute produce SQL that is complete and correct for the object it came
-  from, and you run it with whatever you already use. When the grid lands,
-  Execute becomes a verb and none of that SQL has to change.
-
-Designed and stored on the profile, but not yet acting:
-
-- SSH tunnelling. The details are saved; connections still go direct.
-- The read-only flag on SQL Server. PostgreSQL genuinely holds the session
-  read-only through `default_transaction_read_only`; SQL Server has no session
-  equivalent, so that flag waits for the query gate.
-- Fully integrated Windows single sign-on, which needs a native driver.
+- **An editable grid.** The results grid is read-only and says so in its
+  footer. Editing needs a unique key strategy, optimistic concurrency, a
+  change set, a preview of the generated DML and a transaction model, and half
+  of an editable grid against production is worse than none. Generate CRUD is
+  how you get a statement you can read before you run it.
+- **Schema comparison.** Compare With opens two scripted definitions in the
+  workbench's own diff editor, which is genuinely useful and is a diff of two
+  scripts rather than a comparison of two schemas. It says so.
+- **PostgreSQL routine dependencies.** The server does not track what a
+  PL/pgSQL body reads, so Used By falls back to a text search over source and
+  labels every row it finds that way. A DBA about to drop a table needs to know
+  both what the catalog knows and what it cannot.
+- **Object created and modified dates on PostgreSQL.** The server does not
+  record them anywhere. They show a dash and a tooltip saying why.
+- **SSH tunnelling.** The details are saved on the profile; connections still
+  go direct.
+- **Fully integrated Windows single sign-on**, which needs a native driver.
   NTLM with an explicit domain, user and password works today.
+
+The read-only flag now acts on both engines. PostgreSQL holds the session
+read-only through `default_transaction_read_only`; SQL Server has no session
+equivalent, so the batch is read before it is sent and a write is refused by
+name — which is the gate the phase 1 comment said would arrive with execution.

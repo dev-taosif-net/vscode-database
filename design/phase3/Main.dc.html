@@ -1,0 +1,392 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>
+* { box-sizing: border-box; }
+body { margin: 0; }
+a { color: #4daafc; text-decoration: none; }
+a:hover { color: #4daafc; text-decoration: underline; }
+.cp { font-family: "Segoe WPC", "Segoe UI", system-ui, -apple-system, sans-serif; font-size: 13px; line-height: 1.4; -webkit-font-smoothing: antialiased; }
+.mono { font-family: Consolas, "Cascadia Mono", "Courier New", monospace; }
+.num { font-variant-numeric: tabular-nums; }
+.vt { font-size: 11px; font-weight: 600; letter-spacing: .07em; text-transform: uppercase; color: #cccccc; }
+.row { height: 22px; display: flex; align-items: center; white-space: nowrap; }
+.ta { display: inline-flex; align-items: center; gap: 4px; height: 17px; padding: 0 6px; border-radius: 3px; border: 1px solid; font-size: 10px; font-weight: 600; letter-spacing: .02em; white-space: nowrap; }
+.qa { display: flex; align-items: center; gap: 7px; height: 26px; padding: 0 8px; border-radius: 4px; background: #313131; border: 1px solid #3c3c3c; color: #cccccc; font-size: 12px; cursor: pointer; }
+.ic { display: flex; align-items: center; justify-content: center; width: 26px; height: 26px; border-radius: 4px; color: #cccccc; cursor: pointer; }
+.ic:hover { background: #3c3c3c; }
+.k { color: #569cd6; } .s { color: #ce9178; } .n { color: #b5cea8; }
+.c { color: #6a9955; } .f { color: #dcdcaa; } .id { color: #9cdcfe; } .ty { color: #4ec9b0; }
+.cell { padding: 0 8px; height: 22px; display: flex; align-items: center; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; border-right: 1px solid #232323; }
+.hcell { padding: 0 8px; height: 24px; display: flex; align-items: center; gap: 5px; white-space: nowrap; border-right: 1px solid #333333; font-size: 12px; color: #cccccc; background: #252526; }
+.sb { display: flex; align-items: center; gap: 5px; height: 22px; padding: 0 7px; white-space: nowrap; }
+</style>
+</helmet>
+
+<div class="cp" style="width:1480px;height:920px;display:flex;flex-direction:column;background:#1f1f1f;color:#cccccc;overflow:hidden">
+
+  <div style="flex:1;display:flex;min-height:0">
+
+    <!-- activity bar -->
+    <div style="width:48px;flex-shrink:0;background:#181818;border-right:1px solid #2b2b2b;display:flex;flex-direction:column;align-items:center;padding-top:6px;gap:2px">
+      <div style="width:48px;height:48px;display:flex;align-items:center;justify-content:center;color:#9d9d9d"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M3 6h18M3 12h18M3 18h12"/></svg></div>
+      <div style="width:48px;height:48px;display:flex;align-items:center;justify-content:center;color:#9d9d9d"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4"><circle cx="10.5" cy="10.5" r="6.5"/><path d="M15.4 15.4L20 20"/></svg></div>
+      <div style="width:48px;height:48px;display:flex;align-items:center;justify-content:center;color:#9d9d9d"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4"><circle cx="6.5" cy="5.5" r="2.4"/><circle cx="6.5" cy="18.5" r="2.4"/><circle cx="17.5" cy="9" r="2.4"/><path d="M6.5 7.9v8.2M8.9 5.5h4.4a4.2 4.2 0 0 1 4.2 4.2v.9"/></svg></div>
+      <div style="width:48px;height:48px;display:flex;align-items:center;justify-content:center;position:relative;color:#e7e7e7">
+        <div style="position:absolute;left:0;top:0;bottom:0;width:2px;background:#0078d4"></div>
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><ellipse cx="12" cy="5.4" rx="7.6" ry="2.9"></ellipse><path d="M4.4 8.6v3.2c0 1.6 3.4 2.9 7.6 2.9s7.6-1.3 7.6-2.9V8.6c-1.5 1.2-4.3 1.9-7.6 1.9s-6.1-.7-7.6-1.9z"></path><path d="M4.4 14.6v3.2c0 1.6 3.4 2.9 7.6 2.9s7.6-1.3 7.6-2.9v-3.2c-1.5 1.2-4.3 1.9-7.6 1.9s-6.1-.7-7.6-1.9z"></path></svg>
+      </div>
+    </div>
+
+    <!-- explorer -->
+    <div style="width:260px;flex-shrink:0;background:#181818;border-right:1px solid #2b2b2b;display:flex;flex-direction:column;min-height:0">
+      <div style="height:35px;flex-shrink:0;display:flex;align-items:center;gap:6px;padding:0 8px 0 20px">
+        <span class="vt" style="flex:1">Connections</span>
+        <span style="display:flex;color:#cccccc"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><path d="M8 3.4v9.2M3.4 8h9.2"/></svg></span>
+        <span style="display:flex;color:#cccccc"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><path d="M13 8a5 5 0 1 1-1.6-3.7M13 2.6v3h-3"/></svg></span>
+        <span style="display:flex;color:#cccccc"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><path d="M2.4 4h11.2l-4.3 5v4l-2.6 1.4V9z"/></svg></span>
+        <span style="display:flex;color:#cccccc"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><circle cx="3.4" cy="8" r=".9" fill="currentColor" stroke="none"/><circle cx="8" cy="8" r=".9" fill="currentColor" stroke="none"/><circle cx="12.6" cy="8" r=".9" fill="currentColor" stroke="none"/></svg></span>
+      </div>
+
+      <div style="height:32px;flex-shrink:0;padding:0 8px 6px;display:flex">
+        <div style="flex:1;display:flex;align-items:center;gap:6px;height:26px;padding:0 8px;background:#313131;border:1px solid #3c3c3c;border-radius:2px;color:#9d9d9d">
+          <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><circle cx="6.9" cy="6.9" r="4.4"/><path d="M10.2 10.2L13.6 13.6"/></svg>
+          <span style="font-size:12px">Search connections and objects…</span>
+        </div>
+      </div>
+
+      <div style="flex:1;overflow:hidden;padding-bottom:4px">
+
+        <div class="row" style="padding-left:8px;gap:6px"><span style="color:#9d9d9d;display:flex"><svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M5 6.5L8 9.5l3-3"/></svg></span><span style="font-size:11px;font-weight:700;letter-spacing:.07em;color:#57c76a">DEV</span><span class="num" style="font-size:11px;color:#6b6b6b;margin-left:2px">4</span></div>
+
+        <div class="row" style="position:relative;padding-left:8px"><div style="position:absolute;left:0;top:0;bottom:0;width:3px;background:#3fb84f"></div>
+          <span style="width:14px;margin-right:4px;display:flex;justify-content:center;color:#cccccc"><svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M5 6.5L8 9.5l3-3"/></svg></span>
+          <span style="width:16px;margin-right:5px;display:flex;justify-content:center"><span style="width:8px;height:8px;border-radius:50%;background:#3fb84f"></span></span>
+          <span style="color:#e7e7e7">Dev-Matador</span>
+          <span style="flex:1"></span>
+          <span style="font-size:11px;color:#6b6b6b;margin-right:6px">sql-dev-01 · AdventureWorks</span>
+          <span style="color:#0078d4;display:flex;margin-right:8px"><svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><ellipse cx="12" cy="5.4" rx="7.6" ry="2.9"></ellipse><path d="M4.4 8.6v3.2c0 1.6 3.4 2.9 7.6 2.9s7.6-1.3 7.6-2.9V8.6c-1.5 1.2-4.3 1.9-7.6 1.9s-6.1-.7-7.6-1.9z"></path><path d="M4.4 14.6v3.2c0 1.6 3.4 2.9 7.6 2.9s7.6-1.3 7.6-2.9v-3.2c-1.5 1.2-4.3 1.9-7.6 1.9s-6.1-.7-7.6-1.9z"></path></svg></span>
+        </div>
+
+        <div class="row" style="position:relative;padding-left:18px"><div style="position:absolute;left:0;top:0;bottom:0;width:3px;background:#3fb84f"></div>
+          <span style="width:14px;margin-right:4px;display:flex;justify-content:center;color:#cccccc"><svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M5 6.5L8 9.5l3-3"/></svg></span>
+          <span style="width:16px;margin-right:5px;display:flex;justify-content:center;color:#e8b445"><svg width="15" height="15" viewBox="0 0 16 16" fill="currentColor"><path d="M8 1.9l1.8 3.7 4.1.6-3 2.9.7 4.1L8 11.3l-3.6 1.9.7-4.1-3-2.9 4.1-.6z"/></svg></span>
+          <span>Favourites</span><span style="flex:1"></span><span class="num" style="font-size:11px;color:#6b6b6b;margin-right:8px">2</span>
+        </div>
+
+        <div class="row" style="position:relative;padding-left:28px"><div style="position:absolute;left:0;top:0;bottom:0;width:3px;background:#3fb84f"></div>
+          <span style="width:14px;margin-right:4px"></span>
+          <span style="width:16px;margin-right:5px;display:flex;justify-content:center;color:#4d9de0"><svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.2"><path d="M2 6.2V4.3A1.3 1.3 0 0 1 3.3 3h9.4A1.3 1.3 0 0 1 14 4.3v1.9z" fill="currentColor" opacity=".38" stroke="none"/><rect x="2" y="3" width="12" height="10" rx="1.3"/><path d="M2 6.2h12M6.4 6.2V13M10.2 6.2V13"/></svg></span>
+          <span>dbo.Customer</span><span style="flex:1"></span><span class="num" style="font-size:11px;color:#6b6b6b;margin-right:8px">34 columns</span>
+        </div>
+
+        <div class="row" style="position:relative;padding-left:28px"><div style="position:absolute;left:0;top:0;bottom:0;width:3px;background:#3fb84f"></div>
+          <span style="width:14px;margin-right:4px"></span>
+          <span style="width:16px;margin-right:5px;display:flex;justify-content:center;color:#a97fe0"><svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.2"><rect x="2.4" y="2.4" width="11.2" height="11.2" rx="2.6"/><path d="M6.6 5.6l4.2 2.4-4.2 2.4z" fill="currentColor" stroke="none"/></svg></span>
+          <span>dbo.usp_GetCustomer</span><span style="flex:1"></span><span class="num" style="font-size:11px;color:#6b6b6b;margin-right:8px">4 parameters</span>
+        </div>
+
+        <div class="row" style="position:relative;padding-left:18px"><div style="position:absolute;left:0;top:0;bottom:0;width:3px;background:#3fb84f"></div>
+          <span style="width:14px;margin-right:4px;display:flex;justify-content:center;color:#cccccc"><svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M5 6.5L8 9.5l3-3"/></svg></span>
+          <span style="width:16px;margin-right:5px;display:flex;justify-content:center;color:#8892a4"><svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.2"><path d="M2 4.4A1.2 1.2 0 0 1 3.2 3.2h3l1.4 1.6h5.2A1.2 1.2 0 0 1 14 6v5.6a1.2 1.2 0 0 1-1.2 1.2H3.2A1.2 1.2 0 0 1 2 11.6z"/></svg></span>
+          <span>Tables</span><span style="flex:1"></span><span class="num" style="font-size:11px;color:#6b6b6b;margin-right:8px">1,240</span>
+        </div>
+
+        <div class="row" style="position:relative;padding-left:28px;background:#04395e"><div style="position:absolute;left:0;top:0;bottom:0;width:3px;background:#3fb84f"></div>
+          <span style="width:14px;margin-right:4px"></span>
+          <span style="width:16px;margin-right:5px;display:flex;justify-content:center;color:#4d9de0"><svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.2"><path d="M2 6.2V4.3A1.3 1.3 0 0 1 3.3 3h9.4A1.3 1.3 0 0 1 14 4.3v1.9z" fill="currentColor" opacity=".38" stroke="none"/><rect x="2" y="3" width="12" height="10" rx="1.3"/><path d="M2 6.2h12M6.4 6.2V13M10.2 6.2V13"/></svg></span>
+          <span style="color:#ffffff">dbo.Customer</span><span style="flex:1"></span><span class="num" style="font-size:11px;color:#b8cee0;margin-right:8px">34 columns</span>
+        </div>
+
+        <div class="row" style="position:relative;padding-left:28px"><div style="position:absolute;left:0;top:0;bottom:0;width:3px;background:#3fb84f"></div>
+          <span style="width:14px;margin-right:4px"></span>
+          <span style="width:16px;margin-right:5px;display:flex;justify-content:center;color:#4d9de0"><svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.2"><path d="M2 6.2V4.3A1.3 1.3 0 0 1 3.3 3h9.4A1.3 1.3 0 0 1 14 4.3v1.9z" fill="currentColor" opacity=".38" stroke="none"/><rect x="2" y="3" width="12" height="10" rx="1.3"/><path d="M2 6.2h12M6.4 6.2V13M10.2 6.2V13"/></svg></span>
+          <span>dbo.Order</span><span style="flex:1"></span><span class="num" style="font-size:11px;color:#6b6b6b;margin-right:8px">18 columns</span>
+        </div>
+
+        <div class="row" style="position:relative;padding-left:28px"><div style="position:absolute;left:0;top:0;bottom:0;width:3px;background:#3fb84f"></div>
+          <span style="width:14px;margin-right:4px"></span>
+          <span style="width:16px;margin-right:5px;display:flex;justify-content:center;color:#4d9de0"><svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.2"><path d="M2 6.2V4.3A1.3 1.3 0 0 1 3.3 3h9.4A1.3 1.3 0 0 1 14 4.3v1.9z" fill="currentColor" opacity=".38" stroke="none"/><rect x="2" y="3" width="12" height="10" rx="1.3"/><path d="M2 6.2h12M6.4 6.2V13M10.2 6.2V13"/></svg></span>
+          <span>sales.Territory</span><span style="flex:1"></span><span class="num" style="font-size:11px;color:#6b6b6b;margin-right:8px">9 columns</span>
+        </div>
+
+        <div class="row" style="position:relative;padding-left:38px;color:#4daafc"><div style="position:absolute;left:0;top:0;bottom:0;width:3px;background:#3fb84f"></div>
+          <span style="width:14px;margin-right:4px;display:flex;justify-content:center"><svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M5 6.5L8 9.5l3-3"/></svg></span>
+          <span style="font-size:12px">Load 1,000 more of 1,240</span>
+        </div>
+
+        <div class="row" style="position:relative;padding-left:18px"><div style="position:absolute;left:0;top:0;bottom:0;width:3px;background:#3fb84f"></div>
+          <span style="width:14px;margin-right:4px;display:flex;justify-content:center;color:#cccccc"><svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" style="transform:rotate(-90deg)"><path d="M5 6.5L8 9.5l3-3"/></svg></span>
+          <span style="width:16px;margin-right:5px;display:flex;justify-content:center;color:#8892a4"><svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.2"><path d="M2 4.4A1.2 1.2 0 0 1 3.2 3.2h3l1.4 1.6h5.2A1.2 1.2 0 0 1 14 6v5.6a1.2 1.2 0 0 1-1.2 1.2H3.2A1.2 1.2 0 0 1 2 11.6z"/></svg></span>
+          <span>Views</span><span style="flex:1"></span><span class="num" style="font-size:11px;color:#6b6b6b;margin-right:8px">420</span>
+        </div>
+
+        <div class="row" style="position:relative;padding-left:18px"><div style="position:absolute;left:0;top:0;bottom:0;width:3px;background:#3fb84f"></div>
+          <span style="width:14px;margin-right:4px;display:flex;justify-content:center;color:#cccccc"><svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" style="transform:rotate(-90deg)"><path d="M5 6.5L8 9.5l3-3"/></svg></span>
+          <span style="width:16px;margin-right:5px;display:flex;justify-content:center;color:#8892a4"><svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.2"><path d="M2 4.4A1.2 1.2 0 0 1 3.2 3.2h3l1.4 1.6h5.2A1.2 1.2 0 0 1 14 6v5.6a1.2 1.2 0 0 1-1.2 1.2H3.2A1.2 1.2 0 0 1 2 11.6z"/></svg></span>
+          <span>Procedures</span><span style="flex:1"></span><span class="num" style="font-size:11px;color:#6b6b6b;margin-right:8px">980</span>
+        </div>
+
+        <div class="row" style="position:relative;padding-left:18px"><div style="position:absolute;left:0;top:0;bottom:0;width:3px;background:#3fb84f"></div>
+          <span style="width:14px;margin-right:4px;display:flex;justify-content:center;color:#cccccc"><svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" style="transform:rotate(-90deg)"><path d="M5 6.5L8 9.5l3-3"/></svg></span>
+          <span style="width:16px;margin-right:5px;display:flex;justify-content:center;color:#8892a4"><svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.2"><path d="M2 4.4A1.2 1.2 0 0 1 3.2 3.2h3l1.4 1.6h5.2A1.2 1.2 0 0 1 14 6v5.6a1.2 1.2 0 0 1-1.2 1.2H3.2A1.2 1.2 0 0 1 2 11.6z"/></svg></span>
+          <span>Functions</span><span style="flex:1"></span><span class="num" style="font-size:11px;color:#6b6b6b;margin-right:8px">430</span>
+        </div>
+
+        <div class="row" style="padding-left:8px;gap:6px;margin-top:2px"><span style="color:#9d9d9d;display:flex"><svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M5 6.5L8 9.5l3-3"/></svg></span><span style="font-size:11px;font-weight:700;letter-spacing:.07em;color:#6aa9f5">QA</span><span class="num" style="font-size:11px;color:#6b6b6b;margin-left:2px">3</span></div>
+
+        <div class="row" style="position:relative;padding-left:8px"><div style="position:absolute;left:0;top:0;bottom:0;width:3px;background:#4a93f0"></div>
+          <span style="width:14px;margin-right:4px;display:flex;justify-content:center;color:#cccccc"><svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" style="transform:rotate(-90deg)"><path d="M5 6.5L8 9.5l3-3"/></svg></span>
+          <span style="width:16px;margin-right:5px;display:flex;justify-content:center"><span style="width:8px;height:8px;border-radius:50%;background:#4a93f0"></span></span>
+          <span>analytics-qa</span><span style="flex:1"></span><span style="font-size:11px;color:#6b6b6b;margin-right:6px">pg-qa-3</span>
+          <span style="color:#336791;display:flex;margin-right:8px"><svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2.4c-3.4 0-6.4 1.1-6.4 3.6 0 1.2.2 3.4.5 5.6.4 2.6 1 5.1 1.7 6.6.5 1.1 1.3 1.8 2.2 1.8.6 0 1-.3 1.4-.8.3-.4.5-.6.6-.6s.3.2.6.6c.4.5.8.8 1.4.8.9 0 1.7-.7 2.2-1.8.7-1.5 1.3-4 1.7-6.6.3-2.2.5-4.4.5-5.6 0-2.5-3-3.6-6.4-3.6z" opacity=".9"/></svg></span>
+        </div>
+
+        <div class="row" style="padding-left:8px;gap:6px;margin-top:2px"><span style="color:#9d9d9d;display:flex"><svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" style="transform:rotate(-90deg)"><path d="M5 6.5L8 9.5l3-3"/></svg></span><span style="font-size:11px;font-weight:700;letter-spacing:.07em;color:#e5a054">UAT</span><span class="num" style="font-size:11px;color:#6b6b6b;margin-left:2px">2</span></div>
+        <div class="row" style="padding-left:8px;gap:6px;margin-top:2px"><span style="color:#9d9d9d;display:flex"><svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" style="transform:rotate(-90deg)"><path d="M5 6.5L8 9.5l3-3"/></svg></span><span style="font-size:11px;font-weight:700;letter-spacing:.07em;color:#ff7a66">PROD</span><span class="num" style="font-size:11px;color:#6b6b6b;margin-left:2px">5</span></div>
+      </div>
+
+      <div style="flex-shrink:0;border-top:1px solid #2b2b2b">
+        <div style="height:22px;display:flex;align-items:center;gap:6px;padding:0 8px;color:#cccccc">
+          <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" style="transform:rotate(-90deg)"><path d="M5 6.5L8 9.5l3-3"/></svg><span class="vt">Query history</span>
+        </div>
+        <div style="height:22px;display:flex;align-items:center;gap:6px;padding:0 8px;color:#cccccc">
+          <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" style="transform:rotate(-90deg)"><path d="M5 6.5L8 9.5l3-3"/></svg><span class="vt">Saved queries</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- editor + panel -->
+    <div style="flex:1;display:flex;flex-direction:column;min-width:0;min-height:0">
+
+      <!-- tab bar with editor title actions -->
+      <div style="height:35px;flex-shrink:0;display:flex;align-items:stretch;background:#181818;border-bottom:1px solid #2b2b2b">
+        <div style="display:flex;align-items:center;gap:7px;padding:0 10px 0 12px;background:#1f1f1f;color:#ffffff;border-top:1px solid #0078d4;border-right:1px solid #2b2b2b">
+          <span style="display:flex;color:#4d9de0"><svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.2"><path d="M2 6.2V4.3A1.3 1.3 0 0 1 3.3 3h9.4A1.3 1.3 0 0 1 14 4.3v1.9z" fill="currentColor" opacity=".38" stroke="none"/><rect x="2" y="3" width="12" height="10" rx="1.3"/><path d="M2 6.2h12M6.4 6.2V13M10.2 6.2V13"/></svg></span>
+          <span>Customer.sql</span>
+          <span style="width:6px;height:6px;border-radius:50%;background:#cccccc;margin-left:2px"></span>
+        </div>
+        <div style="display:flex;align-items:center;gap:7px;padding:0 10px 0 12px;color:#9d9d9d;border-right:1px solid #2b2b2b">
+          <span style="display:flex;color:#a97fe0"><svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.2"><rect x="2.4" y="2.4" width="11.2" height="11.2" rx="2.6"/><path d="M6.6 5.6l4.2 2.4-4.2 2.4z" fill="currentColor" stroke="none"/></svg></span>
+          <span>usp_GetCustomer.sql</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:7px;padding:0 10px 0 12px;color:#9d9d9d;border-right:1px solid #2b2b2b;font-style:italic">
+          <span style="display:flex;color:#3fae7a"><svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.2"><rect x="4.6" y="5" width="9.4" height="8" rx="1.2"/><path d="M11.4 5V3.6A1.2 1.2 0 0 0 10.2 2.4H3.2A1.2 1.2 0 0 0 2 3.6v7a1.2 1.2 0 0 0 1.2 1.2h1.4"/></svg></span>
+          <span>vw_CustomerSummary.sql</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:7px;padding:0 10px 0 12px;color:#9d9d9d;border-right:1px solid #2b2b2b">
+          <span style="display:flex;color:#4d9de0"><svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.2"><path d="M2 6.2V4.3A1.3 1.3 0 0 1 3.3 3h9.4A1.3 1.3 0 0 1 14 4.3v1.9z" fill="currentColor" opacity=".38" stroke="none"/><rect x="2" y="3" width="12" height="10" rx="1.3"/><path d="M2 6.2h12M6.4 6.2V13M10.2 6.2V13"/></svg></span>
+          <span>Customer [Data]</span>
+        </div>
+
+        <div style="flex:1"></div>
+
+        <div style="display:flex;align-items:center;gap:1px;padding:0 8px;position:relative">
+          <span class="ic" style="color:#4ec98a"><svg width="17" height="17" viewBox="0 0 16 16" fill="currentColor"><path d="M4.6 3.2l7.6 4.8-7.6 4.8z"/></svg></span>
+          <span class="ic"><svg width="17" height="17" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.25"><circle cx="4" cy="3.4" r="1.7"/><circle cx="4" cy="12.6" r="1.7"/><circle cx="12.2" cy="8" r="1.7"/><path d="M4 5.1v5.8M5.7 3.4h3.1a1.7 1.7 0 0 1 1.7 1.7v1.2M5.7 12.6h3.1a1.7 1.7 0 0 0 1.7-1.7V9.7"/></svg></span>
+          <span class="ic"><svg width="17" height="17" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><path d="M2.6 3.6h10.8M2.6 6.9h7.4M2.6 10.2h10.8M2.6 13.5h5.6"/></svg></span>
+          <span class="ic"><svg width="17" height="17" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.25"><path d="M6.4 9.6L4 12a2.3 2.3 0 0 1-3.3-3.3l2.6-2.6a2.3 2.3 0 0 1 3.3 0"/><path d="M9.6 6.4L12 4a2.3 2.3 0 0 1 3.3 3.3l-2.6 2.6a2.3 2.3 0 0 1-3.3 0" transform="translate(-.7 0)"/></svg></span>
+          <span class="ic"><svg width="17" height="17" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><circle cx="3.4" cy="8" r=".9" fill="currentColor" stroke="none"/><circle cx="8" cy="8" r=".9" fill="currentColor" stroke="none"/><circle cx="12.6" cy="8" r=".9" fill="currentColor" stroke="none"/></svg></span>
+
+          <div style="position:absolute;top:31px;right:118px;background:#202020;border:1px solid #454545;border-radius:4px;padding:4px 9px;font-size:12px;color:#cccccc;box-shadow:0 3px 10px rgba(0,0,0,.5);white-space:nowrap;display:flex;gap:9px;align-items:center;z-index:5">
+            <span>Run</span><span style="color:#8b8b8b">F5</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- editor -->
+      <div style="height:452px;flex-shrink:0;display:flex;background:#1f1f1f;min-width:0;position:relative">
+        <div class="mono num" style="width:52px;flex-shrink:0;text-align:right;padding:8px 12px 0 0;font-size:13px;line-height:19px;color:#6e7681">
+          <div>1</div><div>2</div><div>3</div><div>4</div><div style="color:#cccccc">5</div><div>6</div><div>7</div><div>8</div><div>9</div><div>10</div><div>11</div><div>12</div><div>13</div><div>14</div><div>15</div><div>16</div><div>17</div>
+        </div>
+        <div class="mono" style="flex:1;padding:8px 0 0 4px;font-size:13px;line-height:19px;min-width:0;overflow:hidden">
+          <div class="c">-- Customers created since the last release, with their order counts</div>
+          <div><span class="k">DECLARE</span> <span class="id">@since</span> <span class="ty">datetime2</span> = <span class="s">'2025-01-01'</span>;</div>
+          <div>&nbsp;</div>
+          <div><span class="k">SELECT</span> <span class="k">TOP</span> (<span class="n">100</span>)</div>
+          <div style="background:#232323"><span style="padding-left:32px"></span><span class="id">c</span>.<span class="id">CustomerId</span>,</div>
+          <div><span style="padding-left:32px"></span><span class="id">c</span>.<span class="id">Name</span>,</div>
+          <div><span style="padding-left:32px"></span><span class="id">c</span>.<span class="id">Email</span>,</div>
+          <div><span style="padding-left:32px"></span><span class="id">c</span>.<span class="id">Phone</span>,</div>
+          <div><span style="padding-left:32px"></span><span class="id">c</span>.<span class="id">CreatedDate</span>,</div>
+          <div><span style="padding-left:32px"></span><span class="f">COUNT</span>(<span class="id">o</span>.<span class="id">OrderId</span>) <span class="k">AS</span> <span class="id">Orders</span></div>
+          <div><span class="k">FROM</span> <span class="id">dbo</span>.<span class="id">Customer</span> <span class="k">AS</span> <span class="id">c</span></div>
+          <div><span class="k">LEFT JOIN</span> <span class="id">dbo</span>.<span class="id">[Order]</span> <span class="k">AS</span> <span class="id">o</span> <span class="k">ON</span> <span class="id">o</span>.<span class="id">CustomerId</span> = <span class="id">c</span>.<span class="id">CustomerId</span></div>
+          <div><span class="k">WHERE</span> <span class="id">c</span>.<span class="id">CreatedDate</span> &gt;= <span class="id">@since</span></div>
+          <div><span class="k">GROUP BY</span> <span class="id">c</span>.<span class="id">CustomerId</span>, <span class="id">c</span>.<span class="id">Name</span>, <span class="id">c</span>.<span class="id">Email</span>, <span class="id">c</span>.<span class="id">Phone</span>, <span class="id">c</span>.<span class="id">CreatedDate</span></div>
+          <div><span class="k">ORDER BY</span> <span class="id">c</span>.<span class="id">CreatedDate</span> <span class="k">DESC</span>;</div>
+        </div>
+        <div style="width:64px;flex-shrink:0;padding:10px 8px 0 0;display:flex;flex-direction:column;gap:3px;opacity:.5">
+          <div style="height:2px;width:48px;background:#6a9955"></div>
+          <div style="height:2px;width:31px;background:#569cd6"></div>
+          <div style="height:2px;width:0"></div>
+          <div style="height:2px;width:17px;background:#569cd6"></div>
+          <div style="height:2px;width:23px;background:#9cdcfe"></div>
+          <div style="height:2px;width:20px;background:#9cdcfe"></div>
+          <div style="height:2px;width:19px;background:#9cdcfe"></div>
+          <div style="height:2px;width:19px;background:#9cdcfe"></div>
+          <div style="height:2px;width:25px;background:#9cdcfe"></div>
+          <div style="height:2px;width:34px;background:#dcdcaa"></div>
+          <div style="height:2px;width:29px;background:#569cd6"></div>
+          <div style="height:2px;width:52px;background:#569cd6"></div>
+          <div style="height:2px;width:27px;background:#569cd6"></div>
+          <div style="height:2px;width:50px;background:#569cd6"></div>
+          <div style="height:2px;width:26px;background:#569cd6"></div>
+        </div>
+      </div>
+
+      <!-- results panel -->
+      <div style="flex:1;min-height:0;display:flex;flex-direction:column;background:#181818;border-top:1px solid #2b2b2b">
+        <div style="height:35px;flex-shrink:0;display:flex;align-items:stretch;padding:0 8px 0 14px;gap:14px">
+          <div style="display:flex;align-items:center;border-bottom:1px solid #e7e7e7"><span class="vt" style="color:#e7e7e7">Results</span></div>
+          <div style="display:flex;align-items:center"><span class="vt" style="color:#8b8b8b;font-weight:400">Messages</span></div>
+          <div style="display:flex;align-items:center"><span class="vt" style="color:#8b8b8b;font-weight:400">Plan</span></div>
+          <div style="flex:1"></div>
+          <div style="display:flex;align-items:center;gap:6px">
+            <div style="display:flex;align-items:center;gap:6px;height:24px;padding:0 8px;background:#313131;border:1px solid #3c3c3c;border-radius:2px;color:#9d9d9d;width:168px">
+              <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><circle cx="6.9" cy="6.9" r="4.4"/><path d="M10.2 10.2L13.6 13.6"/></svg><span style="font-size:12px">Filter rows…</span>
+            </div>
+            <span class="ic" style="width:24px;height:24px" title="Export"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><path d="M8 2.4v7.4M5 7.2l3 3 3-3M2.8 12.4h10.4"/></svg></span>
+            <span class="ic" style="width:24px;height:24px" title="Maximize"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><path d="M6 4l-3 4 3 4M10 4l3 4-3 4"/></svg></span>
+            <span class="ic" style="width:24px;height:24px"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><path d="M4.2 4.2l7.6 7.6M11.8 4.2l-7.6 7.6"/></svg></span>
+          </div>
+        </div>
+
+        <div style="flex:1;min-height:0;background:#1f1f1f;display:flex;flex-direction:column">
+          <div style="display:grid;grid-template-columns:40px 88px 168px 208px 146px 128px 60px;border-bottom:1px solid #333333">
+            <div class="hcell" style="justify-content:flex-end;color:#6e7681;background:#252526"></div>
+            <div class="hcell" style="justify-content:space-between"><span>CustomerId</span><span style="color:#6e7681;display:flex"><svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M4 6.4L8 10l4-3.6"/></svg></span></div>
+            <div class="hcell">Name</div>
+            <div class="hcell">Email</div>
+            <div class="hcell">Phone</div>
+            <div class="hcell">CreatedDate</div>
+            <div class="hcell" style="justify-content:flex-end;border-right:none">Orders</div>
+          </div>
+
+          <div style="flex:1;overflow:hidden">
+            <div class="num" style="display:grid;grid-template-columns:40px 88px 168px 208px 146px 128px 60px;font-size:12px">
+              <div class="cell" style="justify-content:flex-end;color:#6e7681;background:#232323">1</div><div class="cell" style="justify-content:flex-end">10421</div><div class="cell">Adeyemi Logistics</div><div class="cell">ops@adeyemi.example</div><div class="cell">+234 1 271 4408</div><div class="cell mono">2025-01-04 09:14</div><div class="cell" style="justify-content:flex-end;border-right:none">7</div>
+
+              <div class="cell" style="justify-content:flex-end;color:#6e7681;background:#232323">2</div><div class="cell" style="justify-content:flex-end">10422</div><div class="cell">Braga &amp; Co</div><div class="cell">hello@braga.example</div><div class="cell">+351 21 884 0192</div><div class="cell mono">2025-01-04 09:41</div><div class="cell" style="justify-content:flex-end;border-right:none">2</div>
+
+              <div class="cell" style="justify-content:flex-end;color:#6e7681;background:#232323">3</div><div class="cell" style="justify-content:flex-end">10423</div><div class="cell" style="background:rgba(0,120,212,.22);outline:1px solid #0078d4;outline-offset:-1px">Cheng Metals</div><div class="cell" style="background:rgba(0,120,212,.22)">ap@chengmetals.example</div><div class="cell" style="background:rgba(0,120,212,.22)">+86 21 5511 0284</div><div class="cell mono">2025-01-05 10:02</div><div class="cell" style="justify-content:flex-end;border-right:none">41</div>
+
+              <div class="cell" style="justify-content:flex-end;color:#6e7681;background:#232323">4</div><div class="cell" style="justify-content:flex-end">10424</div><div class="cell" style="background:rgba(0,120,212,.22)">Dvořák Instruments</div><div class="cell" style="background:rgba(0,120,212,.22)">faktura@dvorak.example</div><div class="cell" style="background:rgba(0,120,212,.22)">+420 296 118 550</div><div class="cell mono">2025-01-06 11:37</div><div class="cell" style="justify-content:flex-end;border-right:none">0</div>
+
+              <div class="cell" style="justify-content:flex-end;color:#6e7681;background:#232323">5</div><div class="cell" style="justify-content:flex-end">10425</div><div class="cell" style="background:rgba(0,120,212,.22)">Eastgate Provisions</div><div class="cell" style="background:rgba(0,120,212,.22)">accounts@eastgate.example</div><div class="cell" style="background:rgba(0,120,212,.22)">+44 20 7946 0812</div><div class="cell mono">2025-01-07 08:05</div><div class="cell" style="justify-content:flex-end;border-right:none">18</div>
+
+              <div class="cell" style="justify-content:flex-end;color:#6e7681;background:#232323">6</div><div class="cell" style="justify-content:flex-end">10426</div><div class="cell">Fournier Frères</div><div class="cell">contact@fournier.example</div><div class="cell">+33 1 45 22 88 10</div><div class="cell mono">2025-01-07 14:20</div><div class="cell" style="justify-content:flex-end;border-right:none">3</div>
+
+              <div class="cell" style="justify-content:flex-end;color:#6e7681;background:#232323">7</div><div class="cell" style="justify-content:flex-end">10427</div><div class="cell">Ganesh Textiles</div><div class="cell">billing@ganeshtex.example</div><div class="cell">+91 22 6100 7734</div><div class="cell mono">2025-01-08 16:52</div><div class="cell" style="justify-content:flex-end;border-right:none">9</div>
+
+              <div class="cell" style="justify-content:flex-end;color:#6e7681;background:#232323">8</div><div class="cell" style="justify-content:flex-end">10428</div><div class="cell">Hafnarfjörður Salt</div><div class="cell" style="color:#6e7681;font-style:italic">NULL</div><div class="cell">+354 555 0184</div><div class="cell mono">2025-01-09 07:11</div><div class="cell" style="justify-content:flex-end;border-right:none">1</div>
+
+              <div class="cell" style="justify-content:flex-end;color:#6e7681;background:#232323">9</div><div class="cell" style="justify-content:flex-end">10429</div><div class="cell">Ilkeston Foundry</div><div class="cell">purchasing@ilkeston.example</div><div class="cell">+44 115 496 0223</div><div class="cell mono">2025-01-09 13:48</div><div class="cell" style="justify-content:flex-end;border-right:none">26</div>
+
+              <div class="cell" style="justify-content:flex-end;color:#6e7681;background:#232323">10</div><div class="cell" style="justify-content:flex-end">10430</div><div class="cell">Jelinek Pumps</div><div class="cell">ap@jelinek.example</div><div class="cell">+48 22 501 7740</div><div class="cell mono">2025-01-10 09:02</div><div class="cell" style="justify-content:flex-end;border-right:none">4</div>
+            </div>
+          </div>
+
+          <div style="height:26px;flex-shrink:0;display:flex;align-items:center;gap:14px;padding:0 12px;border-top:1px solid #2b2b2b;background:#181818;font-size:11px;color:#9d9d9d">
+            <span class="num">100 rows</span>
+            <span class="num">41 ms</span>
+            <span class="num">3 rows &times; 3 columns selected</span>
+            <span style="flex:1"></span>
+            <span style="display:flex;align-items:center;gap:5px"><span style="width:6px;height:6px;border-radius:50%;background:#3fb84f"></span>Dev-Matador · AdventureWorks</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- details, secondary side bar -->
+    <div style="width:320px;flex-shrink:0;background:#181818;border-left:1px solid #2b2b2b;display:flex;flex-direction:column;min-height:0">
+      <div style="height:35px;flex-shrink:0;display:flex;align-items:center;gap:6px;padding:0 8px 0 14px">
+        <span class="vt" style="flex:1">Database object</span>
+        <span class="ic" style="width:22px;height:22px"><svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><circle cx="3.4" cy="8" r=".9" fill="currentColor" stroke="none"/><circle cx="8" cy="8" r=".9" fill="currentColor" stroke="none"/><circle cx="12.6" cy="8" r=".9" fill="currentColor" stroke="none"/></svg></span>
+      </div>
+
+      <div style="flex:1;overflow:hidden;padding:0 14px 12px">
+        <div style="display:flex;align-items:center;gap:8px">
+          <span style="display:flex;color:#4d9de0"><svg width="20" height="20" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.15"><path d="M2 6.2V4.3A1.3 1.3 0 0 1 3.3 3h9.4A1.3 1.3 0 0 1 14 4.3v1.9z" fill="currentColor" opacity=".38" stroke="none"/><rect x="2" y="3" width="12" height="10" rx="1.3"/><path d="M2 6.2h12M6.4 6.2V13M10.2 6.2V13"/></svg></span>
+          <div style="min-width:0">
+            <div style="font-size:15px;font-weight:600;color:#e7e7e7">dbo.Customer</div>
+            <div style="font-size:11px;color:#8b8b8b;margin-top:2px">Table · SQL Server · Dev-Matador</div>
+          </div>
+        </div>
+
+        <div style="display:flex;flex-wrap:wrap;gap:5px;margin-top:12px">
+          <span class="ta" style="color:#d9b44a;border-color:rgba(217,180,74,.42);background:rgba(217,180,74,.12)">PK</span>
+          <span class="ta" style="color:#7fa7c4;border-color:rgba(127,167,196,.42);background:rgba(127,167,196,.12)">FK&times;3</span>
+          <span class="ta" style="color:#4d9de0;border-color:rgba(77,157,224,.42);background:rgba(77,157,224,.12)">Identity</span>
+          <span class="ta" style="color:#8e97ad;border-color:rgba(142,151,173,.42);background:rgba(142,151,173,.12)">Clustered</span>
+          <span class="ta" style="color:#e0605f;border-color:rgba(224,96,95,.42);background:rgba(224,96,95,.12)">2 triggers</span>
+          <span class="ta" style="color:#3fb8c4;border-color:rgba(63,184,196,.42);background:rgba(63,184,196,.12)">Temporal</span>
+          <span class="ta" style="color:#e0884c;border-color:rgba(224,136,76,.42);background:rgba(224,136,76,.12)">Partitioned</span>
+        </div>
+
+        <div style="margin-top:14px;border-top:1px solid #2b2b2b;padding-top:10px;display:grid;grid-template-columns:78px 1fr;row-gap:6px;font-size:12px">
+          <span style="color:#8b8b8b">Rows</span><span class="num" style="color:#e7e7e7">~12,430,121</span>
+          <span style="color:#8b8b8b">Columns</span><span class="num">34</span>
+          <span style="color:#8b8b8b">Data</span><span class="num">3.8 GB</span>
+          <span style="color:#8b8b8b">Indexes</span><span class="num">6 · 412 MB</span>
+          <span style="color:#8b8b8b">Created</span><span class="num">2022-01-05</span>
+          <span style="color:#8b8b8b">Modified</span><span class="num">2025-02-12</span>
+        </div>
+
+        <div style="margin-top:14px;border-top:1px solid #2b2b2b;padding-top:12px;display:grid;grid-template-columns:1fr 1fr;gap:6px">
+          <span class="qa"><svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" style="color:#4ec98a"><path d="M4.6 3.2l7.6 4.8-7.6 4.8z"/></svg>View Data</span>
+          <span class="qa"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><circle cx="8" cy="8" r="2.2"/><path d="M8 1.6v2M8 12.4v2M1.6 8h2M12.4 8h2M3.5 3.5l1.4 1.4M11.1 11.1l1.4 1.4M12.5 3.5l-1.4 1.4M4.9 11.1l-1.4 1.4"/></svg>Generate CRUD</span>
+          <span class="qa"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><path d="M9.4 1.9H4.2a1.3 1.3 0 0 0-1.3 1.3v9.6a1.3 1.3 0 0 0 1.3 1.3h7.6a1.3 1.3 0 0 0 1.3-1.3V5.5z"/><path d="M9.4 1.9v3.6h3.7"/></svg>Script CREATE</span>
+          <span class="qa"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><path d="M10.8 2.4l2.8 2.8-8 8H2.8v-2.8z"/></svg>Script ALTER</span>
+          <span class="qa"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><path d="M2.6 5.4h7.2M9.8 5.4L7.4 3M9.8 5.4L7.4 7.8M13.4 10.6H6.2M6.2 10.6L8.6 8.2M6.2 10.6l2.4 2.4"/></svg>Dependencies</span>
+          <span class="qa"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><rect x="1.8" y="3" width="5.2" height="10" rx="1"/><rect x="9" y="3" width="5.2" height="10" rx="1"/></svg>Compare With</span>
+        </div>
+
+        <div style="margin-top:14px;border-top:1px solid #2b2b2b">
+          <div class="row" style="gap:6px;color:#cccccc;margin-top:4px"><svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M5 6.5L8 9.5l3-3"/></svg><span style="font-size:12px">Columns</span><span style="flex:1"></span><span class="num" style="font-size:11px;color:#6b6b6b">34</span></div>
+
+          <div class="row" style="padding-left:24px;gap:6px"><span style="color:#d9b44a;display:flex"><svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><circle cx="5.6" cy="6.2" r="2.6"/><path d="M7.5 8.1l4 4M9.7 10.3l1.1-1.1M11 11.6l1.1-1.1"/></svg></span><span style="font-size:12px">CustomerId</span><span style="flex:1"></span><span class="mono" style="font-size:11px;color:#6b6b6b">int identity</span></div>
+          <div class="row" style="padding-left:24px;gap:6px"><span style="width:13px"></span><span style="font-size:12px">Name</span><span style="flex:1"></span><span class="mono" style="font-size:11px;color:#6b6b6b">nvarchar(200)</span></div>
+          <div class="row" style="padding-left:24px;gap:6px"><span style="width:13px"></span><span style="font-size:12px">Email</span><span style="flex:1"></span><span class="mono" style="font-size:11px;color:#6b6b6b">nvarchar(320)</span></div>
+          <div class="row" style="padding-left:24px;gap:6px"><span style="width:13px"></span><span style="font-size:12px">Phone</span><span style="flex:1"></span><span class="mono" style="font-size:11px;color:#6b6b6b">varchar(40) null</span></div>
+          <div class="row" style="padding-left:24px;gap:6px"><span style="color:#7fa7c4;display:flex"><svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><path d="M6.6 9.4a2.6 2.6 0 0 0 3.7 0l2-2a2.6 2.6 0 0 0-3.7-3.7l-.6.6"/><path d="M9.4 6.6a2.6 2.6 0 0 0-3.7 0l-2 2a2.6 2.6 0 0 0 3.7 3.7l.6-.6"/></svg></span><span style="font-size:12px">RegionId</span><span style="flex:1"></span><span class="mono" style="font-size:11px;color:#6b6b6b">int</span></div>
+
+          <div class="row" style="gap:6px;color:#cccccc"><svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" style="transform:rotate(-90deg)"><path d="M5 6.5L8 9.5l3-3"/></svg><span style="font-size:12px">Indexes</span><span style="flex:1"></span><span class="num" style="font-size:11px;color:#6b6b6b">6</span></div>
+          <div class="row" style="gap:6px;color:#cccccc"><svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" style="transform:rotate(-90deg)"><path d="M5 6.5L8 9.5l3-3"/></svg><span style="font-size:12px">Foreign keys</span><span style="flex:1"></span><span class="num" style="font-size:11px;color:#6b6b6b">3</span></div>
+          <div class="row" style="gap:6px;color:#cccccc"><svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" style="transform:rotate(-90deg)"><path d="M5 6.5L8 9.5l3-3"/></svg><span style="font-size:12px">Depends on</span><span style="flex:1"></span><span class="num" style="font-size:11px;color:#6b6b6b">2</span></div>
+          <div class="row" style="gap:6px;color:#cccccc"><svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M5 6.5L8 9.5l3-3"/></svg><span style="font-size:12px">Used by</span><span style="flex:1"></span><span class="num" style="font-size:11px;color:#6b6b6b">7</span></div>
+
+          <div class="row" style="padding-left:24px;gap:6px"><span style="color:#3fae7a;display:flex"><svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.2"><rect x="4.6" y="5" width="9.4" height="8" rx="1.2"/><path d="M11.4 5V3.6A1.2 1.2 0 0 0 10.2 2.4H3.2A1.2 1.2 0 0 0 2 3.6v7a1.2 1.2 0 0 0 1.2 1.2h1.4"/></svg></span><span style="font-size:12px">vw_CustomerSummary</span></div>
+          <div class="row" style="padding-left:24px;gap:6px"><span style="color:#a97fe0;display:flex"><svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.2"><rect x="2.4" y="2.4" width="11.2" height="11.2" rx="2.6"/><path d="M6.6 5.6l4.2 2.4-4.2 2.4z" fill="currentColor" stroke="none"/></svg></span><span style="font-size:12px">usp_GetCustomer</span></div>
+          <div class="row" style="padding-left:24px;gap:6px"><span style="color:#a97fe0;display:flex"><svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.2"><rect x="2.4" y="2.4" width="11.2" height="11.2" rx="2.6"/><path d="M6.6 5.6l4.2 2.4-4.2 2.4z" fill="currentColor" stroke="none"/></svg></span><span style="font-size:12px">usp_UpdateCustomer</span></div>
+          <div class="row" style="padding-left:24px;gap:6px"><span style="color:#e0605f;display:flex"><svg width="13" height="13" viewBox="0 0 16 16" fill="currentColor"><path d="M9.1 2L4.4 8.9h3l-.5 5.1 4.8-7H8.6z"/></svg></span><span style="font-size:12px">trg_Customer_Audit</span></div>
+          <div class="row" style="padding-left:24px;gap:6px"><span style="color:#7fa7c4;display:flex"><svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><path d="M6.6 9.4a2.6 2.6 0 0 0 3.7 0l2-2a2.6 2.6 0 0 0-3.7-3.7l-.6.6"/><path d="M9.4 6.6a2.6 2.6 0 0 0-3.7 0l-2 2a2.6 2.6 0 0 0 3.7 3.7l.6-.6"/></svg></span><span style="font-size:12px">FK_Order_Customer</span><span style="flex:1"></span><span style="font-size:11px;color:#6b6b6b">dbo.Order</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- status bar -->
+  <div style="height:22px;flex-shrink:0;display:flex;align-items:stretch;background:#181818;border-top:1px solid #2b2b2b;font-size:12px;color:#cccccc">
+    <div class="sb"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><circle cx="11.4" cy="4" r="1.9"/><circle cx="4.6" cy="4" r="1.9"/><circle cx="4.6" cy="12" r="1.9"/><path d="M4.6 5.9v4.2M9.5 4H6.5"/></svg><span>main</span></div>
+    <div class="sb"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><circle cx="8" cy="8" r="5.6"/><path d="M8 5.2v3.4M8 10.4v.2"/></svg><span class="num">0</span><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" style="margin-left:4px"><path d="M8 2.6l5.8 10.2H2.2z"/><path d="M8 6.6v3M8 11.2v.2"/></svg><span class="num">0</span></div>
+    <div class="sb" style="color:#ff7a66"><span style="width:7px;height:7px;border-radius:50%;background:#f0563f"></span><span>PROD Ledger-Core</span></div>
+    <div style="flex:1"></div>
+    <div class="sb" style="background:rgba(63,184,79,.14)"><span style="width:7px;height:7px;border-radius:50%;background:#3fb84f"></span><span>Dev-Matador · AdventureWorks</span></div>
+    <div class="sb num">100 rows · 41 ms</div>
+    <div class="sb num">Ln 9, Col 24</div>
+    <div class="sb">Spaces: 4</div>
+    <div class="sb">UTF-8</div>
+    <div class="sb">SQL</div>
+    <div class="sb"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><path d="M8 2.2a3.9 3.9 0 0 0-3.9 3.9c0 3.4-1.4 4.4-1.4 4.4h10.6s-1.4-1-1.4-4.4A3.9 3.9 0 0 0 8 2.2z"/><path d="M6.9 12.8a1.3 1.3 0 0 0 2.2 0"/></svg></div>
+  </div>
+</div>
+</x-dc>
+</body>
+</html>

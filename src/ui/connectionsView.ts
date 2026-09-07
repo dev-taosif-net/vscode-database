@@ -11,7 +11,7 @@ import {
   SidebarWebviewMessage,
   SortOrder
 } from '../shared/sidebar';
-import { ObjectPageRequest } from '../shared/catalog';
+import { FavouriteRef, ObjectPageRequest } from '../shared/catalog';
 import { ConnectionProfile, ENVIRONMENTS, EnvironmentId } from '../types';
 
 const GROUPED_KEY = 'databaseTools.view.grouped';
@@ -79,7 +79,12 @@ export class ConnectionsView implements vscode.WebviewViewProvider, vscode.Dispo
     void vscode.commands.executeCommand('setContext', 'databaseTools.filtered', false);
   }
 
+  /** Fires with the object the explorer's cursor has landed on. */
+  private readonly selectionEmitter = new vscode.EventEmitter<{ profileId: string; ref: FavouriteRef }>();
+  readonly onDidSelectObject = this.selectionEmitter.event;
+
   dispose(): void {
+    this.selectionEmitter.dispose();
     while (this.viewDisposables.length) {
       this.viewDisposables.pop()?.dispose();
     }
@@ -182,6 +187,13 @@ export class ConnectionsView implements vscode.WebviewViewProvider, vscode.Dispo
 
       case 'searchObjects':
         await this.searchObjects(message.query);
+        return;
+
+      case 'selectObject':
+        // Announced, never acted on here. Phase 3's details panel listens; a
+        // window without it drops this on the floor, which is why the explorer
+        // does not have to know whether the panel exists.
+        this.selectionEmitter.fire({ profileId: message.profileId, ref: message.ref });
         return;
 
       default:

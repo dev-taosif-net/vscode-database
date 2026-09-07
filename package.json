@@ -19,7 +19,9 @@
     "database"
   ],
   "main": "./dist/extension.js",
-  "activationEvents": [],
+  "activationEvents": [
+    "onLanguage:sql"
+  ],
   "contributes": {
     "commands": [
       {
@@ -201,6 +203,126 @@
         "title": "Remove from Favourites",
         "category": "Database",
         "icon": "$(star-delete)"
+      },
+      {
+        "command": "databaseTools.run",
+        "title": "Run",
+        "category": "Database",
+        "icon": "$(play)"
+      },
+      {
+        "command": "databaseTools.runStatement",
+        "title": "Run Current Statement",
+        "category": "Database",
+        "icon": "$(debug-line-by-line)"
+      },
+      {
+        "command": "databaseTools.cancelQuery",
+        "title": "Cancel",
+        "category": "Database",
+        "icon": "$(debug-stop)"
+      },
+      {
+        "command": "databaseTools.explainPlan",
+        "title": "Explain Plan",
+        "category": "Database",
+        "icon": "$(type-hierarchy)"
+      },
+      {
+        "command": "databaseTools.explainActual",
+        "title": "Explain Plan with Actual Statistics",
+        "category": "Database",
+        "icon": "$(type-hierarchy-sub)"
+      },
+      {
+        "command": "databaseTools.formatQuery",
+        "title": "Format SQL",
+        "category": "Database",
+        "icon": "$(list-flat)"
+      },
+      {
+        "command": "databaseTools.newQuery",
+        "title": "New Query",
+        "category": "Database",
+        "icon": "$(new-file)"
+      },
+      {
+        "command": "databaseTools.bindConnection",
+        "title": "Change Connection for This Tab",
+        "category": "Database",
+        "icon": "$(plug)"
+      },
+      {
+        "command": "databaseTools.saveQuery",
+        "title": "Save Query",
+        "category": "Database",
+        "icon": "$(save-as)"
+      },
+      {
+        "command": "databaseTools.shareQuery",
+        "title": "Share",
+        "category": "Database",
+        "icon": "$(export)"
+      },
+      {
+        "command": "databaseTools.disconnectTab",
+        "title": "Release This Tab's Session",
+        "category": "Database",
+        "icon": "$(debug-disconnect)"
+      },
+      {
+        "command": "databaseTools.viewData",
+        "title": "View Data",
+        "category": "Database",
+        "icon": "$(table)"
+      },
+      {
+        "command": "databaseTools.runRoutine",
+        "title": "Run…",
+        "category": "Database",
+        "icon": "$(play)"
+      },
+      {
+        "command": "databaseTools.selectTop1000",
+        "title": "Select Top 1000",
+        "category": "Database",
+        "icon": "$(table)"
+      },
+      {
+        "command": "databaseTools.countRows",
+        "title": "Count Rows Exactly",
+        "category": "Database",
+        "icon": "$(symbol-number)"
+      },
+      {
+        "command": "databaseTools.scriptCreate",
+        "title": "Script As CREATE",
+        "category": "Database",
+        "icon": "$(file-code)"
+      },
+      {
+        "command": "databaseTools.scriptDrop",
+        "title": "Script As DROP",
+        "category": "Database",
+        "icon": "$(trash)"
+      },
+      {
+        "command": "databaseTools.viewDependencies",
+        "title": "View Dependencies",
+        "category": "Database",
+        "icon": "$(references)"
+      },
+      {
+        "command": "databaseTools.compareWith",
+        "title": "Compare With…",
+        "category": "Database",
+        "icon": "$(diff)"
+      },
+      {
+        "command": "databaseTools.showDetails",
+        "title": "Show Details",
+        "category": "Database",
+        "icon": "$(info)"
       }
     ],
     "configuration": {
@@ -229,6 +351,54 @@
           "type": "boolean",
           "default": true,
           "description": "Show the active connection in the status bar, tinted by its environment."
+        },
+        "databaseTools.executionSessions": {
+          "type": "number",
+          "default": 4,
+          "minimum": 1,
+          "maximum": 16,
+          "description": "Execution sessions one connection may hold at once. Each is a separate connection to the server, opened only when a tab first runs something. The catalog keeps a session of its own that is never counted here, so browsing the tree stays responsive while a query runs."
+        },
+        "databaseTools.confirmProductionWrite": {
+          "type": "boolean",
+          "default": true,
+          "description": "Ask before running anything that writes against a connection marked as Production. This is separate from the confirmation before connecting: consenting to look at production is not consenting to change it."
+        },
+        "databaseTools.savedQueryFolder": {
+          "type": "string",
+          "default": ".database/queries",
+          "description": "Where saved queries are written, relative to the first workspace folder. They are ordinary .sql files, so they diff and review like any other source. Without a folder open they go to the extension's global storage instead."
+        },
+        "databaseTools.format.keywordCase": {
+          "type": "string",
+          "enum": [
+            "upper",
+            "lower",
+            "preserve"
+          ],
+          "default": "upper",
+          "description": "How SQL keywords are cased by the formatter."
+        },
+        "databaseTools.format.commas": {
+          "type": "string",
+          "enum": [
+            "trailing",
+            "leading"
+          ],
+          "default": "trailing",
+          "description": "Whether a list's commas end a line or begin the next one."
+        },
+        "databaseTools.format.leadingBoolean": {
+          "type": "boolean",
+          "default": true,
+          "description": "Start a line with AND or OR rather than trailing the line before it."
+        },
+        "databaseTools.format.maxWidth": {
+          "type": "number",
+          "default": 100,
+          "minimum": 40,
+          "maximum": 400,
+          "description": "The width the formatter aims for. A line it cannot break well is left long rather than broken badly."
         }
       }
     },
@@ -237,6 +407,41 @@
         "command": "databaseTools.openConnections",
         "key": "ctrl+alt+d",
         "mac": "cmd+alt+d"
+      },
+      {
+        "command": "databaseTools.run",
+        "key": "f5",
+        "when": "databaseTools.sqlTab && editorTextFocus"
+      },
+      {
+        "command": "databaseTools.run",
+        "key": "ctrl+enter",
+        "mac": "cmd+enter",
+        "when": "databaseTools.sqlTab && editorTextFocus"
+      },
+      {
+        "command": "databaseTools.runStatement",
+        "key": "ctrl+shift+enter",
+        "mac": "cmd+shift+enter",
+        "when": "databaseTools.sqlTab && editorTextFocus"
+      },
+      {
+        "command": "databaseTools.cancelQuery",
+        "key": "ctrl+alt+.",
+        "mac": "cmd+alt+.",
+        "when": "databaseTools.running"
+      },
+      {
+        "command": "databaseTools.explainPlan",
+        "key": "ctrl+l",
+        "mac": "cmd+l",
+        "when": "databaseTools.sqlTab && editorTextFocus"
+      },
+      {
+        "command": "databaseTools.formatQuery",
+        "key": "ctrl+shift+f",
+        "mac": "cmd+shift+f",
+        "when": "databaseTools.sqlTab && editorTextFocus && editorLangId == sql"
       }
     ],
     "menus": {
@@ -328,6 +533,82 @@
         {
           "command": "databaseTools.removeObjectFavourite",
           "when": "false"
+        },
+        {
+          "command": "databaseTools.viewData",
+          "when": "false"
+        },
+        {
+          "command": "databaseTools.runRoutine",
+          "when": "false"
+        },
+        {
+          "command": "databaseTools.selectTop1000",
+          "when": "false"
+        },
+        {
+          "command": "databaseTools.countRows",
+          "when": "false"
+        },
+        {
+          "command": "databaseTools.scriptCreate",
+          "when": "false"
+        },
+        {
+          "command": "databaseTools.scriptDrop",
+          "when": "false"
+        },
+        {
+          "command": "databaseTools.viewDependencies",
+          "when": "false"
+        },
+        {
+          "command": "databaseTools.compareWith",
+          "when": "false"
+        },
+        {
+          "command": "databaseTools.showDetails",
+          "when": "false"
+        },
+        {
+          "command": "databaseTools.run",
+          "when": "databaseTools.sqlTab"
+        },
+        {
+          "command": "databaseTools.runStatement",
+          "when": "databaseTools.sqlTab"
+        },
+        {
+          "command": "databaseTools.explainPlan",
+          "when": "databaseTools.sqlTab"
+        },
+        {
+          "command": "databaseTools.explainActual",
+          "when": "databaseTools.sqlTab"
+        },
+        {
+          "command": "databaseTools.formatQuery",
+          "when": "databaseTools.sqlTab"
+        },
+        {
+          "command": "databaseTools.saveQuery",
+          "when": "databaseTools.sqlTab"
+        },
+        {
+          "command": "databaseTools.shareQuery",
+          "when": "databaseTools.sqlTab"
+        },
+        {
+          "command": "databaseTools.bindConnection",
+          "when": "databaseTools.sqlTab"
+        },
+        {
+          "command": "databaseTools.disconnectTab",
+          "when": "databaseTools.sqlTab"
+        },
+        {
+          "command": "databaseTools.cancelQuery",
+          "when": "databaseTools.running"
         }
       ],
       "view/title": [
@@ -370,6 +651,11 @@
           "command": "databaseTools.showFlatList",
           "when": "view == databaseTools.connections && databaseTools.grouped",
           "group": "2_view@1"
+        },
+        {
+          "command": "databaseTools.newQuery",
+          "when": "view == databaseTools.connections",
+          "group": "navigation@0"
         }
       ],
       "webview/context": [
@@ -472,6 +758,130 @@
           "command": "databaseTools.removeObjectFavourite",
           "when": "webviewSection == 'dbObject' && dbObjectPinned",
           "group": "4_pin@1"
+        },
+        {
+          "command": "databaseTools.viewData",
+          "when": "webviewSection == 'dbObject' && dbObjectRelational",
+          "group": "1_open@1"
+        },
+        {
+          "command": "databaseTools.runRoutine",
+          "when": "webviewSection == 'dbObject' && dbObjectRoutine",
+          "group": "1_open@2"
+        },
+        {
+          "command": "databaseTools.selectTop1000",
+          "when": "webviewSection == 'dbObject' && dbObjectRelational",
+          "group": "1_open@4"
+        },
+        {
+          "command": "databaseTools.showDetails",
+          "when": "webviewSection == 'dbObject'",
+          "group": "1_open@5"
+        },
+        {
+          "command": "databaseTools.countRows",
+          "when": "webviewSection == 'dbObject' && objectKind == 'table'",
+          "group": "1_open@6"
+        },
+        {
+          "command": "databaseTools.scriptCreate",
+          "when": "webviewSection == 'dbObject'",
+          "group": "2_script@3"
+        },
+        {
+          "command": "databaseTools.scriptDrop",
+          "when": "webviewSection == 'dbObject'",
+          "group": "2_script@4"
+        },
+        {
+          "command": "databaseTools.viewDependencies",
+          "when": "webviewSection == 'dbObject'",
+          "group": "2_script@5"
+        },
+        {
+          "command": "databaseTools.compareWith",
+          "when": "webviewSection == 'dbObject'",
+          "group": "2_script@6"
+        },
+        {
+          "command": "databaseTools.newQuery",
+          "when": "webviewSection == 'connection' && dbConnectionLive",
+          "group": "1_session@3"
+        }
+      ],
+      "editor/title": [
+        {
+          "command": "databaseTools.run",
+          "when": "databaseTools.sqlTab && !databaseTools.running",
+          "group": "navigation@1"
+        },
+        {
+          "command": "databaseTools.cancelQuery",
+          "when": "databaseTools.sqlTab && databaseTools.running",
+          "group": "navigation@1"
+        },
+        {
+          "command": "databaseTools.explainPlan",
+          "when": "databaseTools.sqlTab",
+          "group": "navigation@2"
+        },
+        {
+          "command": "databaseTools.formatQuery",
+          "when": "databaseTools.sqlTab",
+          "group": "navigation@3"
+        },
+        {
+          "command": "databaseTools.bindConnection",
+          "when": "databaseTools.sqlTab && resourceScheme != dbquery",
+          "group": "navigation@4"
+        },
+        {
+          "command": "databaseTools.runStatement",
+          "when": "databaseTools.sqlTab",
+          "group": "1_run@1"
+        },
+        {
+          "command": "databaseTools.explainActual",
+          "when": "databaseTools.sqlTab",
+          "group": "1_run@2"
+        },
+        {
+          "command": "databaseTools.saveQuery",
+          "when": "databaseTools.sqlTab",
+          "group": "2_keep@1"
+        },
+        {
+          "command": "databaseTools.shareQuery",
+          "when": "databaseTools.sqlTab",
+          "group": "2_keep@2"
+        },
+        {
+          "command": "databaseTools.disconnectTab",
+          "when": "databaseTools.sqlTab",
+          "group": "3_session@1"
+        }
+      ],
+      "editor/context": [
+        {
+          "command": "databaseTools.run",
+          "when": "databaseTools.sqlTab && editorTextFocus",
+          "group": "1_database@1"
+        },
+        {
+          "command": "databaseTools.runStatement",
+          "when": "databaseTools.sqlTab && editorTextFocus",
+          "group": "1_database@2"
+        },
+        {
+          "command": "databaseTools.explainPlan",
+          "when": "databaseTools.sqlTab && editorTextFocus",
+          "group": "1_database@3"
+        },
+        {
+          "command": "databaseTools.saveQuery",
+          "when": "databaseTools.sqlTab && editorTextFocus",
+          "group": "2_database@1"
         }
       ]
     },
@@ -480,6 +890,13 @@
         {
           "id": "databaseTools",
           "title": "Database Connections",
+          "icon": "media/database.svg"
+        }
+      ],
+      "panel": [
+        {
+          "id": "databaseToolsResults",
+          "title": "Query Results",
           "icon": "media/database.svg"
         }
       ]
@@ -491,6 +908,25 @@
           "name": "Connections",
           "type": "webview",
           "icon": "media/database.svg"
+        },
+        {
+          "id": "databaseTools.details",
+          "name": "Database Object",
+          "type": "webview",
+          "icon": "media/database.svg"
+        },
+        {
+          "id": "databaseTools.history",
+          "name": "Query History",
+          "type": "webview",
+          "icon": "media/database.svg"
+        }
+      ],
+      "databaseToolsResults": [
+        {
+          "id": "databaseTools.results",
+          "name": "Results",
+          "type": "webview"
         }
       ]
     }

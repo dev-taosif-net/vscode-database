@@ -1,0 +1,243 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>
+* { box-sizing: border-box; }
+body { margin: 0; }
+a { color: #4daafc; text-decoration: none; }
+a:hover { color: #4daafc; text-decoration: underline; }
+.cp { font-family: "Segoe WPC", "Segoe UI", system-ui, -apple-system, sans-serif; font-size: 13px; line-height: 1.4; -webkit-font-smoothing: antialiased; }
+.mono { font-family: Consolas, "Cascadia Mono", "Courier New", monospace; }
+.num { font-variant-numeric: tabular-nums; }
+.h2 { font-size: 11px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: #9d9d9d; }
+.rule { flex: 1; height: 1px; background: #2b2b2b; }
+.sh { display: flex; align-items: center; gap: 10px; margin: 0 0 11px; }
+.tb { width: 100%; border-collapse: collapse; font-size: 11.5px; }
+.tb th { text-align: left; font-weight: 400; color: #7a7a7a; font-size: 10.5px; letter-spacing: .05em; text-transform: uppercase; padding: 0 8px 5px 0; border-bottom: 1px solid #2b2b2b; }
+.tb td { padding: 4px 8px 4px 0; border-bottom: 1px solid #232323; color: #cccccc; vertical-align: top; }
+.tb td.d { color: #8b8b8b; }
+.sw { width: 15px; height: 15px; border-radius: 3px; flex-shrink: 0; }
+.swr { display: flex; align-items: center; gap: 8px; font-size: 11.5px; }
+.ta { display: inline-flex; align-items: center; height: 17px; padding: 0 6px; border-radius: 3px; border: 1px solid; font-size: 10px; font-weight: 600; white-space: nowrap; }
+.card { border: 1px solid #2b2b2b; border-radius: 4px; background: #1a1a1a; padding: 11px 12px; }
+</style>
+</helmet>
+
+<div class="cp" style="width:1480px;height:1120px;display:flex;flex-direction:column;gap:20px;padding:24px;background:#141414;color:#cccccc;overflow:hidden">
+
+  <div style="display:flex;align-items:flex-end;gap:20px;padding-bottom:16px;border-bottom:1px solid #2b2b2b">
+    <div>
+      <div style="font-size:22px;font-weight:600;color:#e7e7e7;letter-spacing:-.01em">Phase 3 · query workspace</div>
+      <div style="font-size:12.5px;color:#8b8b8b;margin-top:5px">The numbers an implementer needs, and the one rule the whole thing rests on.</div>
+    </div>
+    <div style="flex:1"></div>
+    <div style="max-width:660px;font-size:12px;color:#9d9d9d;line-height:1.65">
+      Every neutral surface reads a VS Code theme token, so the workspace follows the user&#39;s theme with no detection of its own. The values below are the literals — the object hues, the environment hues and the plan ramp — and each was measured against the ground it sits on.
+    </div>
+  </div>
+
+  <div style="flex:1;min-height:0;display:grid;grid-template-columns:456px 456px 456px;gap:24px">
+
+    <!-- column 1 -->
+    <div style="display:flex;flex-direction:column;gap:20px;min-height:0">
+
+      <div>
+        <div class="sh"><span class="h2">The rule</span><span class="rule"></span></div>
+        <div class="card" style="border-color:#0078d4;background:rgba(0,120,212,.07)">
+          <div style="font-size:13.5px;color:#e7e7e7;line-height:1.6">The host owns state. A webview is a projection with a scroll position.</div>
+          <div style="font-size:11.5px;color:#9d9d9d;line-height:1.65;margin-top:7px">Three things live in a webview and only three: scroll offset, column widths, selection rectangle. All three survive a disposal through <span class="mono" style="font-size:11px">vscode.setState</span>. Everything else changes what the host has to fetch, so the host holds it.</div>
+        </div>
+      </div>
+
+      <div>
+        <div class="sh"><span class="h2">Surfaces</span><span class="rule"></span></div>
+        <table class="tb">
+          <tr><th style="width:40%">surface</th><th style="width:26%">what</th><th>where</th></tr>
+          <tr><td class="mono">Customer.sql</td><td class="d">text document</td><td class="d">editor tab</td></tr>
+          <tr><td class="mono">usp_GetCustomer.sql</td><td class="d">text document</td><td class="d">editor tab</td></tr>
+          <tr><td>Results · Messages · Plan</td><td class="d">webview</td><td class="d">panel, one</td></tr>
+          <tr><td class="mono">Customer [Data]</td><td class="d">webview</td><td class="d">editor tab</td></tr>
+          <tr><td class="mono">usp_GetCustomer [Run]</td><td class="d">webview</td><td class="d">editor tab</td></tr>
+          <tr><td>Database object</td><td class="d">webview</td><td class="d">side bar</td></tr>
+          <tr><td>Query history</td><td class="d">webview</td><td class="d">side bar</td></tr>
+          <tr><td>Saved queries</td><td class="d">tree over files</td><td class="d">side bar</td></tr>
+        </table>
+      </div>
+
+      <div>
+        <div class="sh"><span class="h2">URI schemes</span><span class="rule"></span></div>
+        <div class="mono" style="font-size:11.5px;line-height:1.85;color:#9cdcfe">
+          <div>dbquery://&lt;profileId&gt;/&lt;name&gt;.sql</div>
+          <div>dbdata://&lt;profileId&gt;/&lt;schema&gt;.&lt;name&gt;</div>
+          <div>dbrun://&lt;profileId&gt;/&lt;schema&gt;.&lt;name&gt;</div>
+          <div>dbplan://&lt;profileId&gt;/&lt;executionId&gt;</div>
+          <div>dbobj://&lt;profileId&gt;/&lt;kind&gt;/&lt;schema&gt;.&lt;name&gt;</div>
+        </div>
+        <div style="font-size:11.5px;color:#8b8b8b;line-height:1.65;margin-top:9px">
+          The profile id is in the authority, not in a side table. That is what makes binding survive a window reload, a workspace reopen, a tab dragged to another group and Reopen Closed Editor — and it is what a <span class="mono" style="font-size:11px">when</span> clause reads.
+        </div>
+      </div>
+
+      <div>
+        <div class="sh"><span class="h2">Budgets</span><span class="rule"></span></div>
+        <table class="tb">
+          <tr><td>open a query tab</td><td class="num" style="text-align:right;color:#6ad39a">&lt; 50 ms</td></tr>
+          <tr><td>first row on screen</td><td class="num" style="text-align:right;color:#6ad39a">&lt; 200 ms</td></tr>
+          <tr><td>scroll to row 4,000,000</td><td class="num" style="text-align:right;color:#6ad39a">&lt; 100 ms</td></tr>
+          <tr><td>switch between tabs</td><td class="num" style="text-align:right;color:#6ad39a">&lt; 50 ms</td></tr>
+          <tr><td>completion appears</td><td class="num" style="text-align:right;color:#6ad39a">&lt; 80 ms</td></tr>
+          <tr><td>1,000 tabs open</td><td class="num" style="text-align:right;color:#6ad39a">&lt; 200 MB</td></tr>
+          <tr><td>explorer during a 4-minute query</td><td class="num" style="text-align:right;color:#6ad39a">always</td></tr>
+        </table>
+      </div>
+    </div>
+
+    <!-- column 2 -->
+    <div style="display:flex;flex-direction:column;gap:20px;min-height:0">
+
+      <div>
+        <div class="sh"><span class="h2">Geometry</span><span class="rule"></span></div>
+        <table class="tb">
+          <tr><td>grid row</td><td class="num" style="text-align:right">22 px</td><td class="d" style="text-align:right;width:44%"><span class="mono" style="font-size:10.5px">list.rowHeight</span></td></tr>
+          <tr><td>grid header</td><td class="num" style="text-align:right">24 px</td><td class="d" style="text-align:right">sticky</td></tr>
+          <tr><td>row-number gutter</td><td class="num" style="text-align:right">40 px</td><td class="d" style="text-align:right">pinned</td></tr>
+          <tr><td>editor line</td><td class="num" style="text-align:right">19 px</td><td class="d" style="text-align:right">13 px mono</td></tr>
+          <tr><td>tab strip</td><td class="num" style="text-align:right">35 px</td><td class="d" style="text-align:right">workbench</td></tr>
+          <tr><td>panel title</td><td class="num" style="text-align:right">35 px</td><td class="d" style="text-align:right">workbench</td></tr>
+          <tr><td>status bar</td><td class="num" style="text-align:right">22 px</td><td class="d" style="text-align:right">workbench</td></tr>
+          <tr><td>explorer indent</td><td class="num" style="text-align:right">10 px</td><td class="d" style="text-align:right">per level</td></tr>
+          <tr><td>row overscan</td><td class="num" style="text-align:right">12</td><td class="d" style="text-align:right">each way</td></tr>
+          <tr><td>live webviews</td><td class="num" style="text-align:right">16</td><td class="d" style="text-align:right">LRU, then disposed</td></tr>
+        </table>
+        <div style="font-size:11.5px;color:#8b8b8b;line-height:1.65;margin-top:9px">
+          Fixed row height is what makes <span class="mono" style="font-size:11px">scrollTop / 22</span> an index rather than a measurement, and what makes jumping to row nine million a subtraction.
+        </div>
+      </div>
+
+      <div>
+        <div class="sh"><span class="h2">Keyboard</span><span class="rule"></span></div>
+        <table class="tb">
+          <tr><td class="mono" style="width:46%">F5 · Ctrl+Enter</td><td>Execute</td></tr>
+          <tr><td class="mono">Ctrl+Shift+Enter</td><td>Run current statement</td></tr>
+          <tr><td class="mono">Ctrl+Alt+.</td><td>Cancel</td></tr>
+          <tr><td class="mono">Shift+Alt+F</td><td>Format</td></tr>
+          <tr><td class="mono" style="color:#e5a054">Ctrl+Shift+F</td><td class="d">Format, but only while a bound SQL editor has focus — it is Find in Files everywhere else</td></tr>
+          <tr><td class="mono">Ctrl+L</td><td>Explain plan</td></tr>
+          <tr><td class="mono">Ctrl+C · Ctrl+Shift+C</td><td>Copy selection · with headers</td></tr>
+          <tr><td class="mono">F12</td><td>Go to definition</td></tr>
+        </table>
+      </div>
+
+      <div>
+        <div class="sh"><span class="h2">Rows on the wire</span><span class="rule"></span></div>
+        <div class="mono" style="font-size:11.5px;line-height:1.8">
+          <div><span style="color:#569cd6">type</span> <span style="color:#4ec9b0">RowMessage</span> = {</div>
+          <div>&nbsp;&nbsp;<span style="color:#9cdcfe">executionId</span>: <span style="color:#4ec9b0">string</span>;</div>
+          <div>&nbsp;&nbsp;<span style="color:#9cdcfe">offset</span>: <span style="color:#4ec9b0">number</span>;</div>
+          <div>&nbsp;&nbsp;<span style="color:#9cdcfe">rows</span>: <span style="color:#4ec9b0">CellValue</span>[][];</div>
+          <div>};</div>
+        </div>
+        <div style="font-size:11.5px;color:#8b8b8b;line-height:1.65;margin-top:9px">
+          Arrays, never objects. Column names travel once. Thirty-four string keys per row across a million rows is thirty-four million strings carrying no information after the first one.
+        </div>
+        <div style="font-size:11.5px;color:#8b8b8b;line-height:1.65;margin-top:7px">
+          <span class="mono" style="font-size:11px;color:#9cdcfe">bigint</span>, <span class="mono" style="font-size:11px;color:#9cdcfe">Buffer</span> and <span class="mono" style="font-size:11px;color:#9cdcfe">Date</span> do not survive structured cloning intact, so each is tagged <span class="mono" style="font-size:11px;color:#ce9178">{ t, v }</span>. A <span class="mono" style="font-size:11px">datetime2</span> rendered through the browser&#39;s locale is the most common data-corruption bug in this category of tool.
+        </div>
+      </div>
+
+      <div>
+        <div class="sh"><span class="h2">Memory</span><span class="rule"></span></div>
+        <table class="tb">
+          <tr><td>in memory per result</td><td class="num" style="text-align:right">100,000 rows</td></tr>
+          <tr><td>beyond that</td><td class="d" style="text-align:right">spill file, index every 1,000</td></tr>
+          <tr><td>held by the webview</td><td class="d" style="text-align:right">visible window + overscan</td></tr>
+          <tr><td>hydrated result sets</td><td class="num" style="text-align:right">8, then LRU</td></tr>
+          <tr><td>export path</td><td class="d" style="text-align:right">host to disk, never through the page</td></tr>
+        </table>
+      </div>
+    </div>
+
+    <!-- column 3 -->
+    <div style="display:flex;flex-direction:column;gap:20px;min-height:0">
+
+      <div>
+        <div class="sh"><span class="h2">Object hues — unchanged from phase 2</span><span class="rule"></span></div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:5px 18px">
+          <div class="swr"><span class="sw" style="background:#4d9de0"></span>Table<span style="flex:1"></span><span class="mono" style="color:#7a7a7a;font-size:11px">#4d9de0</span></div>
+          <div class="swr"><span class="sw" style="background:#3fae7a"></span>View<span style="flex:1"></span><span class="mono" style="color:#7a7a7a;font-size:11px">#3fae7a</span></div>
+          <div class="swr"><span class="sw" style="background:#a97fe0"></span>Procedure<span style="flex:1"></span><span class="mono" style="color:#7a7a7a;font-size:11px">#a97fe0</span></div>
+          <div class="swr"><span class="sw" style="background:#d9a441"></span>Function<span style="flex:1"></span><span class="mono" style="color:#7a7a7a;font-size:11px">#d9a441</span></div>
+          <div class="swr"><span class="sw" style="background:#e0605f"></span>Trigger<span style="flex:1"></span><span class="mono" style="color:#7a7a7a;font-size:11px">#e0605f</span></div>
+          <div class="swr"><span class="sw" style="background:#e0884c"></span>Sequence<span style="flex:1"></span><span class="mono" style="color:#7a7a7a;font-size:11px">#e0884c</span></div>
+          <div class="swr"><span class="sw" style="background:#8e97ad"></span>Type<span style="flex:1"></span><span class="mono" style="color:#7a7a7a;font-size:11px">#8e97ad</span></div>
+          <div class="swr"><span class="sw" style="background:#3fb8c4"></span>Synonym<span style="flex:1"></span><span class="mono" style="color:#7a7a7a;font-size:11px">#3fb8c4</span></div>
+          <div class="swr"><span class="sw" style="background:#d9b44a"></span>Key<span style="flex:1"></span><span class="mono" style="color:#7a7a7a;font-size:11px">#d9b44a</span></div>
+          <div class="swr"><span class="sw" style="background:#7fa7c4"></span>Reference<span style="flex:1"></span><span class="mono" style="color:#7a7a7a;font-size:11px">#7fa7c4</span></div>
+        </div>
+      </div>
+
+      <div>
+        <div class="sh"><span class="h2">What phase 3 adds</span><span class="rule"></span></div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:5px 18px">
+          <div class="swr"><span class="sw" style="background:#232323;border:1px solid #3c3c3c"></span>Grid hairline<span style="flex:1"></span><span class="mono" style="color:#7a7a7a;font-size:11px">#232323</span></div>
+          <div class="swr"><span class="sw" style="background:#252526;border:1px solid #3c3c3c"></span>Header ground<span style="flex:1"></span><span class="mono" style="color:#7a7a7a;font-size:11px">#252526</span></div>
+          <div class="swr"><span class="sw" style="background:rgba(0,120,212,.22);border:1px solid #0078d4"></span>Selection<span style="flex:1"></span><span class="mono" style="color:#7a7a7a;font-size:11px">accent 22%</span></div>
+          <div class="swr"><span class="sw" style="background:#6e7681"></span>Null ink<span style="flex:1"></span><span class="mono" style="color:#7a7a7a;font-size:11px">#6e7681</span></div>
+        </div>
+        <div style="display:flex;align-items:center;gap:9px;margin-top:11px">
+          <span style="font-size:11.5px;color:#8b8b8b;white-space:nowrap">Plan cost</span>
+          <span style="flex:1;height:9px;border-radius:5px;background:linear-gradient(90deg,#4d9de0 0%,#3fae7a 32%,#d9a441 66%,#e0884c 86%,#e0605f 100%)"></span>
+          <span class="mono num" style="font-size:10.5px;color:#7a7a7a">0 → 100%</span>
+        </div>
+        <div style="font-size:11.5px;color:#8b8b8b;line-height:1.65;margin-top:9px">
+          No ground token, here or in <span class="mono" style="font-size:11px">tokens.css</span>. Each surface defines its own <span class="mono" style="font-size:11px">--bg</span>, because the editor&#39;s is #1f1f1f and the sidebar it would be painted into is #181818.
+        </div>
+      </div>
+
+      <div>
+        <div class="sh"><span class="h2">Object tags</span><span class="rule"></span></div>
+        <div style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:11px">
+          <span class="ta" style="color:#d9b44a;border-color:rgba(217,180,74,.42);background:rgba(217,180,74,.12)">PK</span>
+          <span class="ta" style="color:#7fa7c4;border-color:rgba(127,167,196,.42);background:rgba(127,167,196,.12)">FK&times;3</span>
+          <span class="ta" style="color:#4d9de0;border-color:rgba(77,157,224,.42);background:rgba(77,157,224,.12)">Identity</span>
+          <span class="ta" style="color:#8e97ad;border-color:rgba(142,151,173,.42);background:rgba(142,151,173,.12)">Clustered</span>
+          <span class="ta" style="color:#e0605f;border-color:rgba(224,96,95,.42);background:rgba(224,96,95,.12)">2 triggers</span>
+          <span class="ta" style="color:#3fb8c4;border-color:rgba(63,184,196,.42);background:rgba(63,184,196,.12)">Temporal</span>
+          <span class="ta" style="color:#e0884c;border-color:rgba(224,136,76,.42);background:rgba(224,136,76,.12)">Partitioned</span>
+          <span class="ta" style="color:#8892a4;border-color:rgba(136,146,164,.42);background:rgba(136,146,164,.12)">Heap</span>
+          <span class="ta" style="color:#a97fe0;border-color:rgba(169,127,224,.42);background:rgba(169,127,224,.12)">Unlogged</span>
+          <span class="ta" style="color:#3fae7a;border-color:rgba(63,174,122,.42);background:rgba(63,174,122,.12)">Materialized</span>
+        </div>
+        <table class="tb">
+          <tr><th style="width:38%">tag</th><th style="width:31%">SQL Server</th><th>PostgreSQL</th></tr>
+          <tr><td>Identity</td><td class="d mono" style="font-size:10.5px">identity_columns</td><td class="d mono" style="font-size:10.5px">attidentity</td></tr>
+          <tr><td>Clustered</td><td class="d mono" style="font-size:10.5px">indexes.type = 1</td><td class="d">no such thing</td></tr>
+          <tr><td>Temporal</td><td class="d mono" style="font-size:10.5px">temporal_type = 2</td><td class="d">no such thing</td></tr>
+          <tr><td>Unlogged</td><td class="d">no such thing</td><td class="d mono" style="font-size:10.5px">relpersistence</td></tr>
+          <tr><td>Created</td><td class="d mono" style="font-size:10.5px">objects.create_date</td><td class="d" style="color:#e5a054">not recorded — a dash</td></tr>
+        </table>
+        <div style="font-size:11.5px;color:#8b8b8b;line-height:1.65;margin-top:9px">
+          An engine without a concept gets no badge for it, never a greyed one. A fact that does not exist gets a dash and a tooltip saying why.
+        </div>
+      </div>
+
+      <div>
+        <div class="sh"><span class="h2">Sessions per connection</span><span class="rule"></span></div>
+        <table class="tb">
+          <tr><td style="width:32%">control</td><td class="num" style="width:12%">1</td><td class="d">catalog, metadata, completion. Never leased, so a four-minute scan cannot freeze the explorer.</td></tr>
+          <tr><td>exec</td><td class="num">0–4</td><td class="d">leased per tab and sticky, because a temp table and a SET option belong to a session.</td></tr>
+          <tr><td>side</td><td class="d">on demand</td><td class="d">the PostgreSQL CancelRequest, and nothing else.</td></tr>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+</x-dc>
+</body>
+</html>

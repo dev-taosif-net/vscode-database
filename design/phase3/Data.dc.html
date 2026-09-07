@@ -1,0 +1,123 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>
+* { box-sizing: border-box; }
+body { margin: 0; }
+a { color: #4daafc; text-decoration: none; }
+a:hover { color: #4daafc; text-decoration: underline; }
+.cp { font-family: "Segoe WPC", "Segoe UI", system-ui, -apple-system, sans-serif; font-size: 13px; line-height: 1.4; -webkit-font-smoothing: antialiased; }
+.mono { font-family: Consolas, "Cascadia Mono", "Courier New", monospace; }
+.num { font-variant-numeric: tabular-nums; }
+.cell { padding: 0 8px; height: 22px; display: flex; align-items: center; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; border-right: 1px solid #232323; font-size: 12px; }
+.hcell { padding: 0 8px; height: 26px; display: flex; align-items: center; gap: 5px; white-space: nowrap; border-right: 1px solid #333333; font-size: 12px; color: #cccccc; background: #252526; }
+.ic { display: flex; align-items: center; justify-content: center; width: 26px; height: 26px; border-radius: 4px; color: #cccccc; }
+.ic:hover { background: #3c3c3c; }
+.tb { display: flex; align-items: center; gap: 6px; height: 26px; padding: 0 9px; border-radius: 4px; background: #313131; border: 1px solid #3c3c3c; color: #cccccc; font-size: 12px; }
+</style>
+</helmet>
+
+<div class="cp" style="width:1180px;height:740px;display:flex;flex-direction:column;background:#1f1f1f;color:#cccccc;overflow:hidden">
+
+  <div style="height:35px;flex-shrink:0;display:flex;align-items:stretch;background:#181818;border-bottom:1px solid #2b2b2b">
+    <div style="display:flex;align-items:center;gap:7px;padding:0 10px 0 12px;color:#9d9d9d;border-right:1px solid #2b2b2b">
+      <span style="display:flex;color:#4d9de0"><svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.2"><path d="M2 6.2V4.3A1.3 1.3 0 0 1 3.3 3h9.4A1.3 1.3 0 0 1 14 4.3v1.9z" fill="currentColor" opacity=".38" stroke="none"/><rect x="2" y="3" width="12" height="10" rx="1.3"/><path d="M2 6.2h12M6.4 6.2V13M10.2 6.2V13"/></svg></span>
+      <span>Customer.sql</span>
+    </div>
+    <div style="display:flex;align-items:center;gap:7px;padding:0 10px 0 12px;background:#1f1f1f;color:#ffffff;border-top:1px solid #0078d4;border-right:1px solid #2b2b2b">
+      <span style="display:flex;color:#4d9de0"><svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.2"><path d="M2 6.2V4.3A1.3 1.3 0 0 1 3.3 3h9.4A1.3 1.3 0 0 1 14 4.3v1.9z" fill="currentColor" opacity=".38" stroke="none"/><rect x="2" y="3" width="12" height="10" rx="1.3"/><path d="M2 6.2h12M6.4 6.2V13M10.2 6.2V13"/></svg></span>
+      <span>Customer [Data]</span>
+      <span style="display:flex;color:#cccccc;margin-left:3px"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><path d="M4.2 4.2l7.6 7.6M11.8 4.2l-7.6 7.6"/></svg></span>
+    </div>
+    <div style="flex:1"></div>
+    <div style="display:flex;align-items:center;gap:1px;padding:0 8px">
+      <span class="ic"><svg width="17" height="17" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><path d="M13 8a5 5 0 1 1-1.6-3.7M13 2.6v3h-3"/></svg></span>
+      <span class="ic"><svg width="17" height="17" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><circle cx="3.4" cy="8" r=".9" fill="currentColor" stroke="none"/><circle cx="8" cy="8" r=".9" fill="currentColor" stroke="none"/><circle cx="12.6" cy="8" r=".9" fill="currentColor" stroke="none"/></svg></span>
+    </div>
+  </div>
+
+  <div style="height:44px;flex-shrink:0;display:flex;align-items:center;gap:10px;padding:0 12px;background:#181818;border-bottom:1px solid #2b2b2b">
+    <span style="display:flex;color:#4d9de0"><svg width="18" height="18" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.2"><path d="M2 6.2V4.3A1.3 1.3 0 0 1 3.3 3h9.4A1.3 1.3 0 0 1 14 4.3v1.9z" fill="currentColor" opacity=".38" stroke="none"/><rect x="2" y="3" width="12" height="10" rx="1.3"/><path d="M2 6.2h12M6.4 6.2V13M10.2 6.2V13"/></svg></span>
+    <span style="font-size:14px;font-weight:600;color:#e7e7e7">dbo.Customer</span>
+    <div style="display:flex;align-items:center;gap:6px;height:26px;padding:0 9px;background:#313131;border:1px solid #3c3c3c;border-radius:2px;color:#9d9d9d;width:220px">
+      <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><circle cx="6.9" cy="6.9" r="4.4"/><path d="M10.2 10.2L13.6 13.6"/></svg><span style="font-size:12px">Filter — becomes a WHERE</span>
+    </div>
+    <span class="tb" style="color:#4daafc;border-color:rgba(0,120,212,.5);background:rgba(0,120,212,.14)">
+      CreatedDate
+      <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M4 6.4L8 10l4-3.6"/></svg>
+      <span style="color:#8b8b8b;font-size:11px">server-side</span>
+    </span>
+    <div style="flex:1"></div>
+    <span class="ic" title="Refresh"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><path d="M13 8a5 5 0 1 1-1.6-3.7M13 2.6v3h-3"/></svg></span>
+    <span class="ic" title="Export"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><path d="M8 2.4v7.4M5 7.2l3 3 3-3M2.8 12.4h10.4"/></svg></span>
+    <span class="num" style="font-size:12px;color:#9d9d9d">~12,430,121 rows</span>
+  </div>
+
+  <div style="display:grid;grid-template-columns:44px 92px 200px 236px 140px 84px 140px 140px 70px 1fr;border-bottom:1px solid #333333;flex-shrink:0">
+    <div class="hcell" style="background:#252526"></div>
+    <div class="hcell" style="justify-content:flex-end;gap:4px"><span style="color:#d9b44a;display:flex"><svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><circle cx="5.6" cy="6.2" r="2.6"/><path d="M7.5 8.1l4 4M9.7 10.3l1.1-1.1M11 11.6l1.1-1.1"/></svg></span>CustomerId</div>
+    <div class="hcell">Name</div>
+    <div class="hcell">Email</div>
+    <div class="hcell">Phone</div>
+    <div class="hcell" style="justify-content:flex-end">RegionId</div>
+    <div class="hcell" style="color:#ffffff;background:#2d2d30">CreatedDate<svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="#4daafc" stroke-width="1.8"><path d="M4 6.4L8 10l4-3.6"/></svg></div>
+    <div class="hcell">ModifiedDate</div>
+    <div class="hcell" style="justify-content:flex-end">IsActive</div>
+    <div class="hcell" style="border-right:none"></div>
+  </div>
+
+  <div style="flex:1;min-height:0;overflow:hidden">
+    <div class="num" style="display:grid;grid-template-columns:44px 92px 200px 236px 140px 84px 140px 140px 70px 1fr">
+<div class="cell" style="justify-content:flex-end;color:#6e7681;background:#232323">1</div><div class="cell" style="justify-content:flex-end">10421</div><div class="cell" style="">Adeyemi Logistics</div><div class="cell" style="">ops@adeyemi.example</div><div class="cell" style="">+234 1 271 4408</div><div class="cell" style="justify-content:flex-end">4</div><div class="cell mono" style="">2025-01-04 09:14</div><div class="cell mono" style="">2025-02-11 08:20</div><div class="cell" style="justify-content:flex-end">1</div><div class="cell" style="border-right:none"></div>
+              <div class="cell" style="justify-content:flex-end;color:#6e7681;background:#232323">2</div><div class="cell" style="justify-content:flex-end">10422</div><div class="cell" style="">Braga & Co</div><div class="cell" style="">hello@braga.example</div><div class="cell" style="">+351 21 884 0192</div><div class="cell" style="justify-content:flex-end">2</div><div class="cell mono" style="">2025-01-04 09:41</div><div class="cell mono" style="">2025-01-04 09:41</div><div class="cell" style="justify-content:flex-end">1</div><div class="cell" style="border-right:none"></div>
+              <div class="cell" style="justify-content:flex-end;color:#6e7681;background:#232323">3</div><div class="cell" style="justify-content:flex-end;background:#04395e">10423</div><div class="cell" style=";background:#04395e">Cheng Metals</div><div class="cell" style=";background:#04395e">ap@chengmetals.example</div><div class="cell" style=";background:#04395e">+86 21 5511 0284</div><div class="cell" style="justify-content:flex-end;background:#04395e">7</div><div class="cell mono" style="background:#04395e">2025-01-05 10:02</div><div class="cell mono" style="background:#04395e">2025-02-28 16:44</div><div class="cell" style="justify-content:flex-end;background:#04395e">1</div><div class="cell" style="border-right:none;background:#04395e"></div>
+              <div class="cell" style="justify-content:flex-end;color:#6e7681;background:#232323">4</div><div class="cell" style="justify-content:flex-end">10424</div><div class="cell" style="">Dvo&#345;&#225;k Instruments</div><div class="cell" style="">faktura@dvorak.example</div><div class="cell" style="">+420 296 118 550</div><div class="cell" style="justify-content:flex-end">3</div><div class="cell mono" style="">2025-01-06 11:37</div><div class="cell mono" style="">2025-01-06 11:37</div><div class="cell" style="justify-content:flex-end">0</div><div class="cell" style="border-right:none"></div>
+              <div class="cell" style="justify-content:flex-end;color:#6e7681;background:#232323">5</div><div class="cell" style="justify-content:flex-end">10425</div><div class="cell" style="">Eastgate Provisions</div><div class="cell" style="">accounts@eastgate.example</div><div class="cell" style="">+44 20 7946 0812</div><div class="cell" style="justify-content:flex-end">1</div><div class="cell mono" style="">2025-01-07 08:05</div><div class="cell mono" style="">2025-03-02 10:11</div><div class="cell" style="justify-content:flex-end">1</div><div class="cell" style="border-right:none"></div>
+              <div class="cell" style="justify-content:flex-end;color:#6e7681;background:#232323">6</div><div class="cell" style="justify-content:flex-end">10426</div><div class="cell" style="">Fournier Fr&#232;res</div><div class="cell" style="">contact@fournier.example</div><div class="cell" style="">+33 1 45 22 88 10</div><div class="cell" style="justify-content:flex-end">3</div><div class="cell mono" style="">2025-01-07 14:20</div><div class="cell mono" style="">2025-01-19 09:30</div><div class="cell" style="justify-content:flex-end">1</div><div class="cell" style="border-right:none"></div>
+              <div class="cell" style="justify-content:flex-end;color:#6e7681;background:#232323">7</div><div class="cell" style="justify-content:flex-end">10427</div><div class="cell" style="">Ganesh Textiles</div><div class="cell" style="">billing@ganeshtex.example</div><div class="cell" style="">+91 22 6100 7734</div><div class="cell" style="justify-content:flex-end">7</div><div class="cell mono" style="">2025-01-08 16:52</div><div class="cell mono" style="">2025-02-02 12:05</div><div class="cell" style="justify-content:flex-end">1</div><div class="cell" style="border-right:none"></div>
+              <div class="cell" style="justify-content:flex-end;color:#6e7681;background:#232323">8</div><div class="cell" style="justify-content:flex-end">10428</div><div class="cell" style="">Hafnarfj&#246;r&#240;ur Salt</div><div class="cell" style="color:#6e7681;font-style:italic;">NULL</div><div class="cell" style="">+354 555 0184</div><div class="cell" style="justify-content:flex-end">1</div><div class="cell mono" style="">2025-01-09 07:11</div><div class="cell mono" style="">2025-01-09 07:11</div><div class="cell" style="justify-content:flex-end">1</div><div class="cell" style="border-right:none"></div>
+              <div class="cell" style="justify-content:flex-end;color:#6e7681;background:#232323">9</div><div class="cell" style="justify-content:flex-end">10429</div><div class="cell" style="">Ilkeston Foundry</div><div class="cell" style="">purchasing@ilkeston.example</div><div class="cell" style="">+44 115 496 0223</div><div class="cell" style="justify-content:flex-end">1</div><div class="cell mono" style="">2025-01-09 13:48</div><div class="cell mono" style="">2025-03-04 15:22</div><div class="cell" style="justify-content:flex-end">1</div><div class="cell" style="border-right:none"></div>
+              <div class="cell" style="justify-content:flex-end;color:#6e7681;background:#232323">10</div><div class="cell" style="justify-content:flex-end">10430</div><div class="cell" style="">Jelinek Pumps</div><div class="cell" style="">ap@jelinek.example</div><div class="cell" style="">+48 22 501 7740</div><div class="cell" style="justify-content:flex-end">3</div><div class="cell mono" style="">2025-01-10 09:02</div><div class="cell mono" style="">2025-01-10 09:02</div><div class="cell" style="justify-content:flex-end">1</div><div class="cell" style="border-right:none"></div>
+              <div class="cell" style="justify-content:flex-end;color:#6e7681;background:#232323">11</div><div class="cell" style="justify-content:flex-end">10431</div><div class="cell" style="">Kowalczyk Bearings</div><div class="cell" style="">zamowienia@kowalczyk.example</div><div class="cell" style="color:#6e7681;font-style:italic;">NULL</div><div class="cell" style="justify-content:flex-end">3</div><div class="cell mono" style="">2025-01-10 15:39</div><div class="cell mono" style="">2025-02-17 11:48</div><div class="cell" style="justify-content:flex-end">1</div><div class="cell" style="border-right:none"></div>
+              <div class="cell" style="justify-content:flex-end;color:#6e7681;background:#232323">12</div><div class="cell" style="justify-content:flex-end">10432</div><div class="cell" style="">Lindqvist Marin</div><div class="cell" style="">faktura@lindqvist.example</div><div class="cell" style="">+46 31 774 0155</div><div class="cell" style="justify-content:flex-end">2</div><div class="cell mono" style="">2025-01-11 08:27</div><div class="cell mono" style="">2025-01-11 08:27</div><div class="cell" style="justify-content:flex-end">0</div><div class="cell" style="border-right:none"></div>
+              <div class="cell" style="justify-content:flex-end;color:#6e7681;background:#232323">13</div><div class="cell" style="justify-content:flex-end">10433</div><div class="cell" style="">Moreno Cer&#225;mica</div><div class="cell" style="">cuentas@moreno.example</div><div class="cell" style="">+34 96 355 1290</div><div class="cell" style="justify-content:flex-end">2</div><div class="cell mono" style="">2025-01-12 10:14</div><div class="cell mono" style="">2025-02-20 14:03</div><div class="cell" style="justify-content:flex-end">1</div><div class="cell" style="border-right:none"></div>
+              <div class="cell" style="justify-content:flex-end;color:#6e7681;background:#232323">14</div><div class="cell" style="justify-content:flex-end">10434</div><div class="cell" style="">Nakamura Optics</div><div class="cell" style="">keiri@nakamura.example</div><div class="cell" style="">+81 3 5610 2244</div><div class="cell" style="justify-content:flex-end">7</div><div class="cell mono" style="">2025-01-12 17:41</div><div class="cell mono" style="">2025-01-30 09:19</div><div class="cell" style="justify-content:flex-end">1</div><div class="cell" style="border-right:none"></div>
+              <div class="cell" style="justify-content:flex-end;color:#6e7681;background:#232323">15</div><div class="cell" style="justify-content:flex-end">10435</div><div class="cell" style="">Okonkwo Textiles</div><div class="cell" style="">finance@okonkwo.example</div><div class="cell" style="">+234 9 291 6620</div><div class="cell" style="justify-content:flex-end">4</div><div class="cell mono" style="">2025-01-13 09:55</div><div class="cell mono" style="">2025-01-13 09:55</div><div class="cell" style="justify-content:flex-end">1</div><div class="cell" style="border-right:none"></div>
+              <div class="cell" style="justify-content:flex-end;color:#6e7681;background:#232323">16</div><div class="cell" style="justify-content:flex-end">10436</div><div class="cell" style="">Pretorius Mining</div><div class="cell" style="">creditors@pretorius.example</div><div class="cell" style="">+27 11 447 8830</div><div class="cell" style="justify-content:flex-end">4</div><div class="cell mono" style="">2025-01-14 07:32</div><div class="cell mono" style="">2025-03-01 08:44</div><div class="cell" style="justify-content:flex-end">1</div><div class="cell" style="border-right:none"></div>
+              <div class="cell" style="justify-content:flex-end;color:#6e7681;background:#232323">17</div><div class="cell" style="justify-content:flex-end">10437</div><div class="cell" style="">Quintero Agr&#237;cola</div><div class="cell" style="">pagos@quintero.example</div><div class="cell" style="">+57 1 742 3318</div><div class="cell" style="justify-content:flex-end">6</div><div class="cell mono" style="">2025-01-14 12:08</div><div class="cell mono" style="">2025-01-14 12:08</div><div class="cell" style="justify-content:flex-end">1</div><div class="cell" style="border-right:none"></div>
+              <div class="cell" style="justify-content:flex-end;color:#6e7681;background:#232323">18</div><div class="cell" style="justify-content:flex-end">10438</div><div class="cell" style="">Rasmussen Kolding</div><div class="cell" style="">bogholderi@rasmussen.example</div><div class="cell" style="">+45 76 30 22 08</div><div class="cell" style="justify-content:flex-end">2</div><div class="cell mono" style="">2025-01-15 08:44</div><div class="cell mono" style="">2025-02-09 13:26</div><div class="cell" style="justify-content:flex-end">0</div><div class="cell" style="border-right:none"></div>
+              <div class="cell" style="justify-content:flex-end;color:#6e7681;background:#232323">19</div><div class="cell" style="justify-content:flex-end">10439</div><div class="cell" style="">Sorokin Hydraulics</div><div class="cell" style="">buh@sorokin.example</div><div class="cell" style="">+7 812 305 4471</div><div class="cell" style="justify-content:flex-end">5</div><div class="cell mono" style="">2025-01-15 16:20</div><div class="cell mono" style="">2025-01-15 16:20</div><div class="cell" style="justify-content:flex-end">1</div><div class="cell" style="border-right:none"></div>
+              <div class="cell" style="justify-content:flex-end;color:#6e7681;background:#232323">20</div><div class="cell" style="justify-content:flex-end">10440</div><div class="cell" style="">Tan Boon Seng Trading</div><div class="cell" style="">accounts@tanboonseng.example</div><div class="cell" style="">+65 6221 0904</div><div class="cell" style="justify-content:flex-end">7</div><div class="cell mono" style="">2025-01-16 09:11</div><div class="cell mono" style="">2025-02-25 17:38</div><div class="cell" style="justify-content:flex-end">1</div><div class="cell" style="border-right:none"></div>
+              <div class="cell" style="justify-content:flex-end;color:#6e7681;background:#232323">21</div><div class="cell" style="justify-content:flex-end">10441</div><div class="cell" style="">Uddin Fabrics</div><div class="cell" style="">billing@uddin.example</div><div class="cell" style="">+880 2 985 3117</div><div class="cell" style="justify-content:flex-end">7</div><div class="cell mono" style="">2025-01-17 11:26</div><div class="cell mono" style="">2025-01-17 11:26</div><div class="cell" style="justify-content:flex-end">1</div><div class="cell" style="border-right:none"></div>
+              <div class="cell" style="justify-content:flex-end;color:#6e7681;background:#232323">22</div><div class="cell" style="justify-content:flex-end">10442</div><div class="cell" style="">Vermeulen Bloemen</div><div class="cell" style="">admin@vermeulen.example</div><div class="cell" style="">+31 20 794 0261</div><div class="cell" style="justify-content:flex-end">2</div><div class="cell mono" style="">2025-01-17 14:03</div><div class="cell mono" style="">2025-03-05 09:57</div><div class="cell" style="justify-content:flex-end">1</div><div class="cell" style="border-right:none"></div>
+              <div class="cell" style="justify-content:flex-end;color:#6e7681;background:#232323">23</div><div class="cell" style="justify-content:flex-end">10443</div><div class="cell" style="">Wan&#380;yna Chemicals</div><div class="cell" style="">ksiegowosc@wanzyna.example</div><div class="cell" style="color:#6e7681;font-style:italic;">NULL</div><div class="cell" style="justify-content:flex-end">3</div><div class="cell mono" style="">2025-01-18 08:19</div><div class="cell mono" style="">2025-01-18 08:19</div><div class="cell" style="justify-content:flex-end">0</div><div class="cell" style="border-right:none"></div>
+              <div class="cell" style="justify-content:flex-end;color:#6e7681;background:#232323">24</div><div class="cell" style="justify-content:flex-end">10444</div><div class="cell" style="">Ximenes Pescados</div><div class="cell" style="">contas@ximenes.example</div><div class="cell" style="">+55 71 3311 8842</div><div class="cell" style="justify-content:flex-end">6</div><div class="cell mono" style="">2025-01-19 10:37</div><div class="cell mono" style="">2025-02-14 11:12</div><div class="cell" style="justify-content:flex-end">1</div><div class="cell" style="border-right:none"></div>
+              <div class="cell" style="justify-content:flex-end;color:#6e7681;background:#232323">25</div><div class="cell" style="justify-content:flex-end">10445</div><div class="cell" style="">Yilmaz Makina</div><div class="cell" style="">muhasebe@yilmaz.example</div><div class="cell" style="">+90 216 470 2205</div><div class="cell" style="justify-content:flex-end">5</div><div class="cell mono" style="">2025-01-19 15:52</div><div class="cell mono" style="">2025-01-19 15:52</div><div class="cell" style="justify-content:flex-end">1</div><div class="cell" style="border-right:none"></div>
+              <div class="cell" style="justify-content:flex-end;color:#6e7681;background:#232323">26</div><div class="cell" style="justify-content:flex-end">10446</div><div class="cell" style="">Zorzi Vetro</div><div class="cell" style="">amministrazione@zorzi.example</div><div class="cell" style="">+39 041 522 7719</div><div class="cell" style="justify-content:flex-end">2</div><div class="cell mono" style="">2025-01-20 08:06</div><div class="cell mono" style="">2025-02-27 16:29</div><div class="cell" style="justify-content:flex-end">1</div><div class="cell" style="border-right:none"></div>    </div>
+  </div>
+
+  <div style="height:28px;flex-shrink:0;display:flex;align-items:center;gap:16px;padding:0 12px;border-top:1px solid #2b2b2b;background:#181818;font-size:11px;color:#9d9d9d">
+    <span class="num" style="color:#cccccc">Rows 1–200 of ~12,430,121</span>
+    <span class="num">34 ms</span>
+    <span style="display:flex;align-items:center;gap:5px">
+      <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><rect x="3.4" y="7" width="9.2" height="6.2" rx="1.2"/><path d="M5.6 7V5.2a2.4 2.4 0 0 1 4.8 0V7"/></svg>
+      Read-only · Generate CRUD to write
+    </span>
+    <span style="display:flex;align-items:center;gap:5px;color:#8b8b8b">Keyset paged on CustomerId — constant time at any depth</span>
+    <div style="flex:1"></div>
+    <span style="display:flex;align-items:center;gap:2px">
+      <span style="display:flex;width:20px;height:20px;align-items:center;justify-content:center;border-radius:3px;color:#5a5a5a"><svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M9.6 4L6 8l3.6 4"/></svg></span>
+      <span style="display:flex;width:20px;height:20px;align-items:center;justify-content:center;border-radius:3px;background:#313131;color:#cccccc"><svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M6.4 4L10 8l-3.6 4"/></svg></span>
+    </span>
+    <span style="display:flex;align-items:center;gap:5px;height:20px;padding:0 7px;border-radius:3px;background:#313131;border:1px solid #3c3c3c;color:#cccccc">200<svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M4.5 6.5L8 10l3.5-3.5"/></svg></span>
+  </div>
+</div>
+</x-dc>
+</body>
+</html>

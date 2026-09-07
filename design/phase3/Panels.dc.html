@@ -1,0 +1,180 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>
+* { box-sizing: border-box; }
+body { margin: 0; }
+a { color: #4daafc; text-decoration: none; }
+a:hover { color: #4daafc; text-decoration: underline; }
+.cp { font-family: "Segoe WPC", "Segoe UI", system-ui, -apple-system, sans-serif; font-size: 13px; line-height: 1.4; -webkit-font-smoothing: antialiased; }
+.mono { font-family: Consolas, "Cascadia Mono", "Courier New", monospace; }
+.num { font-variant-numeric: tabular-nums; }
+.vt { font-size: 11px; font-weight: 600; letter-spacing: .07em; text-transform: uppercase; color: #cccccc; }
+.pan { width: 320px; background: #181818; border: 1px solid #2b2b2b; border-radius: 3px; display: flex; flex-direction: column; overflow: hidden; }
+.ph { height: 35px; flex-shrink: 0; display: flex; align-items: center; gap: 7px; padding: 0 8px 0 14px; border-bottom: 1px solid #2b2b2b; }
+.ic { display: flex; align-items: center; justify-content: center; width: 22px; height: 22px; border-radius: 3px; color: #cccccc; }
+.he { padding: 7px 12px; border-bottom: 1px solid #232323; display: flex; flex-direction: column; gap: 4px; }
+.hm { display: flex; align-items: center; gap: 8px; font-size: 11px; }
+.hq { font-family: Consolas, "Cascadia Mono", "Courier New", monospace; font-size: 11.5px; color: #b4b4b4; line-height: 15px; max-height: 30px; overflow: hidden; }
+.row { height: 22px; display: flex; align-items: center; white-space: nowrap; }
+.cap { font-size: 10px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: #7a7a7a; }
+</style>
+</helmet>
+
+<div class="cp" style="width:1040px;height:860px;display:flex;gap:20px;padding:20px;background:#1f1f1f;color:#cccccc;overflow:hidden">
+
+  <!-- query history -->
+  <div class="pan">
+    <div class="ph">
+      <span class="vt" style="flex:1">Query history</span>
+      <span class="ic"><svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><circle cx="6.9" cy="6.9" r="4.4"/><path d="M10.2 10.2L13.6 13.6"/></svg></span>
+      <span class="ic"><svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><path d="M2.6 4.2h10.8M6.2 4.2V2.8h3.6v1.4M4 4.2l.6 8.4a1 1 0 0 0 1 .9h4.8a1 1 0 0 0 1-.9l.6-8.4"/></svg></span>
+    </div>
+    <div style="flex-shrink:0;padding:8px 12px;border-bottom:1px solid #2b2b2b;display:flex;gap:7px">
+      <div style="flex:1;display:flex;align-items:center;gap:6px;height:24px;padding:0 8px;background:#313131;border:1px solid #3c3c3c;border-radius:2px;color:#9d9d9d;font-size:12px">
+        <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><circle cx="6.9" cy="6.9" r="4.4"/><path d="M10.2 10.2L13.6 13.6"/></svg>Search history…
+      </div>
+      <span style="display:flex;align-items:center;gap:5px;height:24px;padding:0 8px;border-radius:2px;background:#313131;border:1px solid #3c3c3c;font-size:11px;color:#57c76a">
+        <span style="width:6px;height:6px;border-radius:50%;background:#3fb84f"></span>Dev-Matador
+        <svg width="10" height="10" viewBox="0 0 16 16" fill="none" stroke="#9d9d9d" stroke-width="1.6"><path d="M4.5 6.5L8 10l3.5-3.5"/></svg>
+      </span>
+    </div>
+
+    <div style="flex:1;overflow:hidden">
+      <div class="he" style="background:#04395e">
+        <div class="hm"><span style="color:#6ad39a;display:flex"><svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3.4 8.4l3 3 6.2-6.6"/></svg></span><span class="num" style="color:#ffffff">09:41</span><span class="num" style="color:#b8cee0">41 ms</span><span class="num" style="color:#b8cee0">100 rows</span></div>
+        <div class="hq" style="color:#dbe7f2">SELECT TOP (100) c.CustomerId, c.Name, c.Email, c.Phone, c.CreatedDate FROM dbo.Customer AS c LEFT JOIN dbo.[Order]…</div>
+      </div>
+
+      <div class="he">
+        <div class="hm"><span style="color:#4ec98a;display:flex"><svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3.4 8.4l3 3 6.2-6.6"/></svg></span><span class="num" style="color:#cccccc">09:38</span><span class="num" style="color:#8b8b8b">1.2 s</span><span class="num" style="color:#8b8b8b">1 row</span></div>
+        <div class="hq">EXEC dbo.usp_GetCustomer @CustomerId = 10421, @IncludeOrders = 1, @Status = 'Active';</div>
+      </div>
+
+      <div class="he">
+        <div class="hm"><span style="color:#ff7a66;display:flex"><svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M4.4 4.4l7.2 7.2M11.6 4.4l-7.2 7.2"/></svg></span><span class="num" style="color:#cccccc">09:36</span><span style="color:#ff7a66">Invalid column name &#39;CustmerId&#39;</span></div>
+        <div class="hq">SELECT * FROM dbo.[Order] WHERE CustmerId = 10421;</div>
+      </div>
+
+      <div class="he">
+        <div class="hm"><span style="color:#e5a054;display:flex"><svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><circle cx="8" cy="8" r="5.6"/><path d="M4.4 4.4l7.2 7.2"/></svg></span><span class="num" style="color:#cccccc">09:21</span><span class="num" style="color:#e5a054">cancelled after 41,208 rows</span></div>
+        <div class="hq">SELECT * FROM dbo.OrderLine ol JOIN dbo.[Order] o ON o.OrderId = ol.OrderId ORDER BY ol.OrderLineId;</div>
+      </div>
+
+      <div class="he">
+        <div class="hm"><span style="color:#4ec98a;display:flex"><svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3.4 8.4l3 3 6.2-6.6"/></svg></span><span class="num" style="color:#cccccc">09:04</span><span class="num" style="color:#8b8b8b">88 ms</span><span class="num" style="color:#8b8b8b">1,240 rows</span></div>
+        <div class="hq">SELECT s.name AS [schema], t.name FROM sys.tables t JOIN sys.schemas s ON s.schema_id = t.schema_id;</div>
+      </div>
+
+      <div class="he">
+        <div class="hm"><span style="color:#4ec98a;display:flex"><svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3.4 8.4l3 3 6.2-6.6"/></svg></span><span class="num" style="color:#cccccc">08:52</span><span class="num" style="color:#8b8b8b">12 ms</span><span class="num" style="color:#8b8b8b">0 rows</span></div>
+        <div class="hq">SELECT 1 FROM dbo.Customer WHERE Email = @email;</div>
+      </div>
+
+      <div class="he">
+        <div class="hm"><span style="color:#8e97ad;display:flex"><svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><rect x="3.4" y="7" width="9.2" height="6.2" rx="1.2"/><path d="M5.6 7V5.2a2.4 2.4 0 0 1 4.8 0V7"/></svg></span><span class="num" style="color:#cccccc">08:40</span><span class="num" style="color:#8b8b8b">31 ms</span></div>
+        <div class="hq" style="color:#7a7a7a;font-style:italic">Statement withheld — it set a credential</div>
+      </div>
+    </div>
+
+    <div style="flex-shrink:0;padding:8px 12px;border-top:1px solid #2b2b2b;font-size:11px;color:#7a7a7a">
+      1,000 entries or 8 MB per connection, oldest trimmed first.
+    </div>
+  </div>
+
+  <!-- saved queries -->
+  <div class="pan">
+    <div class="ph">
+      <span class="vt" style="flex:1">Saved queries</span>
+      <span class="ic"><svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><path d="M8 3.4v9.2M3.4 8h9.2"/></svg></span>
+      <span class="ic"><svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><path d="M13 8a5 5 0 1 1-1.6-3.7M13 2.6v3h-3"/></svg></span>
+    </div>
+
+    <div style="flex:1;overflow:hidden;padding-top:4px">
+      <div class="row" style="padding-left:8px;gap:6px">
+        <span style="color:#cccccc;display:flex"><svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M5 6.5L8 9.5l3-3"/></svg></span>
+        <span style="width:7px;height:7px;border-radius:50%;background:#3fb84f"></span>
+        <span style="color:#e7e7e7">Dev-Matador</span><span style="flex:1"></span><span class="num" style="font-size:11px;color:#6b6b6b;margin-right:8px">3</span>
+      </div>
+
+      <div class="row" style="padding-left:26px;gap:7px"><span style="color:#e8b445;display:flex"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.25"><path d="M4 2.6h8a.8.8 0 0 1 .8.8v10L8 10.8 3.2 13.4v-10a.8.8 0 0 1 .8-.8z"/></svg></span><span>Customer Search</span><span style="flex:1"></span><span class="mono" style="font-size:11px;color:#6b6b6b;margin-right:8px">.sql</span></div>
+      <div class="row" style="padding-left:26px;gap:7px"><span style="color:#e8b445;display:flex"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.25"><path d="M4 2.6h8a.8.8 0 0 1 .8.8v10L8 10.8 3.2 13.4v-10a.8.8 0 0 1 .8-.8z"/></svg></span><span>Inactive Customers</span><span style="flex:1"></span><span class="mono" style="font-size:11px;color:#6b6b6b;margin-right:8px">.sql</span></div>
+      <div class="row" style="padding-left:26px;gap:7px"><span style="color:#e8b445;display:flex"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.25"><path d="M4 2.6h8a.8.8 0 0 1 .8.8v10L8 10.8 3.2 13.4v-10a.8.8 0 0 1 .8-.8z"/></svg></span><span>Monthly Sales</span><span style="flex:1"></span><span class="mono" style="font-size:11px;color:#57c76a;margin-right:8px">M</span></div>
+
+      <div class="row" style="padding-left:8px;gap:6px;margin-top:4px">
+        <span style="color:#cccccc;display:flex"><svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M5 6.5L8 9.5l3-3"/></svg></span>
+        <span style="width:7px;height:7px;border-radius:50%;background:#f0563f"></span>
+        <span style="color:#e7e7e7">Ledger-Core</span><span style="flex:1"></span><span class="num" style="font-size:11px;color:#6b6b6b;margin-right:8px">2</span>
+      </div>
+      <div class="row" style="padding-left:26px;gap:7px"><span style="color:#e8b445;display:flex"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.25"><path d="M4 2.6h8a.8.8 0 0 1 .8.8v10L8 10.8 3.2 13.4v-10a.8.8 0 0 1 .8-.8z"/></svg></span><span>Revenue Report</span><span style="flex:1"></span><span class="mono" style="font-size:11px;color:#6b6b6b;margin-right:8px">.sql</span></div>
+      <div class="row" style="padding-left:26px;gap:7px"><span style="color:#e8b445;display:flex"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.25"><path d="M4 2.6h8a.8.8 0 0 1 .8.8v10L8 10.8 3.2 13.4v-10a.8.8 0 0 1 .8-.8z"/></svg></span><span>Reconciliation Gaps</span><span style="flex:1"></span><span class="mono" style="font-size:11px;color:#6b6b6b;margin-right:8px">.sql</span></div>
+
+      <div style="margin:16px 12px 0;border:1px solid #2b2b2b;border-radius:3px;overflow:hidden">
+        <div style="padding:6px 10px;background:#202020;border-bottom:1px solid #2b2b2b;font-size:11px;color:#8b8b8b">Customer Search.sql</div>
+        <div class="mono" style="padding:9px 11px;font-size:11.5px;line-height:17px;background:#1a1a1a">
+          <div style="color:#6a9955">-- @connection Dev-Matador</div>
+          <div style="color:#6a9955">-- @description Customers created in the</div>
+          <div style="color:#6a9955">--&nbsp;&nbsp;&nbsp;last 30 days, with order counts</div>
+          <div><span style="color:#569cd6">SELECT</span> <span style="color:#569cd6">TOP</span> (<span style="color:#b5cea8">100</span>) …</div>
+        </div>
+      </div>
+
+      <div style="margin:14px 12px 0;font-size:11px;color:#7a7a7a;line-height:1.6">
+        Real files under <span class="mono" style="color:#9d9d9d">.database/queries/</span>. They diff, they review, and they survive the machine.
+      </div>
+    </div>
+  </div>
+
+  <!-- dependencies -->
+  <div class="pan">
+    <div class="ph">
+      <span class="vt" style="flex:1">Dependencies</span>
+      <span class="ic"><svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><path d="M2.6 3.4h10.8M2.6 8h10.8M2.6 12.6h6.8"/></svg></span>
+    </div>
+
+    <div style="flex-shrink:0;display:flex;align-items:center;gap:8px;padding:10px 12px;border-bottom:1px solid #2b2b2b">
+      <span style="display:flex;color:#4d9de0"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.2"><path d="M2 6.2V4.3A1.3 1.3 0 0 1 3.3 3h9.4A1.3 1.3 0 0 1 14 4.3v1.9z" fill="currentColor" opacity=".38" stroke="none"/><rect x="2" y="3" width="12" height="10" rx="1.3"/><path d="M2 6.2h12M6.4 6.2V13M10.2 6.2V13"/></svg></span>
+      <span style="color:#e7e7e7">dbo.Customer</span>
+      <span style="flex:1"></span>
+      <span style="font-size:11px;color:#8b8b8b">SQL Server</span>
+    </div>
+
+    <div style="flex:1;overflow:hidden;padding-top:8px">
+      <div style="padding:0 12px 6px"><span class="cap">Depends on · 2</span></div>
+      <div class="row" style="padding-left:16px;gap:7px"><span style="color:#4d9de0;display:flex"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.2"><path d="M2 6.2V4.3A1.3 1.3 0 0 1 3.3 3h9.4A1.3 1.3 0 0 1 14 4.3v1.9z" fill="currentColor" opacity=".38" stroke="none"/><rect x="2" y="3" width="12" height="10" rx="1.3"/><path d="M2 6.2h12M6.4 6.2V13M10.2 6.2V13"/></svg></span><span>dbo.Region</span><span style="flex:1"></span><span style="font-size:11px;color:#7fa7c4;margin-right:10px">foreign key</span></div>
+      <div class="row" style="padding-left:16px;gap:7px"><span style="color:#d9a441;display:flex"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.2"><rect x="2.4" y="2.4" width="11.2" height="11.2" rx="2.6"/><path d="M6.2 11.4V6.6c0-1.1.7-1.8 1.7-1.8h.9M6 8.3h3.2" stroke-linecap="round"/></svg></span><span>dbo.fn_Slug</span><span style="flex:1"></span><span style="font-size:11px;color:#8b8b8b;margin-right:10px">computed column</span></div>
+
+      <div style="padding:14px 12px 6px"><span class="cap">Used by · 7</span></div>
+      <div class="row" style="padding-left:16px;gap:7px"><span style="color:#3fae7a;display:flex"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.2"><rect x="4.6" y="5" width="9.4" height="8" rx="1.2"/><path d="M11.4 5V3.6A1.2 1.2 0 0 0 10.2 2.4H3.2A1.2 1.2 0 0 0 2 3.6v7a1.2 1.2 0 0 0 1.2 1.2h1.4"/></svg></span><span>vw_CustomerSummary</span></div>
+      <div class="row" style="padding-left:16px;gap:7px"><span style="color:#a97fe0;display:flex"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.2"><rect x="2.4" y="2.4" width="11.2" height="11.2" rx="2.6"/><path d="M6.6 5.6l4.2 2.4-4.2 2.4z" fill="currentColor" stroke="none"/></svg></span><span>usp_GetCustomer</span></div>
+      <div class="row" style="padding-left:16px;gap:7px"><span style="color:#a97fe0;display:flex"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.2"><rect x="2.4" y="2.4" width="11.2" height="11.2" rx="2.6"/><path d="M6.6 5.6l4.2 2.4-4.2 2.4z" fill="currentColor" stroke="none"/></svg></span><span>usp_UpdateCustomer</span></div>
+      <div class="row" style="padding-left:16px;gap:7px"><span style="color:#e0605f;display:flex"><svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M9.1 2L4.4 8.9h3l-.5 5.1 4.8-7H8.6z"/></svg></span><span>trg_Customer_Audit</span></div>
+      <div class="row" style="padding-left:16px;gap:7px"><span style="color:#7fa7c4;display:flex"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><path d="M6.6 9.4a2.6 2.6 0 0 0 3.7 0l2-2a2.6 2.6 0 0 0-3.7-3.7l-.6.6"/><path d="M9.4 6.6a2.6 2.6 0 0 0-3.7 0l-2 2a2.6 2.6 0 0 0 3.7 3.7l.6-.6"/></svg></span><span>FK_Order_Customer</span><span style="flex:1"></span><span style="font-size:11px;color:#8b8b8b;margin-right:10px">dbo.Order</span></div>
+      <div class="row" style="padding-left:16px;gap:7px"><span style="color:#3fae7a;display:flex"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.2"><rect x="4.6" y="5" width="9.4" height="8" rx="1.2"/><path d="M11.4 5V3.6A1.2 1.2 0 0 0 10.2 2.4H3.2A1.2 1.2 0 0 0 2 3.6v7a1.2 1.2 0 0 0 1.2 1.2h1.4"/></svg></span><span>sales.vw_TerritoryRollup</span></div>
+      <div class="row" style="padding-left:16px;gap:7px"><span style="color:#a97fe0;display:flex"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.2"><rect x="2.4" y="2.4" width="11.2" height="11.2" rx="2.6"/><path d="M6.6 5.6l4.2 2.4-4.2 2.4z" fill="currentColor" stroke="none"/></svg></span><span>rpt_CustomerChurn</span></div>
+
+      <div style="margin:18px 12px 0;padding-top:12px;border-top:1px solid #2b2b2b">
+        <div style="display:flex;align-items:center;gap:7px;margin-bottom:8px">
+          <span style="display:flex;color:#336791"><svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2.4c-3.4 0-6.4 1.1-6.4 3.6 0 1.2.2 3.4.5 5.6.4 2.6 1 5.1 1.7 6.6.5 1.1 1.3 1.8 2.2 1.8.6 0 1-.3 1.4-.8.3-.4.5-.6.6-.6s.3.2.6.6c.4.5.8.8 1.4.8.9 0 1.7-.7 2.2-1.8.7-1.5 1.3-4 1.7-6.6.3-2.2.5-4.4.5-5.6 0-2.5-3-3.6-6.4-3.6z"/></svg></span>
+          <span style="font-size:12px;color:#cccccc">public.customer</span>
+          <span style="flex:1"></span><span style="font-size:11px;color:#8b8b8b">PostgreSQL</span>
+        </div>
+        <div class="row" style="padding-left:4px;gap:7px"><span style="color:#3fae7a;display:flex"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.2"><rect x="4.6" y="5" width="9.4" height="8" rx="1.2"/><path d="M11.4 5V3.6A1.2 1.2 0 0 0 10.2 2.4H3.2A1.2 1.2 0 0 0 2 3.6v7a1.2 1.2 0 0 0 1.2 1.2h1.4"/></svg></span><span style="font-size:12px">v_customer_summary</span></div>
+        <div class="row" style="padding-left:4px;gap:7px"><span style="color:#7fa7c4;display:flex"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><path d="M6.6 9.4a2.6 2.6 0 0 0 3.7 0l2-2a2.6 2.6 0 0 0-3.7-3.7l-.6.6"/><path d="M9.4 6.6a2.6 2.6 0 0 0-3.7 0l-2 2a2.6 2.6 0 0 0 3.7 3.7l.6-.6"/></svg></span><span style="font-size:12px">order_customer_fkey</span></div>
+        <div class="row" style="padding-left:4px;gap:7px;opacity:.62"><span style="color:#a97fe0;display:flex"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.2" stroke-dasharray="2.4 1.8"><rect x="2.4" y="2.4" width="11.2" height="11.2" rx="2.6"/></svg></span><span style="font-size:12px;font-style:italic">fn_customer_churn</span><span style="flex:1"></span><span style="font-size:10px;color:#8b8b8b;margin-right:10px">matched in source</span></div>
+        <div style="font-size:11px;color:#7a7a7a;line-height:1.6;margin-top:8px">
+          PostgreSQL does not track what a routine body reads. The dimmed rows are a text search, not a fact — a false positive is possible, and you are told which is which.
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+</x-dc>
+</body>
+</html>

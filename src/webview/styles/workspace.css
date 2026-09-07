@@ -1,0 +1,886 @@
+/*
+ * The results panel, a table data tab and a procedure runner.
+ *
+ * Every neutral surface reads a VS Code theme token, so all three follow the
+ * user's theme with no detection of their own — high contrast included. The
+ * only literals are the environment hues, which come from `tokens.css` and
+ * have a light value each.
+ *
+ * Density follows the explorer: 22px rows, tabular figures, and counts in a
+ * right-hand column the eye can run down. A grid at 28px beside a tree at 22px
+ * reads as two products.
+ */
+@import './tokens.css';
+
+:root {
+  --bg: var(--vscode-editor-background);
+  --panel: var(--vscode-sideBar-background, var(--vscode-editor-background));
+  --fg: var(--vscode-foreground);
+  --dim: var(--vscode-descriptionForeground);
+  --bd: var(--vscode-panel-border, var(--vscode-editorWidget-border));
+  --line: var(--vscode-editorIndentGuide-background, rgba(128, 128, 128, 0.18));
+  --head: var(--vscode-keybindingTable-headerBackground, var(--vscode-editorWidget-background));
+  --accent: var(--vscode-focusBorder);
+  --sel: var(--vscode-editor-selectionBackground);
+  --hover: var(--vscode-list-hoverBackground);
+  --row: 22px;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  color: var(--fg);
+  background: var(--bg);
+  font-family: var(--vscode-font-family);
+  font-size: var(--vscode-font-size);
+  overflow: hidden;
+}
+
+.app {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  min-height: 0;
+}
+
+.num {
+  font-variant-numeric: tabular-nums;
+}
+
+.mono {
+  font-family: var(--vscode-editor-font-family, monospace);
+}
+
+.dim {
+  color: var(--dim);
+}
+
+.strip-spacer {
+  flex: 1;
+}
+
+/* ------------------------------------------------------------------ tabs */
+
+.tabs {
+  display: flex;
+  align-items: stretch;
+  gap: 14px;
+  padding: 0 8px 0 12px;
+  height: 30px;
+  flex-shrink: 0;
+  border-bottom: 1px solid var(--bd);
+}
+
+.tab {
+  background: none;
+  border: none;
+  border-bottom: 1px solid transparent;
+  color: var(--dim);
+  font: inherit;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  cursor: pointer;
+  padding: 0 2px;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.tab.is-on {
+  color: var(--fg);
+  border-bottom-color: var(--fg);
+}
+
+.tab.has-error {
+  color: var(--vscode-errorForeground);
+}
+
+.setbar {
+  display: flex;
+  gap: 6px;
+  padding: 6px 12px;
+  flex-shrink: 0;
+  border-bottom: 1px solid var(--line);
+  overflow-x: auto;
+}
+
+.chip {
+  height: 20px;
+  padding: 0 8px;
+  border-radius: 3px;
+  border: 1px solid var(--bd);
+  background: var(--vscode-input-background);
+  color: var(--dim);
+  font: inherit;
+  font-size: 11px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.chip.is-on {
+  border-color: var(--accent);
+  color: var(--fg);
+}
+
+/* --------------------------------------------------------------- toolbar */
+
+.toolbar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.search {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 22px;
+  padding: 0 7px;
+  border-radius: 2px;
+  border: 1px solid var(--vscode-input-border, transparent);
+  background: var(--vscode-input-background);
+  color: var(--dim);
+  min-width: 150px;
+}
+
+.search input {
+  border: none;
+  background: none;
+  color: var(--vscode-input-foreground);
+  font: inherit;
+  font-size: 12px;
+  width: 100%;
+  outline: none;
+}
+
+.icon-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border: none;
+  border-radius: 3px;
+  background: none;
+  color: var(--fg);
+  cursor: pointer;
+}
+
+.icon-btn:hover:not(:disabled) {
+  background: var(--vscode-toolbar-hoverBackground, var(--hover));
+}
+
+.icon-btn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.menu {
+  position: relative;
+}
+
+.menu-list {
+  display: none;
+  position: absolute;
+  right: 0;
+  top: 24px;
+  z-index: 10;
+  min-width: 140px;
+  padding: 4px;
+  border-radius: 4px;
+  border: 1px solid var(--vscode-menu-border, var(--bd));
+  background: var(--vscode-menu-background, var(--vscode-editorWidget-background));
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.4);
+}
+
+.menu:hover .menu-list,
+.menu:focus-within .menu-list {
+  display: block;
+}
+
+.menu-list button {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 4px 9px;
+  border: none;
+  border-radius: 3px;
+  background: none;
+  color: var(--vscode-menu-foreground, var(--fg));
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.menu-list button:hover {
+  background: var(--vscode-menu-selectionBackground, var(--hover));
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 24px;
+  padding: 0 11px;
+  border-radius: 3px;
+  border: 1px solid var(--vscode-button-border, transparent);
+  background: var(--vscode-button-secondaryBackground);
+  color: var(--vscode-button-secondaryForeground);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.btn-p {
+  background: var(--vscode-button-background);
+  color: var(--vscode-button-foreground);
+}
+
+.btn-stop {
+  background: none;
+  border-color: var(--bd);
+  color: var(--warn-ink);
+}
+
+.btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.key {
+  opacity: 0.7;
+  font-size: 11px;
+}
+
+/* ------------------------------------------------------------------ grid */
+
+.results {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+
+.grid {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  outline: none;
+}
+
+.grid:focus-visible {
+  outline: 1px solid var(--accent);
+  outline-offset: -1px;
+}
+
+.grid-header {
+  display: flex;
+  flex-shrink: 0;
+  height: 24px;
+  background: var(--head);
+  border-bottom: 1px solid var(--bd);
+  will-change: transform;
+}
+
+.grid-hcell {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 0 8px;
+  height: 24px;
+  font-size: 12px;
+  white-space: nowrap;
+  overflow: hidden;
+  border-right: 1px solid var(--line);
+  cursor: pointer;
+  position: relative;
+  flex-shrink: 0;
+}
+
+.grid-hname {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.grid-hcell.is-sorted {
+  color: var(--vscode-list-activeSelectionForeground, var(--fg));
+}
+
+.grid-sort {
+  font-size: 9px;
+  color: var(--accent);
+}
+
+/* A hollow arrow says the sort covers only the rows that were fetched. */
+.grid-sort.is-partial {
+  color: var(--warn-ink);
+}
+
+.grid-resize {
+  position: absolute;
+  right: -3px;
+  top: 0;
+  bottom: 0;
+  width: 7px;
+  cursor: col-resize;
+}
+
+.grid-resize:hover {
+  background: var(--accent);
+  opacity: 0.5;
+}
+
+.grid-viewport {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+}
+
+.grid-canvas {
+  position: relative;
+}
+
+.grid-row {
+  position: absolute;
+  left: 0;
+  display: flex;
+  height: var(--row);
+}
+
+.grid-row:hover .grid-cell {
+  background: var(--hover);
+}
+
+.grid-cell {
+  display: flex;
+  align-items: center;
+  height: var(--row);
+  padding: 0 8px;
+  font-size: 12px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  border-right: 1px solid var(--line);
+  border-bottom: 1px solid transparent;
+  flex-shrink: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+.grid-cell.kind-number,
+.grid-cell.kind-bool {
+  justify-content: flex-end;
+}
+
+.grid-gutter {
+  justify-content: flex-end;
+  color: var(--dim);
+  background: var(--head);
+  position: sticky;
+  left: 0;
+  z-index: 1;
+}
+
+.grid-cell.is-selected {
+  background: var(--sel);
+}
+
+.grid-cell.is-anchor {
+  outline: 1px solid var(--accent);
+  outline-offset: -1px;
+}
+
+/* NULL and an empty string must never look the same. */
+.grid-null {
+  color: var(--dim);
+  font-style: italic;
+  opacity: 0.8;
+}
+
+.grid-mono,
+.grid-binary {
+  font-family: var(--vscode-editor-font-family, monospace);
+}
+
+.grid-skeleton {
+  display: block;
+  width: 60%;
+  height: 8px;
+  border-radius: 2px;
+  background: var(--line);
+}
+
+/* ----------------------------------------------------------------- strips */
+
+.strip {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  height: 26px;
+  padding: 0 12px;
+  flex-shrink: 0;
+  border-top: 1px solid var(--bd);
+  background: var(--panel);
+  font-size: 11px;
+  color: var(--dim);
+}
+
+.strip-live {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--accent);
+}
+
+.strip-warn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--warn-ink);
+}
+
+.strip-ok {
+  color: var(--env-dev-ink);
+}
+
+.strip-error {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--vscode-errorForeground);
+}
+
+.strip-lock,
+.strip-connection {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--env-dev);
+}
+
+.dot.env-qa { background: var(--env-qa); }
+.dot.env-uat { background: var(--env-uat); }
+.dot.env-prod { background: var(--env-prod); }
+
+.honest {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  flex-shrink: 0;
+  font-size: 11.5px;
+  color: var(--fg);
+  background: color-mix(in srgb, var(--warn-ink) 10%, transparent);
+  border-bottom: 1px solid color-mix(in srgb, var(--warn-ink) 34%, transparent);
+}
+
+.truncated {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  flex-shrink: 0;
+  border-top: 1px solid var(--bd);
+  font-size: 12px;
+}
+
+/* --------------------------------------------------------------- messages */
+
+.messages {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.message {
+  display: flex;
+  gap: 9px;
+}
+
+.message pre {
+  margin: 0;
+  font-family: var(--vscode-editor-font-family, monospace);
+  font-size: 12px;
+  white-space: pre-wrap;
+}
+
+.message.tone-error pre {
+  color: var(--vscode-errorForeground);
+}
+
+.link {
+  border: none;
+  background: none;
+  padding: 0;
+  color: var(--vscode-textLink-foreground);
+  font: inherit;
+  font-size: 11.5px;
+  cursor: pointer;
+}
+
+.link:hover {
+  text-decoration: underline;
+}
+
+/* ------------------------------------------------------------------- plan */
+
+.plan {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 10px 12px;
+}
+
+.plan-warnings {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  margin-bottom: 12px;
+}
+
+.plan-warning {
+  display: flex;
+  gap: 8px;
+  padding: 8px 10px;
+  border-radius: 4px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--fg);
+  background: color-mix(in srgb, var(--warn-ink) 9%, transparent);
+  border: 1px solid color-mix(in srgb, var(--warn-ink) 32%, transparent);
+}
+
+.plan-node {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  height: var(--row);
+  padding-left: calc(var(--depth) * 16px);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.plan-cost {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  width: 54px;
+  height: 15px;
+  padding-right: 4px;
+  border-radius: 2px;
+  background: var(--line);
+  color: var(--dim);
+  font-size: 10.5px;
+  flex-shrink: 0;
+  overflow: hidden;
+}
+
+.plan-bar {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  background: var(--obj-view);
+  opacity: 0.55;
+}
+
+.plan-cost.is-heavy {
+  color: var(--fg);
+}
+
+.plan-cost.is-heavy .plan-bar {
+  background: var(--obj-sequence);
+}
+
+.plan-op {
+  color: var(--fg);
+}
+
+.plan-detail,
+.plan-object,
+.plan-rows {
+  color: var(--dim);
+  font-size: 11px;
+}
+
+.plan-stats {
+  display: flex;
+  gap: 14px;
+  margin-top: 14px;
+  padding-top: 10px;
+  border-top: 1px solid var(--line);
+  font-size: 11px;
+  color: var(--dim);
+}
+
+/* ------------------------------------------------------------ table data */
+
+.data-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 36px;
+  padding: 0 12px;
+  flex-shrink: 0;
+  border-bottom: 1px solid var(--bd);
+  background: var(--panel);
+}
+
+.obj-name {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.obj-mark {
+  width: 14px;
+  height: 12px;
+  border-radius: 2px;
+  border: 1px solid var(--obj-table);
+  background: color-mix(in srgb, var(--obj-table) 30%, transparent);
+  flex-shrink: 0;
+}
+
+.obj-mark.obj-routine {
+  border-color: var(--obj-procedure);
+  background: color-mix(in srgb, var(--obj-procedure) 30%, transparent);
+  border-radius: 3px;
+  height: 14px;
+}
+
+.page-size {
+  height: 20px;
+  border-radius: 3px;
+  border: 1px solid var(--bd);
+  background: var(--vscode-input-background);
+  color: var(--fg);
+  font: inherit;
+  font-size: 11px;
+}
+
+/* ----------------------------------------------------------------- runner */
+
+.runner {
+  flex-shrink: 0;
+  padding: 14px 18px 0;
+  border-bottom: 1px solid var(--bd);
+}
+
+.runner-loading {
+  padding: 18px;
+  color: var(--dim);
+}
+
+.runner-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.runner-name {
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.runner-sub {
+  font-size: 11px;
+  color: var(--dim);
+  margin-top: 2px;
+}
+
+.runner-form {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 16px 26px;
+}
+
+.field-label {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-bottom: 5px;
+  font-size: 12.5px;
+}
+
+.req {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: var(--env-uat-ink);
+}
+
+.input {
+  width: 100%;
+  height: 26px;
+  padding: 0 8px;
+  border-radius: 2px;
+  border: 1px solid var(--vscode-input-border, transparent);
+  background: var(--vscode-input-background);
+  color: var(--vscode-input-foreground);
+  font: inherit;
+  font-size: 13px;
+}
+
+textarea.input {
+  height: auto;
+  padding: 5px 8px;
+  resize: vertical;
+}
+
+.input:disabled {
+  opacity: 0.45;
+}
+
+.check,
+.null-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 12px;
+  margin-top: 5px;
+}
+
+.null-toggle {
+  color: var(--dim);
+}
+
+.runner-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 16px 0 14px;
+  font-size: 11px;
+}
+
+.outputs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding: 0 0 14px;
+  font-size: 12px;
+}
+
+.outputs-title {
+  color: var(--dim);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+}
+
+.output {
+  display: inline-flex;
+  gap: 7px;
+}
+
+/* ----------------------------------------------------------- detail, toast */
+
+.detail {
+  position: absolute;
+  right: 12px;
+  bottom: 34px;
+  width: min(460px, 70vw);
+  max-height: 50vh;
+  display: flex;
+  flex-direction: column;
+  border-radius: 4px;
+  border: 1px solid var(--bd);
+  background: var(--vscode-editorWidget-background);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.45);
+  z-index: 20;
+}
+
+.detail-head {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 7px 8px 7px 11px;
+  border-bottom: 1px solid var(--bd);
+  font-size: 12px;
+}
+
+.detail-type {
+  font-size: 11px;
+  color: var(--dim);
+}
+
+.detail-body {
+  margin: 0;
+  padding: 11px;
+  overflow: auto;
+  font-family: var(--vscode-editor-font-family, monospace);
+  font-size: 12px;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.toast {
+  position: absolute;
+  left: 50%;
+  bottom: 36px;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 13px;
+  border-radius: 4px;
+  border: 1px solid var(--bd);
+  background: var(--vscode-editorWidget-background);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.4);
+  font-size: 12px;
+  z-index: 30;
+}
+
+.toast.tone-error {
+  color: var(--vscode-errorForeground);
+  border-color: var(--vscode-errorForeground);
+}
+
+/* ------------------------------------------------------------------ empty */
+
+.empty {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 24px;
+  color: var(--dim);
+  text-align: center;
+}
+
+.empty .codicon {
+  font-size: 26px;
+  opacity: 0.5;
+}
+
+.empty-title {
+  margin: 4px 0 0;
+  color: var(--fg);
+  font-size: 13px;
+}
+
+.empty-body {
+  margin: 0;
+  max-width: 42ch;
+  font-size: 12px;
+  line-height: 1.6;
+}

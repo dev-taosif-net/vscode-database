@@ -1,0 +1,158 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>
+* { box-sizing: border-box; }
+body { margin: 0; }
+a { color: #4daafc; text-decoration: none; }
+a:hover { color: #4daafc; text-decoration: underline; }
+.cp { font-family: "Segoe WPC", "Segoe UI", system-ui, -apple-system, sans-serif; font-size: 13px; line-height: 1.4; -webkit-font-smoothing: antialiased; }
+.mono { font-family: Consolas, "Cascadia Mono", "Courier New", monospace; }
+.num { font-variant-numeric: tabular-nums; }
+.vt { font-size: 11px; font-weight: 600; letter-spacing: .07em; text-transform: uppercase; }
+.op { position: absolute; width: 160px; height: 60px; border-radius: 4px; background: #252526; border: 1px solid #3c3c3c; padding: 7px 9px 0; display: flex; flex-direction: column; gap: 2px; }
+.opn { font-size: 12px; color: #e7e7e7; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ops { font-size: 10.5px; color: #8b8b8b; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.bar { position: absolute; left: 0; right: 0; bottom: 0; height: 3px; background: #2b2b2b; border-radius: 0 0 3px 3px; overflow: hidden; }
+.dl { display: contents; }
+.dk { font-size: 11.5px; color: #8b8b8b; }
+.dv { font-size: 11.5px; color: #cccccc; font-variant-numeric: tabular-nums; }
+.warn { display: flex; gap: 9px; padding: 9px 11px; border-radius: 4px; border: 1px solid; font-size: 12px; line-height: 1.55; }
+</style>
+</helmet>
+
+<div class="cp" style="width:1180px;height:680px;display:flex;flex-direction:column;background:#181818;color:#cccccc;overflow:hidden">
+
+  <div style="height:35px;flex-shrink:0;display:flex;align-items:stretch;padding:0 8px 0 14px;gap:14px;border-bottom:1px solid #2b2b2b">
+    <div style="display:flex;align-items:center"><span class="vt" style="color:#8b8b8b;font-weight:400">Results</span></div>
+    <div style="display:flex;align-items:center"><span class="vt" style="color:#8b8b8b;font-weight:400">Messages</span></div>
+    <div style="display:flex;align-items:center;border-bottom:1px solid #e7e7e7"><span class="vt" style="color:#e7e7e7">Plan</span></div>
+    <div style="flex:1"></div>
+    <div style="display:flex;align-items:center;gap:10px;font-size:11px;color:#8b8b8b">
+      <span>Actual plan · <span class="mono">SET STATISTICS XML ON</span></span>
+      <span style="display:flex;align-items:center;gap:5px;color:#57c76a"><span style="width:6px;height:6px;border-radius:50%;background:#3fb84f"></span>Dev-Matador</span>
+    </div>
+  </div>
+
+  <div style="height:34px;flex-shrink:0;display:flex;align-items:center;gap:6px;padding:0 14px;border-bottom:1px solid #2b2b2b">
+    <span style="height:22px;padding:0 10px;display:flex;align-items:center;border-radius:3px;background:#313131;border:1px solid #0078d4;font-size:12px;color:#e7e7e7">Graphical</span>
+    <span style="height:22px;padding:0 10px;display:flex;align-items:center;border-radius:3px;border:1px solid transparent;font-size:12px;color:#9d9d9d">Raw</span>
+    <span style="height:22px;padding:0 10px;display:flex;align-items:center;border-radius:3px;border:1px solid transparent;font-size:12px;color:#9d9d9d">Statistics</span>
+    <div style="flex:1"></div>
+    <span style="font-size:11px;color:#8b8b8b">Arrow width is rows. Cost is a share of the whole plan.</span>
+  </div>
+
+  <div style="flex:1;min-height:0;display:flex;padding:14px;gap:12px;background:#1f1f1f">
+
+    <div style="width:800px;flex-shrink:0;position:relative">
+      <svg width="800" height="400" style="position:absolute;left:0;top:0" viewBox="0 0 800 400">
+        <path d="M212 198 H176" stroke="#5a6b7a" stroke-width="2" fill="none"/>
+        <path d="M170 198 l10 -5 v10 z" fill="#5a6b7a"/>
+        <path d="M416 198 H380" stroke="#5a6b7a" stroke-width="5" fill="none"/>
+        <path d="M374 198 l10 -5.5 v11 z" fill="#5a6b7a"/>
+        <path d="M620 94 H604 V198 H584" stroke="#5a6b7a" stroke-width="5" fill="none"/>
+        <path d="M578 198 l10 -5.5 v11 z" fill="#5a6b7a"/>
+        <path d="M620 302 H596 V198" stroke="#c98a3c" stroke-width="7" fill="none"/>
+        <text x="196" y="188" fill="#7a8a99" font-size="10.5" font-family="Segoe UI, sans-serif" text-anchor="end">100 rows</text>
+        <text x="628" y="82" fill="#7a8a99" font-size="10.5" font-family="Segoe UI, sans-serif">12,430 rows</text>
+        <text x="628" y="290" fill="#c98a3c" font-size="10.5" font-family="Segoe UI, sans-serif">12,430 rows · 12,430 executions</text>
+      </svg>
+
+      <div class="op" style="left:8px;top:168px">
+        <div style="display:flex;align-items:center;gap:7px">
+          <span style="width:17px;height:17px;border-radius:3px;background:rgba(0,120,212,.2);display:flex;align-items:center;justify-content:center;color:#4daafc"><svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 4.4h10M3 8h10M3 11.6h6"/></svg></span>
+          <span class="opn">SELECT</span>
+        </div>
+        <div class="ops">100 rows · cost 0%</div>
+        <div class="bar"><div style="width:1%;height:100%;background:#4d9de0"></div></div>
+      </div>
+
+      <div class="op" style="left:212px;top:168px">
+        <div style="display:flex;align-items:center;gap:7px">
+          <span style="width:17px;height:17px;border-radius:3px;background:rgba(142,151,173,.2);display:flex;align-items:center;justify-content:center;color:#8e97ad"><svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4 8h8M8 4v8"/></svg></span>
+          <span class="opn">Compute Scalar</span>
+        </div>
+        <div class="ops">cost 0%</div>
+        <div class="bar"><div style="width:1%;height:100%;background:#8e97ad"></div></div>
+      </div>
+
+      <div class="op" style="left:416px;top:168px">
+        <div style="display:flex;align-items:center;gap:7px">
+          <span style="width:17px;height:17px;border-radius:3px;background:rgba(63,174,122,.2);display:flex;align-items:center;justify-content:center;color:#3fae7a"><svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><circle cx="6.1" cy="8" r="3.5"/><circle cx="9.9" cy="8" r="3.5"/></svg></span>
+          <span class="opn">Nested Loops</span>
+        </div>
+        <div class="ops">Inner Join · cost 12%</div>
+        <div class="bar"><div style="width:12%;height:100%;background:#3fae7a"></div></div>
+      </div>
+
+      <div class="op" style="left:620px;top:64px">
+        <div style="display:flex;align-items:center;gap:7px">
+          <span style="width:17px;height:17px;border-radius:3px;background:rgba(77,157,224,.2);display:flex;align-items:center;justify-content:center;color:#4d9de0"><svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="6.9" cy="6.9" r="4.2"/><path d="M10.1 10.1L13.4 13.4"/></svg></span>
+          <span class="opn">Index Seek</span>
+        </div>
+        <div class="ops mono">IX_Customer_CreatedDate</div>
+        <div class="ops">cost 4%</div>
+        <div class="bar"><div style="width:4%;height:100%;background:#4d9de0"></div></div>
+      </div>
+
+      <div class="op" style="left:620px;top:272px;border-color:#0078d4;background:#04395e">
+        <div style="display:flex;align-items:center;gap:7px">
+          <span style="width:17px;height:17px;border-radius:3px;background:rgba(224,136,76,.24);display:flex;align-items:center;justify-content:center;color:#e0884c"><svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><circle cx="5.6" cy="6.2" r="2.6"/><path d="M7.5 8.1l4 4M9.7 10.3l1.1-1.1M11 11.6l1.1-1.1"/></svg></span>
+          <span class="opn" style="color:#ffffff">Key Lookup</span>
+          <span style="flex:1"></span>
+          <span style="display:flex;color:#e8b445"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M8 2.6l5.8 10.2H2.2z"/><path d="M8 6.6v3M8 11.2v.2"/></svg></span>
+        </div>
+        <div class="ops mono" style="color:#b8cee0">PK_Customer</div>
+        <div class="ops" style="color:#e8b445">cost 84%</div>
+        <div class="bar" style="background:#0b3050"><div style="width:84%;height:100%;background:#e0884c"></div></div>
+      </div>
+    </div>
+
+    <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:12px">
+      <div style="border:1px solid #2b2b2b;border-radius:4px;overflow:hidden;background:#181818">
+        <div style="padding:8px 12px;background:#202020;border-bottom:1px solid #2b2b2b;display:flex;align-items:center;gap:7px">
+          <span style="display:flex;color:#e0884c"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><circle cx="5.6" cy="6.2" r="2.6"/><path d="M7.5 8.1l4 4M9.7 10.3l1.1-1.1M11 11.6l1.1-1.1"/></svg></span>
+          <span style="font-size:12px;color:#e7e7e7">Key Lookup</span>
+        </div>
+        <div style="padding:10px 12px;display:grid;grid-template-columns:104px 1fr;row-gap:6px;column-gap:10px">
+          <span class="dk">Logical op</span><span class="dv">Lookup</span>
+          <span class="dk">Estimated cost</span><span class="dv">84%</span>
+          <span class="dk">Estimated rows</span><span class="dv">1</span>
+          <span class="dk">Actual rows</span><span class="dv" style="color:#e8b445">12,430</span>
+          <span class="dk">Executions</span><span class="dv" style="color:#e8b445">12,430</span>
+          <span class="dk">I/O cost</span><span class="dv">0.0031250</span>
+          <span class="dk">CPU cost</span><span class="dv">0.0001581</span>
+          <span class="dk">Object</span><span class="dv mono" style="font-size:11px;word-break:break-all">[dbo].[Customer].[PK_Customer]</span>
+          <span class="dk">Output</span><span class="dv mono" style="font-size:11px">Email, Phone, CreatedDate</span>
+        </div>
+      </div>
+
+      <div class="warn" style="color:#e8b445;border-color:rgba(232,180,69,.34);background:rgba(232,180,69,.08)">
+        <span style="display:flex;flex-shrink:0;margin-top:1px"><svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M8 2.6l5.8 10.2H2.2z"/><path d="M8 6.6v3M8 11.2v.2"/></svg></span>
+        <span style="color:#cccccc">The optimiser expected <span class="num" style="color:#e8b445">1 row</span> and got <span class="num" style="color:#e8b445">12,430</span>. Statistics on <span class="mono" style="font-size:11px">IX_Customer_CreatedDate</span> were last updated 41 days ago.</span>
+      </div>
+
+      <div class="warn" style="color:#e8b445;border-color:rgba(232,180,69,.34);background:rgba(232,180,69,.08)">
+        <span style="display:flex;flex-shrink:0;margin-top:1px"><svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M8 2.6l5.8 10.2H2.2z"/><path d="M8 6.6v3M8 11.2v.2"/></svg></span>
+        <span style="color:#cccccc">Key Lookup ran 12,430 times. A covering index on <span class="mono" style="font-size:11px">(CreatedDate) INCLUDE (Email, Phone)</span> removes it.</span>
+      </div>
+    </div>
+  </div>
+
+  <div style="height:26px;flex-shrink:0;display:flex;align-items:center;gap:16px;padding:0 14px;border-top:1px solid #2b2b2b;background:#181818;font-size:11px;color:#9d9d9d">
+    <span class="num">5 operators</span>
+    <span class="num">estimated subtree cost 0.0384</span>
+    <span class="num">2 warnings</span>
+    <div style="flex:1"></div>
+    <span>Parsed off the UI thread — a fifty-join plan is megabytes of XML</span>
+  </div>
+</div>
+</x-dc>
+</body>
+</html>

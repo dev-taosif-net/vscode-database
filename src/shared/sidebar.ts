@@ -179,4 +179,13 @@ export type SidebarWebviewMessage =
    * Ask every open connection for matches. The panel has already matched what
    * it holds; this is for the rest of a database it has never read.
    */
-  | { type: 'searchObjects'; query: string };
+  | { type: 'searchObjects'; query: string }
+  /**
+   * The cursor landed on an object.
+   *
+   * Sent so the details panel can follow the explorer without the explorer
+   * knowing the panel exists. It is a notification and not a request: nothing
+   * in the tree changes because of it, and a window with the panel closed
+   * ignores it entirely.
+   */
+  | { type: 'selectObject'; profileId: string; ref: FavouriteRef };

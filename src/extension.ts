@@ -2,10 +2,29 @@ import * as vscode from 'vscode';
 import { CatalogService } from './catalog/catalogService';
 import { ConnectionManager } from './connections/connectionManager';
 import { ConnectionStore } from './store/connectionStore';
+import { DetailsService } from './details/detailsService';
+import { ExecutionService } from './exec/executionService';
+import { ResultStore } from './exec/resultStore';
+import { SessionPool } from './exec/sessionPool';
+import { BindingStore, QUERY_SCHEME, OBJECT_SCHEME } from './query/bindingStore';
+import { DefinitionProvider, QueryFileSystem } from './query/queryFs';
+import { HistoryStore } from './query/historyStore';
+import { SavedQueryStore } from './query/savedQueries';
+import { SqlDiagnostics } from './query/diagnostics';
+import { MetadataIndex } from './query/language/index';
+import { SqlLanguageProviders } from './query/language/providers';
+import { ActiveTab } from './ui/activeTab';
 import { ConnectionsPanel } from './ui/connectionsPanel';
 import { ConnectionsView } from './ui/connectionsView';
+import { DetailsView, HistoryView } from './ui/panelViews';
 import { ObjectCommands } from './ui/objectCommands';
+import { QueryBridge } from './ui/queryBridge';
+import { QueryCommands } from './ui/queryCommands';
+import { ResultsView } from './ui/resultsView';
 import { ConnectionStatusBar } from './ui/statusBar';
+import { WorkspacePanels } from './ui/workspacePanels';
+import { WorkspaceStatusBar } from './ui/workspaceStatusBar';
+import { FavouriteRef } from './shared/catalog';
 import { ConnectionProfile, environmentLabel } from './types';
 
 /**
@@ -17,10 +36,27 @@ import { ConnectionProfile, environmentLabel } from './types';
 type CommandTarget = string | { connectionId?: unknown } | undefined;
 
 /**
- * Phase 1 opened a connection; phase 2 browses what is inside it. Activation
- * still does no work beyond wiring: neither driver is loaded until the first
- * connection is opened, and the catalog reads nothing until a connection in the
- * tree is actually expanded.
+ * An object, in the shape a `webview/context` command expects.
+ *
+ * The details panel does not have a row to right-click, so it builds the same
+ * payload the row would have put in its attribute. One shape, checked in one
+ * place — `objectTarget` — however the command was invoked.
+ */
+function contextOf(target: { profileId: string; ref: FavouriteRef }): Record<string, string> {
+  return {
+    connectionId: target.profileId,
+    objectKind: target.ref.kind,
+    objectSchema: target.ref.schema,
+    objectName: target.ref.name
+  };
+}
+
+/**
+ * Phase 1 opened a connection, phase 2 browsed what is inside it, and phase 3
+ * runs statements against it. Activation still does no work beyond wiring:
+ * neither driver is loaded until the first connection is opened, the catalog
+ * reads nothing until a folder is expanded, and no execution session is opened
+ * until somebody presses Run.
  */
 export function activate(context: vscode.ExtensionContext): void {
   const output = vscode.window.createOutputChannel('Database Tools', { log: true });
@@ -31,7 +67,175 @@ export function activate(context: vscode.ExtensionContext): void {
   const view = new ConnectionsView(context, store, manager, catalog);
 
   context.subscriptions.push(output, store, manager, catalog, statusBar, view);
+
+  /*
+   * Phase 3.
+   *
+   * The order below is the dependency order and is worth reading as one: the
+   * pool sits on the manager, execution sits on the pool, the store holds what
+   * comes back, and every view is a projection of that store. Nothing here
+   * reaches around another layer — which is what lets a tab be closed
+   * mid-query and leave nothing behind.
+   */
+  const storageDir = vscode.Uri.joinPath(context.globalStorageUri, 'results').fsPath;
+  const historyDir = vscode.Uri.joinPath(context.globalStorageUri, 'history').fsPath;
+
+  const details = new DetailsService(store, manager, catalog, output);
+  const pool = new SessionPool(manager, output);
+  const results = new ResultStore(storageDir);
+  const execution = new ExecutionService(store, manager, pool, results, output);
+  const history = new HistoryStore(historyDir);
+  const bindings = new BindingStore(context);
+  const files = new QueryFileSystem();
+  const definitions = new DefinitionProvider(store, catalog);
+  const saved = new SavedQueryStore(context, store);
+  const index = new MetadataIndex(store, manager, catalog, details);
+  const active = new ActiveTab(bindings);
+  const bridge = new QueryBridge(store, results, execution, details, output);
+  const resultsView = new ResultsView(context, bridge, active, execution, results);
+  const panels = new WorkspacePanels(
+    context,
+    store,
+    catalog,
+    details,
+    execution,
+    results,
+    bridge,
+    active,
+    output
+  );
+  const workspaceStatus = new WorkspaceStatusBar(store, bindings, results, execution, active);
+  const language = new SqlLanguageProviders(store, bindings, index);
+  const diagnostics = new SqlDiagnostics(execution, results);
+
+  const detailsView = new DetailsView(context, details, (profileId, ref, action) => {
+    void runDetailsAction(profileId, ref, action);
+  });
+  const historyView = new HistoryView(context, store, history, saved, (profileId, sql) => {
+    void commands.openScratch(profileId, 'History', sql);
+  });
+
+  const commands = new QueryCommands(
+    store,
+    manager,
+    catalog,
+    details,
+    execution,
+    results,
+    files,
+    definitions,
+    bindings,
+    saved,
+    panels,
+    resultsView,
+    active,
+    output
+  );
+  commands.onShowDetails = (profileId, ref) => detailsView.show(profileId, ref);
+
+  /**
+   * The details panel's quick actions, routed to the commands that already do
+   * them.
+   *
+   * They go through `executeCommand` rather than calling the methods directly
+   * so that a keybinding, the palette and the panel all take the same path —
+   * and so the panel cannot drift into being a second implementation of Script
+   * As ALTER.
+   */
+  async function runDetailsAction(profileId: string, ref: FavouriteRef, action: string): Promise<void> {
+    const target = { profileId, ref };
+    switch (action) {
+      case 'viewData':
+        return panels.openData(profileId, ref);
+      case 'run':
+        return panels.openRunner(profileId, ref);
+      case 'generateCrud':
+        return commands.generateCrud(target);
+      case 'scriptCreate':
+        return vscode.commands.executeCommand('databaseTools.scriptCreate', contextOf(target));
+      case 'scriptAlter':
+        return vscode.commands.executeCommand('databaseTools.scriptAsAlter', contextOf(target));
+      case 'scriptDrop':
+        return vscode.commands.executeCommand('databaseTools.scriptDrop', contextOf(target));
+      case 'dependencies':
+        return vscode.commands.executeCommand('databaseTools.viewDependencies', contextOf(target));
+      case 'compare':
+        return vscode.commands.executeCommand('databaseTools.compareWith', contextOf(target));
+      default:
+        return undefined;
+    }
+  }
+
+  context.subscriptions.push(
+    details,
+    pool,
+    results,
+    execution,
+    history,
+    bindings,
+    files,
+    definitions,
+    saved,
+    index,
+    active,
+    resultsView,
+    panels,
+    workspaceStatus,
+    language,
+    diagnostics,
+    detailsView,
+    historyView,
+    commands
+  );
+
+  // A finished execution becomes a history entry, once. Paging and Fetch more
+  // are marked quiet and never reach here, so a table browsed for ten minutes
+  // leaves one entry rather than a hundred.
+  context.subscriptions.push(execution.onDidFinish((record) => history.record(record)));
+
+  // The explorer's cursor drives the details panel, through a notification the
+  // explorer does not know anybody is listening to.
+  context.subscriptions.push(view.onDidSelectObject(({ profileId, ref }) => detailsView.show(profileId, ref)));
+
+  context.subscriptions.push(
+    vscode.workspace.registerFileSystemProvider(QUERY_SCHEME, files, { isCaseSensitive: true }),
+    vscode.workspace.registerTextDocumentContentProvider(OBJECT_SCHEME, definitions),
+    vscode.window.registerWebviewViewProvider(ResultsView.viewType, resultsView),
+    vscode.window.registerWebviewViewProvider(DetailsView.viewType, detailsView),
+    vscode.window.registerWebviewViewProvider(HistoryView.viewType, historyView),
+    // A data or runner tab restores from its address alone, so a window reload
+    // brings back forty tabs for the cost of forty empty frames.
+    vscode.window.registerWebviewPanelSerializer(WorkspacePanels.dataViewType, {
+      deserializeWebviewPanel: async (panel, state) => panels.restore(panel, 'data', state)
+    }),
+    vscode.window.registerWebviewPanelSerializer(WorkspacePanels.runnerViewType, {
+      deserializeWebviewPanel: async (panel, state) => panels.restore(panel, 'runner', state)
+    })
+  );
+
+  context.subscriptions.push(...commands.register());
+  context.subscriptions.push(...language.register());
   context.subscriptions.push(...new ObjectCommands(store, catalog, output).register());
+
+  // A tab that closes releases its lease, cancels what it was running and
+  // drops its rows. Nothing else has to remember to.
+  context.subscriptions.push(
+    vscode.workspace.onDidCloseTextDocument((document) => {
+      const tab = active.tabOf(document);
+      if (tab) {
+        void execution.closeTab(tab);
+      }
+    }),
+    // Disconnecting frees every execution session for that connection. The
+    // tabs stay open, because the SQL in them is the user's work.
+    manager.onDidChange(() => {
+      for (const profile of store.all()) {
+        if (!manager.isConnected(profile.id)) {
+          void pool.releaseProfile(profile.id);
+        }
+      }
+    })
+  );
 
   // No `retainContextWhenHidden`. It costs thirty to sixty megabytes for a view
   // many people have open at startup, and it buys nothing here: grouping, sort

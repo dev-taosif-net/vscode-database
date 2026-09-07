@@ -2,6 +2,7 @@ import { memo } from 'react';
 import { KINDS, ObjectKind } from '../../shared/catalog';
 import { Codicon } from '../primitives/Codicon';
 import { IconMark, ObjectIcon } from '../primitives/ObjectIcon';
+import { post } from './api';
 import { segments } from './host';
 import { H } from './model';
 import { cursorStore, loadMore, toggleExpanded, useIsCursor } from './state';
@@ -18,6 +19,18 @@ import { cursorStore, loadMore, toggleExpanded, useIsCursor } from './state';
  */
 function take(gkey: string): void {
   cursorStore.setState((s) => (s.cursorId === gkey ? s : { ...s, cursorId: gkey }));
+}
+
+/**
+ * Tells the host which object the cursor is on, so the details panel can
+ * follow it.
+ *
+ * A notification rather than a request: the tree does not change because of
+ * it, and a window with the panel closed drops it on the floor. That is what
+ * keeps the explorer from having to know the panel exists.
+ */
+function announce(profileId: string, kind: ObjectKind, schema: string, name: string): void {
+  post({ type: 'selectObject', profileId, ref: { kind, schema, name } });
 }
 
 /**
@@ -199,9 +212,13 @@ export const ObjectRow = memo(function ObjectRow(
       // `webview/context` `when` clauses read, which is what makes one row's
       // menu offer Select Top 100 and the next row's offer Execute.
       data-vscode-context={contextFor(profileId, objKind, schema, name, favourite)}
-      onContextMenu={() => take(gkey)}
+      onContextMenu={() => {
+        take(gkey);
+        announce(profileId, objKind, schema, name);
+      }}
       onClick={() => {
         take(gkey);
+        announce(profileId, objKind, schema, name);
         if (expandable) {
           toggleExpanded(gkey);
         }

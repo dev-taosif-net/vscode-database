@@ -1,0 +1,71 @@
+{
+  "artboards": [
+    { "file": "Main.dc.html", "x": 0, "y": 0, "w": 1480, "h": 920, "title": "Query workspace" },
+    { "file": "Data.dc.html", "x": 0, "y": 1080, "w": 1180, "h": 740, "title": "Table data" },
+    { "file": "Intellisense.dc.html", "x": 1300, "y": 1080, "w": 880, "h": 600, "title": "IntelliSense" },
+    { "file": "Runner.dc.html", "x": 0, "y": 1960, "w": 1080, "h": 800, "title": "Procedure runner" },
+    { "file": "Panels.dc.html", "x": 1200, "y": 1960, "w": 1040, "h": 860, "title": "Side bar views" },
+    { "file": "Plan.dc.html", "x": 0, "y": 2960, "w": 1180, "h": 680, "title": "Execution plan" },
+    { "file": "States.dc.html", "x": 1300, "y": 2960, "w": 1180, "h": 940, "title": "Result states" },
+    { "file": "Spec.dc.html", "x": 0, "y": 4040, "w": 1480, "h": 1120, "title": "Build sheet" }
+  ],
+  "annotations": [
+    {
+      "id": "note-main",
+      "x": -340,
+      "y": 20,
+      "w": 280,
+      "text": "The SQL is a real VS Code editor, not Monaco in a webview.\n\nThat is the decision everything else follows from. The user keeps their vim mode, their Copilot, their find widget, their font settings. The toolbar is the editor title menu, so it is icon-only and the connection lives in the status bar, which is what an extension can actually build.\n\nThe results are one panel view that follows the active tab, not one webview per tab. Thousands of tabs and thousands of iframes cannot both be true.\n\nThe explorer on the left is phase 2, untouched."
+    },
+    {
+      "id": "note-data",
+      "x": -340,
+      "y": 1100,
+      "w": 280,
+      "text": "The answer to \"I just want to look at the table\".\n\nSame grid, different source — and because the source is a table rather than a query, three things become possible: sorting runs on the server, the filter becomes a WHERE, and paging is keyset rather than OFFSET.\n\nKeyset is why page five thousand is as fast as page one. OFFSET 9000000 makes the server walk nine million rows to throw them away.\n\nThe row count is the estimate, with a tilde. Never COUNT(*) on open."
+    },
+    {
+      "id": "note-intellisense",
+      "x": 2260,
+      "y": 1100,
+      "w": 260,
+      "text": "The feature people judge a database tool by in the first ten minutes.\n\nThe first completion after ON is the whole foreign-key predicate, because the index already knows the constraint and typing it out is the most tedious keystroke in SQL.\n\nRanking is the explorer's own fuzzy matcher, reused rather than rewritten, so uspgc finds usp_GetCustomer in the editor exactly as it does in the tree."
+    },
+    {
+      "id": "note-runner",
+      "x": -340,
+      "y": 1980,
+      "w": 280,
+      "text": "Generated from the parameter list the catalog already returns, with the control chosen by type.\n\nA nullable parameter gets a NULL checkbox, because empty string and NULL are different arguments and a form that cannot say which is which cannot call the procedure.\n\nValues are bound, never concatenated, and the preview says so. Output parameters and the return value get their own tabs, because a procedure that returns a result set and an output parameter is common and a runner showing only the grid loses half the answer.\n\nArguments are remembered per procedure per connection, never across connections."
+    },
+    {
+      "id": "note-panels",
+      "x": 2320,
+      "y": 1980,
+      "w": 260,
+      "text": "History keeps failures, prominently — the query people most want back is the one they broke twenty minutes ago.\n\nAnything that set a credential is stored redacted, with its timing intact. A history file is a plain file that gets backed up, synced, and occasionally pasted into a support ticket.\n\nSaved queries are real files, so they diff and they review.\n\nThe dimmed PostgreSQL row is the honest part: the server does not track what a routine body reads, so that row is a text search and is labelled as one."
+    },
+    {
+      "id": "note-plan",
+      "x": -340,
+      "y": 2980,
+      "w": 280,
+      "text": "One plan model, two readers — the same relationship the two catalog readers already have.\n\nSQL Server gives showplan XML from SET STATISTICS XML ON. PostgreSQL gives EXPLAIN FORMAT JSON, and its ANALYZE actually runs the statement, so on anything that writes it is wrapped in a transaction that rolls back and the confirmation says exactly that.\n\nThree warnings are called out because they explain most bad plans: estimate against actual, a scan where an index exists, and a spill."
+    },
+    {
+      "id": "note-states",
+      "x": 2600,
+      "y": 2980,
+      "w": 260,
+      "text": "The most valuable screens in a database tool, so they get the most design.\n\nA cancelled query keeps the rows it already fetched. Throwing them away is the one thing a person who cancels never wants.\n\nSorting a query the user wrote sorts only the fetched rows, and says so on the header. Presenting a thousand sorted rows out of forty million as sorted is a lie that has shipped in several tools.\n\nNothing is validated before it runs. The only thing underlined is what the server actually rejected."
+    },
+    {
+      "id": "note-spec",
+      "x": -340,
+      "y": 4060,
+      "w": 280,
+      "text": "Everything neutral reads a VS Code theme token, so the workspace follows the user's theme with no detection of its own. The literals are the object hues, the environment hues and the plan ramp.\n\nThe grid shares the explorer's 22px row and its tabular figures, because a grid at 28px beside a tree at 22px reads as two products.\n\nThe session pool is the part with real risk in it. One session per profile is what phase 2 has, and one long scan on it would freeze the explorer, the details panel and IntelliSense together."
+    }
+  ],
+  "launch": { "view": "canvas" }
+}

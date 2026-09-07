@@ -1,0 +1,458 @@
+/*
+ * The two side bar views: object details, and query history with saved
+ * queries.
+ *
+ * They read the sidebar's own ground rather than the editor's, which is the
+ * distinction `tokens.css` refuses to paper over: in Dark Modern the editor is
+ * #1f1f1f and the side bar it would be painted into is #181818, and a view
+ * that borrowed the editor's ground would paint a visibly lighter rectangle
+ * inside the side bar.
+ */
+@import './tokens.css';
+
+:root {
+  --bg: var(--vscode-sideBar-background);
+  --fg: var(--vscode-sideBar-foreground, var(--vscode-foreground));
+  --dim: var(--vscode-descriptionForeground);
+  --bd: var(--vscode-sideBarSectionHeader-border, var(--vscode-panel-border));
+  --line: var(--vscode-editorIndentGuide-background, rgba(128, 128, 128, 0.16));
+  --hover: var(--vscode-list-hoverBackground);
+  --accent: var(--vscode-focusBorder);
+  --row: 22px;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  color: var(--fg);
+  background: var(--bg);
+  font-family: var(--vscode-font-family);
+  font-size: var(--vscode-font-size);
+}
+
+.num {
+  font-variant-numeric: tabular-nums;
+}
+
+.mono {
+  font-family: var(--vscode-editor-font-family, monospace);
+}
+
+.dim {
+  color: var(--dim);
+}
+
+.strip-spacer {
+  flex: 1;
+}
+
+.row-gap {
+  width: 16px;
+  flex-shrink: 0;
+}
+
+/* --------------------------------------------------------------- details */
+
+.details {
+  padding: 12px 14px 20px;
+}
+
+.details-head {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+
+.details-name {
+  font-size: 14px;
+  font-weight: 600;
+  word-break: break-word;
+}
+
+.details-sub {
+  font-size: 11px;
+  color: var(--dim);
+  margin-top: 2px;
+  text-transform: capitalize;
+}
+
+.details-error {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+  padding: 8px 10px;
+  border-radius: 4px;
+  font-size: 12px;
+  color: var(--vscode-errorForeground);
+  border: 1px solid var(--vscode-errorForeground);
+  background: color-mix(in srgb, var(--vscode-errorForeground) 8%, transparent);
+}
+
+/*
+ * The badges.
+ *
+ * Each carries a hue and a word, never a hue alone: under `forced-colors` and
+ * for the one man in twelve who cannot separate red from green, the word is
+ * what survives. An engine without a concept gets no badge for it rather than
+ * a greyed one, so nothing here has a disabled state.
+ */
+.tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin-top: 12px;
+}
+
+.tag {
+  display: inline-flex;
+  align-items: center;
+  height: 17px;
+  padding: 0 6px;
+  border-radius: 3px;
+  border: 1px solid;
+  font-size: 10px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.tag-pk { color: var(--obj-key); border-color: color-mix(in srgb, var(--obj-key) 42%, transparent); background: color-mix(in srgb, var(--obj-key) 12%, transparent); }
+.tag-fk { color: var(--obj-ref); border-color: color-mix(in srgb, var(--obj-ref) 42%, transparent); background: color-mix(in srgb, var(--obj-ref) 12%, transparent); }
+.tag-identity { color: var(--obj-table); border-color: color-mix(in srgb, var(--obj-table) 42%, transparent); background: color-mix(in srgb, var(--obj-table) 12%, transparent); }
+.tag-clustered,
+.tag-heap,
+.tag-unique { color: var(--obj-type); border-color: color-mix(in srgb, var(--obj-type) 42%, transparent); background: color-mix(in srgb, var(--obj-type) 12%, transparent); }
+.tag-trigger { color: var(--obj-trigger); border-color: color-mix(in srgb, var(--obj-trigger) 42%, transparent); background: color-mix(in srgb, var(--obj-trigger) 12%, transparent); }
+.tag-temporal { color: var(--obj-synonym); border-color: color-mix(in srgb, var(--obj-synonym) 42%, transparent); background: color-mix(in srgb, var(--obj-synonym) 12%, transparent); }
+.tag-partitioned { color: var(--obj-sequence); border-color: color-mix(in srgb, var(--obj-sequence) 42%, transparent); background: color-mix(in srgb, var(--obj-sequence) 12%, transparent); }
+.tag-unlogged { color: var(--obj-procedure); border-color: color-mix(in srgb, var(--obj-procedure) 42%, transparent); background: color-mix(in srgb, var(--obj-procedure) 12%, transparent); }
+.tag-materialized { color: var(--obj-view); border-color: color-mix(in srgb, var(--obj-view) 42%, transparent); background: color-mix(in srgb, var(--obj-view) 12%, transparent); }
+
+.facts {
+  margin: 14px 0 0;
+  padding-top: 10px;
+  border-top: 1px solid var(--line);
+  display: grid;
+  grid-template-columns: 82px 1fr;
+  row-gap: 6px;
+  font-size: 12px;
+}
+
+.fact {
+  display: contents;
+}
+
+.facts dt {
+  color: var(--dim);
+}
+
+.facts dd {
+  margin: 0;
+}
+
+/* A fact the engine does not record is a dash, not a zero and not a guess. */
+.facts dd.is-absent {
+  color: var(--dim);
+  cursor: help;
+}
+
+.actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+}
+
+.action {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  height: 26px;
+  padding: 0 8px;
+  border-radius: 4px;
+  border: 1px solid var(--bd);
+  background: var(--vscode-button-secondaryBackground, transparent);
+  color: var(--vscode-button-secondaryForeground, var(--fg));
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.action:hover {
+  background: var(--hover);
+}
+
+.section {
+  margin-top: 12px;
+  border-top: 1px solid var(--line);
+}
+
+.section-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  height: var(--row);
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--fg);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+  text-align: left;
+}
+
+.section-head.static {
+  cursor: default;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  height: var(--row);
+  padding-left: 16px;
+  font-size: 12px;
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.row-button {
+  width: 100%;
+  border: none;
+  background: none;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  text-align: left;
+}
+
+.row-button:hover {
+  background: var(--hover);
+}
+
+.row-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/*
+ * A dependency the catalog cannot prove.
+ *
+ * Dimmed and italic, with a footnote, because it came from a text search
+ * rather than from the server: PostgreSQL does not track what a routine body
+ * reads, and a name inside a comment matches exactly as well as a real one.
+ */
+.row.is-inferred {
+  opacity: 0.62;
+  font-style: italic;
+}
+
+.footnote {
+  margin: 8px 0 0;
+  padding-left: 16px;
+  font-size: 11px;
+  line-height: 1.6;
+  color: var(--dim);
+}
+
+/* --------------------------------------------------------------- history */
+
+.history {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+}
+
+.history-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 10px;
+  flex-shrink: 0;
+  border-bottom: 1px solid var(--bd);
+}
+
+.search {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 1;
+  min-width: 0;
+  height: 24px;
+  padding: 0 7px;
+  border-radius: 2px;
+  border: 1px solid var(--vscode-input-border, transparent);
+  background: var(--vscode-input-background);
+  color: var(--dim);
+}
+
+.search input {
+  flex: 1;
+  min-width: 0;
+  border: none;
+  background: none;
+  color: var(--vscode-input-foreground);
+  font: inherit;
+  font-size: 12px;
+  outline: none;
+}
+
+.picker {
+  height: 24px;
+  max-width: 120px;
+  border-radius: 2px;
+  border: 1px solid var(--vscode-input-border, transparent);
+  background: var(--vscode-input-background);
+  color: var(--vscode-input-foreground);
+  font: inherit;
+  font-size: 11px;
+}
+
+.icon-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border: none;
+  border-radius: 3px;
+  background: none;
+  color: var(--fg);
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.icon-btn:hover {
+  background: var(--hover);
+}
+
+.entries {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+}
+
+.entry {
+  padding: 7px 12px;
+  border-bottom: 1px solid var(--line);
+  cursor: default;
+}
+
+.entry:hover {
+  background: var(--hover);
+}
+
+.entry-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
+  color: var(--dim);
+}
+
+/* A failure is kept, and kept legible: it is the entry people come back for. */
+.entry.status-error .entry-meta .codicon {
+  color: var(--vscode-errorForeground);
+}
+
+.entry.status-cancelled .entry-meta .codicon {
+  color: var(--warn-ink);
+}
+
+.entry.status-done .entry-meta .codicon {
+  color: var(--env-dev-ink);
+}
+
+.entry-error {
+  color: var(--vscode-errorForeground);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.entry-sql {
+  margin-top: 4px;
+  font-size: 11.5px;
+  line-height: 15px;
+  max-height: 30px;
+  overflow: hidden;
+  color: var(--fg);
+  opacity: 0.85;
+}
+
+.entry-sql.is-redacted {
+  font-style: italic;
+  opacity: 0.55;
+}
+
+.entry-actions {
+  display: none;
+  gap: 10px;
+  margin-top: 5px;
+}
+
+.entry:hover .entry-actions {
+  display: flex;
+}
+
+.link {
+  border: none;
+  background: none;
+  padding: 0;
+  color: var(--vscode-textLink-foreground);
+  font: inherit;
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.link:hover {
+  text-decoration: underline;
+}
+
+.saved {
+  flex-shrink: 0;
+  border-top: 1px solid var(--bd);
+  margin-top: 0;
+  padding: 6px 12px 12px;
+  max-height: 40vh;
+  overflow: auto;
+}
+
+/* ------------------------------------------------------------------ empty */
+
+.empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 32px 20px;
+  color: var(--dim);
+  text-align: center;
+}
+
+.empty .codicon {
+  font-size: 24px;
+  opacity: 0.5;
+}
+
+.empty-title {
+  margin: 4px 0 0;
+  color: var(--fg);
+  font-size: 13px;
+}
+
+.empty-body {
+  margin: 0;
+  max-width: 34ch;
+  font-size: 12px;
+  line-height: 1.6;
+}
