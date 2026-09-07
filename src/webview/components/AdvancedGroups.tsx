@@ -1,6 +1,6 @@
 import { ReactNode } from 'react';
 import { EncryptMode, SslMode, transportLabel, transportStrength } from '../../types';
-import { AdvancedGroupId, toggleGroup, useSelect, useUpdate } from '../state/editor';
+import { AdvancedGroupId, toggleGroup, useField, useSelect, useUpdate } from '../state/editor';
 import { Codicon } from '../primitives/Codicon';
 import { Disclosure } from '../primitives/Disclosure';
 import { Field } from '../primitives/Field';
@@ -32,15 +32,24 @@ const SSL_HINT: Record<SslMode, string> = {
  * disclosure only calls once it is open.
  */
 export function AdvancedGroups() {
-  const draft = useSelect((state) => state.draft);
+  // Only the four readings the headers themselves draw. Holding the whole
+  // draft here rebuilt all five groups, and the body of every open one, on
+  // every keystroke anywhere in the form — the badges are the only part of
+  // this that a field can change, and three of the five have no badge at all.
+  const driver = useField('driver');
+  const readOnly = useField('readOnly');
+  const propertyCount = useSelect((state) => state.draft?.properties.length ?? 0);
+  // Two readings rather than the profile they are read from: both are plain
+  // values, so an edit that leaves the transport alone stops here.
+  const strength = useSelect((state) => (state.draft ? transportStrength(state.draft) : null));
+  const label = useSelect((state) => (state.draft ? transportLabel(state.draft) : ''));
   const open = useSelect((state) => state.advanced);
   const update = useUpdate();
-  if (!draft) {
+  if (driver === undefined || strength === null) {
     return null;
   }
 
-  const isMssql = draft.driver === 'mssql';
-  const strength = transportStrength(draft);
+  const isMssql = driver === 'mssql';
   const toggle = (group: AdvancedGroupId) => () => update((state) => toggleGroup(state, group));
 
   const groups: {
@@ -58,7 +67,7 @@ export function AdvancedGroups() {
       summary: 'Encryption and certificate checking',
       badge: (
         <span className={`chip ${strength === 'verified' ? 'ok' : strength === 'weakened' ? 'warn' : 'bad'}`}>
-          {transportLabel(draft)}
+          {label}
         </span>
       ),
       body: () => (isMssql ? <MssqlTransport /> : <PostgresTransport />)
@@ -75,7 +84,7 @@ export function AdvancedGroups() {
       icon: 'lock',
       title: 'Security',
       summary: 'Where the credential lives and what a session may do',
-      badge: draft.readOnly ? <span className="chip ok">Read-only</span> : undefined,
+      badge: readOnly ? <span className="chip ok">Read-only</span> : undefined,
       body: () => <SecurityGroup />
     },
     {
@@ -90,7 +99,7 @@ export function AdvancedGroups() {
       icon: 'settings-gear',
       title: 'Driver',
       summary: 'Anything the driver accepts that has no field here',
-      badge: draft.properties.length ? <span className="chip">{draft.properties.length}</span> : undefined,
+      badge: propertyCount ? <span className="chip">{propertyCount}</span> : undefined,
       body: () => <PropertiesTable />
     }
   ];

@@ -114,7 +114,14 @@ function buildConfig(profile: ConnectionProfile, secrets: ConnectSecrets): Conne
 
   if (profile.certificateHostname) {
     // Lets a listener or an alias validate against the name on the certificate.
-    options.cryptoCredentialsDetails = { servername: profile.certificateHostname };
+    //
+    // This is `serverName` and not `cryptoCredentialsDetails.servername`. The
+    // latter is the secure-context bag, and tedious hands it to
+    // `tls.createSecureContext`, which has no `servername` option and drops the
+    // key without a word — so the field read as applied and validated against
+    // the host every time. `serverName` is the one tedious passes to
+    // `tls.connect` on both the TDS 8.0 and the STARTTLS path.
+    options.serverName = profile.certificateHostname;
   }
 
   // Driver properties are the user's own escape hatch, so they are applied
@@ -166,14 +173,30 @@ function buildAuthentication(profile: ConnectionProfile, secrets: ConnectSecrets
 function connectOnce(connection: Connection, signal?: AbortSignal): Promise<void> {
   return new Promise<void>((resolve, reject) => {
     let settled = false;
+    /**
+     * The number and state the server actually sent.
+     *
+     * A login failure reaches us as a bare `ConnectionError` carrying nothing
+     * but a message and the code 'ELOGIN': tedious builds it from the error
+     * token and keeps neither the number nor the state. Error 18456 is the most
+     * common failure SQL Server has, and without the number it cannot be told
+     * apart from anything else, so the remedy the editor offers for a rejected
+     * credential was unreachable. The token itself is emitted a moment earlier,
+     * which is where these two come from.
+     */
+    let serverError: { number?: number; state?: number } | undefined;
+    const onErrorMessage = (token: { number?: number; state?: number }) => {
+      serverError = token;
+    };
     const finish = (error?: unknown) => {
       if (settled) {
         return;
       }
       settled = true;
       signal?.removeEventListener('abort', onAbort);
+      connection.removeListener('errorMessage', onErrorMessage);
       if (error) {
-        reject(toDriverError(error));
+        reject(toDriverError(error, serverError));
       } else {
         resolve();
       }
@@ -191,6 +214,8 @@ function connectOnce(connection: Connection, signal?: AbortSignal): Promise<void
     }
     signal?.addEventListener('abort', onAbort, { once: true });
 
+    // Carries the number and state that the 'connect' error is about to drop.
+    connection.on('errorMessage', onErrorMessage);
     connection.on('connect', (error?: Error) => finish(error));
     // A socket-level failure can arrive before 'connect' ever fires.
     connection.on('error', (error: Error) => finish(error));
@@ -220,18 +245,18 @@ function query(connection: Connection, sql: string): Promise<Array<Record<string
   });
 }
 
-function toDriverError(error: unknown): DriverError {
+/**
+ * `token` is only ever a fallback: an error that carries its own number and
+ * state keeps them, so a request failure is untouched by it.
+ */
+function toDriverError(error: unknown, token?: { number?: number; state?: number }): DriverError {
   if (error instanceof DriverError) {
     return error;
   }
   const e = error as { message?: string; code?: string; number?: number; state?: number | string; name?: string };
-  const wrapped = new DriverError(
-    e?.message ?? String(error),
-    e?.code,
-    typeof e?.number === 'number' ? e.number : undefined,
-    e?.state === undefined ? undefined : String(e.state),
-    error
-  );
+  const number = typeof e?.number === 'number' ? e.number : token?.number;
+  const state = e?.state !== undefined ? String(e.state) : token?.state !== undefined ? String(token.state) : undefined;
+  const wrapped = new DriverError(e?.message ?? String(error), e?.code, number, state, error);
   if (e?.name === 'AbortError') {
     wrapped.name = 'AbortError';
   }

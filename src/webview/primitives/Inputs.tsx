@@ -2,6 +2,7 @@ import { memo, useCallback } from 'react';
 import { ConnectionProfile } from '../../types';
 import { setField, useField, useUpdate } from '../state/editor';
 import { Codicon } from './Codicon';
+import { useFieldAria } from './Field';
 
 type TextKey = {
   [K in keyof ConnectionProfile]: ConnectionProfile[K] extends string ? K : never;
@@ -41,6 +42,7 @@ export const TextInput = memo(function TextInput({
   autoFocus
 }: TextProps) {
   const value = useField(field) ?? '';
+  const aria = useFieldAria();
   const update = useUpdate();
   const onChange = useCallback(
     (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -59,6 +61,8 @@ export const TextInput = memo(function TextInput({
       placeholder={placeholder}
       aria-label={ariaLabel}
       aria-invalid={invalid || undefined}
+      aria-required={aria.required || undefined}
+      aria-describedby={aria.describedBy}
       autoComplete="off"
       spellCheck={false}
       autoFocus={autoFocus}
@@ -85,9 +89,13 @@ export const NumberInput = memo(function NumberInput({
   width
 }: NumberProps) {
   const value = useField(field);
+  const aria = useFieldAria();
   const update = useUpdate();
   const onChange = useCallback(
     (event: React.ChangeEvent<HTMLInputElement>) => {
+      // An empty box stays empty; clearing one to retype it is the ordinary
+      // way to change a number. What an empty box *means* is settled where the
+      // profile is read, not here.
       const raw = event.target.value.trim();
       const next = raw === '' ? null : Number(raw);
       update((state) =>
@@ -107,6 +115,8 @@ export const NumberInput = memo(function NumberInput({
       placeholder={placeholder}
       aria-label={ariaLabel}
       aria-invalid={invalid || undefined}
+      aria-required={aria.required || undefined}
+      aria-describedby={aria.describedBy}
       autoComplete="off"
       onChange={onChange}
     />
@@ -127,6 +137,7 @@ export function SelectInput<K extends keyof ConnectionProfile>({
   ariaLabel
 }: SelectProps<K>) {
   const value = useField(field);
+  const aria = useFieldAria();
   const update = useUpdate();
 
   return (
@@ -134,6 +145,8 @@ export function SelectInput<K extends keyof ConnectionProfile>({
       <select
         id={id}
         aria-label={ariaLabel}
+        aria-required={aria.required || undefined}
+        aria-describedby={aria.describedBy}
         value={String(value ?? '')}
         onChange={(event) => {
           const chosen = options.find(([option]) => String(option) === event.target.value);

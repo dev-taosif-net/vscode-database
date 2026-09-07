@@ -1,25 +1,29 @@
-import { isDirty, isNew, useSelect, useStore } from '../state/editor';
+import { isDirty, isNew, useField, useSelect, useStore } from '../state/editor';
 import { post } from '../state/vscode';
 import { Codicon } from '../primitives/Codicon';
 import { EngineMark, engineName } from '../primitives/EngineMark';
 
 export function Header() {
   const store = useStore();
-  const draft = useSelect((state) => state.draft);
+  // The head draws the name and the engine and nothing else out of the draft.
+  // Subscribing to the whole object rebuilt this on every keystroke in every
+  // box on the page, and with it the engine mark's thirty-odd nodes.
+  const name = useField('name');
+  const driver = useField('driver');
   const fresh = useSelect(isNew);
   const dirty = useSelect(isDirty);
   const connected = useSelect((state) => Boolean(state.draft && state.host.connected.includes(state.draft.id)));
 
-  if (!draft) {
+  if (name === undefined || driver === undefined) {
     return null;
   }
 
-  const engine = engineName(draft.driver);
-  const title = draft.name.trim() || (fresh ? `New ${engine} connection` : 'Untitled connection');
+  const engine = engineName(driver);
+  const title = name.trim() || (fresh ? `New ${engine} connection` : 'Untitled connection');
 
   return (
     <header className="page-head">
-      <EngineMark driver={draft.driver} size={20} plate={36} />
+      <EngineMark driver={driver} size={20} plate={36} />
       <div className="page-title">
         <h1>{title}</h1>
         <p>{fresh ? `Create a connection to ${engine}` : engine}</p>

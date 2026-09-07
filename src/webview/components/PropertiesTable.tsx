@@ -1,9 +1,15 @@
+import { ConnectionProfile } from '../../types';
 import { useSelect, useUpdate } from '../state/editor';
 import { Codicon } from '../primitives/Codicon';
 
+/** One shared empty list, so the no-draft reading keeps a stable identity. */
+const EMPTY: ConnectionProfile['properties'] = [];
+
 /** The driver key/value list. A pair with no name is dropped on save. */
 export function PropertiesTable() {
-  const properties = useSelect((state) => state.draft?.properties ?? []);
+  // `?? []` would be a fresh array on every read, which `useSyncExternalStore`
+  // compares by identity and treats as a change that has to be redrawn again.
+  const properties = useSelect((state) => state.draft?.properties) ?? EMPTY;
   const update = useUpdate();
 
   const edit = (index: number, part: 'name' | 'value', value: string) =>

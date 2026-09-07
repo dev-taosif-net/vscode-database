@@ -98,9 +98,19 @@ export function useSelect<T>(select: (state: AppState) => T): T {
   return useStoreSelector(useStore(), select);
 }
 
-/** Reads one field of the draft. Undefined while nothing is selected. */
+/**
+ * Reads one field of the draft. Undefined while nothing is selected.
+ *
+ * The selector is held stable on `key` rather than written inline, for the
+ * reason `sidebar/state.ts` sets out: `useStoreSelector` memoises its snapshot
+ * on the selector's identity, so a fresh arrow every render makes React treat
+ * the store as possibly-changed and re-run its consistency check and a passive
+ * effect for that hook on every pass. One control would never show it. The
+ * advanced groups alone build about fifty.
+ */
 export function useField<K extends keyof ConnectionProfile>(key: K): ConnectionProfile[K] | undefined {
-  return useSelect((state) => state.draft?.[key]);
+  const select = useCallback((state: AppState) => state.draft?.[key], [key]);
+  return useStoreSelector(useStore(), select);
 }
 
 export function useUpdate(): (update: (state: AppState) => AppState) => void {
@@ -169,8 +179,18 @@ export function applyHostMessage(state: AppState, message: HostMessage): AppStat
         ? { ...state, draft: { ...state.draft, ...message.patch } }
         : state;
 
-    case 'probe':
-      return state.draft?.id === message.profileId ? { ...state, probe: message.result } : state;
+    case 'probe': {
+      // The reply carries the address it was asked about, and a lookup that
+      // took a while can land after the box has moved on. Matching the profile
+      // alone let an answer for a host nobody is looking at any more paint
+      // itself under the one they are, which is the one reading on this page
+      // that has to be true or say nothing.
+      if (state.draft?.id !== message.profileId) {
+        return state;
+      }
+      const current = `${(state.draft.host ?? '').trim()}|${state.draft.port ?? ''}`;
+      return message.result.target === current ? { ...state, probe: message.result } : state;
+    }
 
     default:
       return state;

@@ -97,10 +97,6 @@ export class ConnectionManager implements vscode.Disposable {
     return [...this.active.keys()].filter((id) => this.isConnected(id));
   }
 
-  isBusy(profileId: string): boolean {
-    return this.inFlight.has(profileId);
-  }
-
   /** Which kind of attempt is in flight, or undefined when none is. */
   busyKind(profileId: string): AttemptKind | undefined {
     return this.inFlight.get(profileId)?.kind;
@@ -190,7 +186,8 @@ export class ConnectionManager implements vscode.Disposable {
       existing.controller.abort();
     }
     const controller = new AbortController();
-    this.inFlight.set(profile.id, { controller, kind: keep ? 'connect' : 'test' });
+    const entry: InFlight = { controller, kind: keep ? 'connect' : 'test' };
+    this.inFlight.set(profile.id, entry);
     // The list draws a spinner from this, so it has to hear about the attempt
     // when it starts and not only when it lands.
     this.onDidChangeEmitter.fire();
@@ -199,6 +196,16 @@ export class ConnectionManager implements vscode.Disposable {
       const driver = this.driverFor(profile);
       const secrets = await this.resolveSecrets(profile, true, secretOverride);
       const opened = await driver.open(profile, secrets, controller.signal);
+
+      // A cancel that lands while the server is answering still opens a
+      // session, and a driver is free to resolve rather than reject on it. The
+      // session is real, so it has to be closed rather than dropped, and the
+      // attempt has to report as cancelled: keeping it would file a result the
+      // user asked not to have, under an id a newer attempt may already own.
+      if (controller.signal.aborted) {
+        await opened.session.close().catch(() => undefined);
+        throw abortError();
+      }
 
       const info: ConnectionInfo = {
         profileId: profile.id,
@@ -237,7 +244,13 @@ export class ConnectionManager implements vscode.Disposable {
       }
       return { ok: false, failure };
     } finally {
-      this.inFlight.delete(profile.id);
+      // Only if this attempt is still the one in flight. A superseded attempt
+      // settles after its replacement has registered, and deleting the entry
+      // unconditionally cleared the newer attempt's spinner and made
+      // `cancel` a no-op on a connection that was very much still connecting.
+      if (this.inFlight.get(profile.id) === entry) {
+        this.inFlight.delete(profile.id);
+      }
       this.onDidChangeEmitter.fire();
     }
   }
@@ -302,9 +315,7 @@ export class ConnectionManager implements vscode.Disposable {
       ignoreFocusOut: true
     });
     if (entered === undefined) {
-      const error = new Error('The connection attempt was cancelled.');
-      error.name = 'AbortError';
-      throw error;
+      throw abortError();
     }
     if (profile.credentialStore === 'secret') {
       await this.store.writeSecret(profile.id, entered);
@@ -346,4 +357,11 @@ export class ConnectionManager implements vscode.Disposable {
     );
     return choice === 'Connect to production';
   }
+}
+
+/** The shape `describeFailure` reads as a cancellation rather than a fault. */
+function abortError(): Error {
+  const error = new Error('The connection attempt was cancelled.');
+  error.name = 'AbortError';
+  return error;
 }

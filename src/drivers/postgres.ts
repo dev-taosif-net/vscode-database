@@ -79,6 +79,16 @@ export class PostgresDriver implements Driver {
       if (!negotiates || signal?.aborted) {
         throw error;
       }
+      if (profile.sslMode === 'prefer' && answeredOverTls(error)) {
+        // `prefer` is the one direction that falls back downwards, from an
+        // encrypted socket to a plain one. libpq only ever does that when the
+        // server refuses to negotiate TLS at all; once a session is up, the
+        // transport is settled and the answer on it is the answer. Retrying
+        // here anyway would put the password back on the wire in clear over a
+        // wrong password or a missing database, which is not a fallback but a
+        // leak. `allow` negotiates the other way and is left alone.
+        throw error;
+      }
       const second = profile.sslMode === 'allow' ? buildSsl(profile, secrets) : false;
       return this.connectOnce(profile, secrets, second, signal);
     }
@@ -198,6 +208,23 @@ function buildConfig(
   }
 
   return config as ClientConfig;
+}
+
+/**
+ * True when the server answered on the connection rather than refusing to
+ * build one.
+ *
+ * A five-character SQLSTATE is the tell: only the backend produces one, and it
+ * cannot produce one until the transport is up and the startup packet has been
+ * read. A negotiation failure has no SQLSTATE at all — node-postgres raises a
+ * plain Error for a server with SSL off, and a handshake that dies arrives as
+ * ECONNRESET or an ERR_SSL_ code. 28000 is the exception in the other
+ * direction: that is how a `hostnossl` rule turns down the transport itself,
+ * which is the one thing the fallback is for.
+ */
+function answeredOverTls(error: unknown): boolean {
+  const code = (error as { code?: unknown } | null | undefined)?.code;
+  return typeof code === 'string' && /^[0-9A-Z]{5}$/.test(code) && code !== '28000';
 }
 
 function buildSsl(profile: ConnectionProfile, secrets: ConnectSecrets): ClientConfig['ssl'] {

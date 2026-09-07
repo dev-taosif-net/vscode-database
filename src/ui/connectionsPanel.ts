@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import { AttemptResult, ConnectionManager } from '../connections/connectionManager';
-import { ConnectionStore, blankProfile } from '../store/connectionStore';
+import { ConnectionStore, blankProfile, normalise } from '../store/connectionStore';
 import { probeServer } from '../connections/probe';
 import { DraftPayload, EditorState, HostMessage, WebviewMessage } from '../shared/protocol';
 import { ConnectionProfile, DriverKind, FailureActionId, defaultPort } from '../types';
@@ -37,7 +37,17 @@ export class ConnectionsPanel {
   private readonly disposables: vscode.Disposable[] = [];
   private readonly results = new Map<string, AttemptResult>();
   private selectedId: string | undefined;
-  private busyId: string | undefined;
+  /**
+   * The profiles with an attempt in flight.
+   *
+   * A set rather than one id: two attempts can overlap — a test on the draft
+   * while a connect the sidebar started is still running — and one field meant
+   * whichever finished first cleared the other one's spinner, leaving a
+   * connecting row looking idle until something else redrew it.
+   */
+  private readonly busy = new Set<string>();
+  /** Set once the panel is gone, so nothing posts into a dead webview. */
+  private disposed = false;
   private pending: ConnectionProfile | undefined;
   /** Whether the editor has typed changes the user would lose. */
   private dirty = false;
@@ -93,10 +103,23 @@ export class ConnectionsPanel {
     this.selectedId = selectId ?? store.all()[0]?.id;
     this.panel.webview.html = this.html();
 
+    // The page takes a few hundred milliseconds to boot before it says `ready`,
+    // and the answer it is then waiting on is a keychain read per connection.
+    // Starting them here spends that time instead of adding to it.
+    this.store.primeSecretPresence();
+
     this.disposables.push(
       this.panel.onDidDispose(() => this.dispose()),
       this.panel.webview.onDidReceiveMessage((message: WebviewMessage) => {
-        void this.onMessage(message);
+        // A handler that throws used to take its rejection with it and leave
+        // the editor sitting on a spinner that nothing would ever clear.
+        void this.onMessage(message).catch((error) => {
+          this.busy.delete(this.selectedId ?? '');
+          void vscode.window.showErrorMessage(
+            `The connection editor could not finish that: ${describe(error)}`
+          );
+          void this.postState();
+        });
       }),
       this.store.onDidChange(() => void this.postState()),
       this.manager.onDidChange(() => void this.postState())
@@ -104,6 +127,10 @@ export class ConnectionsPanel {
   }
 
   dispose(): void {
+    if (this.disposed) {
+      return;
+    }
+    this.disposed = true;
     ConnectionsPanel.current = undefined;
     while (this.disposables.length) {
       this.disposables.pop()?.dispose();
@@ -229,7 +256,19 @@ export class ConnectionsPanel {
     }
   }
 
+  /**
+   * The one door out to the page.
+   *
+   * Everything the host says goes through here so the disposed check sits in
+   * one place rather than at each call. Work started before the tab was closed
+   * keeps running and still tries to report, and posting into a webview that
+   * no longer exists throws from deep inside the host and takes the rest of
+   * the handler with it.
+   */
   private async send(message: HostMessage): Promise<void> {
+    if (this.disposed) {
+      return;
+    }
     await this.panel.webview.postMessage(message);
   }
 
@@ -356,7 +395,7 @@ export class ConnectionsPanel {
       return;
     }
 
-    this.busyId = effective.id;
+    this.busy.add(effective.id);
     await this.postState();
     try {
       const result =
@@ -365,7 +404,7 @@ export class ConnectionsPanel {
           : await this.manager.connect(effective, message.secret);
       this.results.set(effective.id, result);
     } finally {
-      this.busyId = undefined;
+      this.busy.delete(effective.id);
       await this.postState();
     }
   }
@@ -375,17 +414,17 @@ export class ConnectionsPanel {
     if (!effective) {
       return;
     }
-    this.busyId = effective.id;
+    this.busy.add(effective.id);
     await this.postState();
     try {
       const databases = await this.manager.listDatabases(effective, message.secret);
-      await this.panel.webview.postMessage({ type: 'databases', profileId: effective.id, databases });
+      await this.send({ type: 'databases', profileId: effective.id, databases });
     } catch (error) {
       void vscode.window.showErrorMessage(
         `The database list could not be read: ${error instanceof Error ? error.message : String(error)}`
       );
     } finally {
-      this.busyId = undefined;
+      this.busy.delete(effective.id);
       await this.postState();
     }
   }
@@ -399,7 +438,15 @@ export class ConnectionsPanel {
     if (!stored) {
       return undefined;
     }
-    return message.patch ? { ...stored, ...message.patch, id: stored.id } : stored;
+    if (!message.patch) {
+      return stored;
+    }
+    // The same coercion a save would apply, applied here too. Testing a draft
+    // used to hand the driver the boxes exactly as typed, so a cleared timeout
+    // reached it as null and a port typed as text reached it as a string —
+    // and a test could therefore behave differently from the connection it was
+    // supposed to be proving.
+    return normalise({ ...stored, ...message.patch, id: stored.id });
   }
 
   private async runFailureAction(message: { id: string; actionId: FailureActionId; raw: string }): Promise<void> {
@@ -441,7 +488,7 @@ export class ConnectionsPanel {
         if (confirmed !== 'Trust it anyway') {
           return;
         }
-        await this.panel.webview.postMessage({
+        await this.send({
           type: 'patch',
           profileId: profile.id,
           patch: { trustServerCertificate: true }
@@ -450,7 +497,7 @@ export class ConnectionsPanel {
       }
 
       case 'useDefaultDatabase':
-        await this.panel.webview.postMessage({
+        await this.send({
           type: 'patch',
           profileId: profile.id,
           patch: { database: '' }
@@ -458,7 +505,7 @@ export class ConnectionsPanel {
         return;
 
       case 'retryLongerTimeout':
-        await this.panel.webview.postMessage({
+        await this.send({
           type: 'patch',
           profileId: profile.id,
           patch: { connectTimeoutSeconds: 60 }
@@ -578,7 +625,7 @@ export class ConnectionsPanel {
       pending: this.isPending(this.selectedId) ? this.pending ?? null : null,
       selectedId: this.selectedId ?? null,
       connected: this.manager.activeIds(),
-      busy: this.busyId ?? null,
+      busy: this.selectedId && this.busy.has(this.selectedId) ? this.selectedId : null,
       hasSecret,
       results,
       reload
@@ -619,6 +666,10 @@ export class ConnectionsPanel {
 </body>
 </html>`;
   }
+}
+
+function describe(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
 }
 
 function makeNonce(): string {

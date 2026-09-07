@@ -24,6 +24,27 @@ export class ConnectionStore {
   private readonly onDidChangeEmitter = new vscode.EventEmitter<void>();
   readonly onDidChange = this.onDidChangeEmitter.event;
 
+  private readonly disposables: vscode.Disposable[] = [];
+
+  /**
+   * Whether each profile has a stored credential, once it has been asked.
+   *
+   * `hasSecret` is a boolean, but reading it is not cheap: every call is a
+   * round trip to the keychain that fetches and decrypts the whole password
+   * only to compare it against undefined. The editor asks for the whole list
+   * on every redraw, so an uncached answer put one keychain read per
+   * connection in front of the first paint and repeated the set on every state
+   * post after it.
+   *
+   * The cache is exact rather than best-effort: every write in the extension
+   * goes through `writeSecret` or `remove`, both of which set the entry
+   * themselves, and `onDidChange` drops entries for anything written by
+   * another window. So a hit is as true as the read it replaces.
+   */
+  private readonly secretPresence = new Map<string, boolean>();
+  /** Reads already in the air, so a burst of callers shares one round trip. */
+  private readonly presenceReads = new Map<string, Promise<boolean>>();
+
   private profiles: ConnectionProfile[];
   /**
    * Pinned ids, kept beside the profiles rather than inside them. A pin is a
@@ -41,9 +62,26 @@ export class ConnectionStore {
     // so the set is filtered on the way in rather than trusted.
     const known = new Set(this.profiles.map((p) => p.id));
     this.pinned = new Set(favourites.filter((id) => known.has(id)));
+
+    // A credential written in another window is written to the same keychain,
+    // so the cached answer for it has to be dropped rather than trusted.
+    this.disposables.push(
+      context.secrets.onDidChange((event) => {
+        for (const profile of this.profiles) {
+          if (secretKey(profile.id) === event.key) {
+            this.secretPresence.delete(profile.id);
+            this.onDidChangeEmitter.fire();
+            return;
+          }
+        }
+      })
+    );
   }
 
   dispose(): void {
+    while (this.disposables.length) {
+      this.disposables.pop()?.dispose();
+    }
     this.onDidChangeEmitter.dispose();
   }
 
@@ -58,6 +96,8 @@ export class ConnectionStore {
   async create(seed: Partial<ConnectionProfile> = {}): Promise<ConnectionProfile> {
     const profile = blankProfile(seed);
     this.profiles = [...this.profiles, profile];
+    // A fresh id has never been a keychain key, so this is known without asking.
+    this.secretPresence.set(profile.id, false);
     await this.flush();
     return profile;
   }
@@ -90,6 +130,7 @@ export class ConnectionStore {
       name: uniqueName(this.profiles, `${source.name} copy`)
     });
     this.profiles = [...this.profiles, copy];
+    this.secretPresence.set(copy.id, false);
     await this.flush();
     return copy;
   }
@@ -97,9 +138,18 @@ export class ConnectionStore {
   async remove(id: string): Promise<void> {
     this.profiles = this.profiles.filter((p) => p.id !== id);
     this.pinned.delete(id);
-    await this.context.secrets.delete(secretKey(id));
+    this.secretPresence.delete(id);
+    this.presenceReads.delete(id);
+
+    // The list is written first. A keychain that refuses the delete used to
+    // take the removal down with it: the profile was already gone from memory,
+    // the throw skipped both flushes, and the next window read the old list
+    // back out of `globalState` and the connection returned from the dead. The
+    // orphaned credential is the smaller failure of the two, and it is
+    // recoverable — deleting the profile again clears it.
     await this.flushFavourites();
     await this.flush();
+    await this.context.secrets.delete(secretKey(id));
   }
 
   /* ---------------------------------------------------------- favourites */
@@ -140,13 +190,49 @@ export class ConnectionStore {
   async writeSecret(profileId: string, secret: string | undefined): Promise<void> {
     if (secret === undefined || secret === '') {
       await this.context.secrets.delete(secretKey(profileId));
+      this.secretPresence.set(profileId, false);
       return;
     }
     await this.context.secrets.store(secretKey(profileId), secret);
+    this.secretPresence.set(profileId, true);
   }
 
   async hasSecret(profileId: string): Promise<boolean> {
-    return (await this.context.secrets.get(secretKey(profileId))) !== undefined;
+    const known = this.secretPresence.get(profileId);
+    if (known !== undefined) {
+      return known;
+    }
+    const inFlight = this.presenceReads.get(profileId);
+    if (inFlight) {
+      return inFlight;
+    }
+    const read = Promise.resolve(this.context.secrets.get(secretKey(profileId))).then(
+      (value) => {
+        const present = value !== undefined;
+        this.secretPresence.set(profileId, present);
+        this.presenceReads.delete(profileId);
+        return present;
+      },
+      (error) => {
+        // A keychain that will not answer is not proof of anything, so nothing
+        // is cached and the next caller asks again.
+        this.presenceReads.delete(profileId);
+        throw error;
+      }
+    );
+    this.presenceReads.set(profileId, read);
+    return read;
+  }
+
+  /**
+   * Asks the keychain about every profile at once, so the answers are already
+   * held by the time something needs the whole set. Failures are the caller's
+   * to ignore: this is a warm-up, and every id it misses is simply read later.
+   */
+  primeSecretPresence(): void {
+    for (const profile of this.profiles) {
+      void this.hasSecret(profile.id).catch(() => undefined);
+    }
   }
 
   /** True when a name is free, ignoring one profile (the one being renamed). */
@@ -230,7 +316,7 @@ export function blankProfile(seed: Partial<ConnectionProfile> = {}): ConnectionP
  * arriving from the webview, both pass through here, so every consumer can
  * assume the fields exist and the numbers are numbers.
  */
-function normalise(input: ConnectionProfile): ConnectionProfile {
+export function normalise(input: ConnectionProfile): ConnectionProfile {
   const driver: DriverKind = input.driver === 'postgres' ? 'postgres' : 'mssql';
   const port = coercePort(input.port);
   return {
@@ -270,6 +356,12 @@ function coerceEnvironment(value: unknown): EnvironmentId {
 }
 
 function clamp(value: unknown, min: number, max: number, fallback: number): number {
+  // An empty box arrives as null, and `Number(null)` is 0, which is finite and
+  // would have been clamped to the minimum. A cleared connect timeout became
+  // one second rather than the fifteen the field is documented to default to.
+  if (value === null || value === undefined || value === '') {
+    return fallback;
+  }
   const n = Number(value);
   if (!Number.isFinite(n)) {
     return fallback;

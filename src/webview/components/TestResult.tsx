@@ -1,4 +1,4 @@
-import { useSelect, useStore } from '../state/editor';
+import { useField, useSelect, useStore } from '../state/editor';
 import { post } from '../state/vscode';
 import { Codicon } from '../primitives/Codicon';
 
@@ -9,23 +9,28 @@ import { Codicon } from '../primitives/Codicon';
  */
 export function TestResult() {
   const store = useStore();
-  const draft = useSelect((state) => state.draft);
+  // The strip reads an id, a host and a port, and only while an attempt is
+  // running. Holding the whole draft redrew it on every keystroke.
+  const id = useField('id');
+  const host = useField('host');
+  const port = useField('port');
+  const driver = useField('driver');
   const busy = useSelect((state) => Boolean(state.draft && state.host.busy === state.draft.id));
   const result = useSelect((state) => (state.draft ? state.host.results[state.draft.id] : undefined));
 
-  if (!draft) {
+  if (id === undefined) {
     return null;
   }
 
   if (busy) {
-    const port = draft.port ?? (draft.driver === 'mssql' ? 1433 : 5432);
+    const shown = port ?? (driver === 'mssql' ? 1433 : 5432);
     return (
       <div className="result busy" role="status" aria-live="polite">
         <Codicon name="loading" spin />
         <span>
-          Connecting to {draft.host || 'the server'} on {port}
+          Connecting to {host || 'the server'} on {shown}
         </span>
-        <button type="button" className="link-btn" onClick={() => post({ type: 'cancel', id: draft.id })}>
+        <button type="button" className="link-btn" onClick={() => post({ type: 'cancel', id })}>
           Cancel
         </button>
       </div>
