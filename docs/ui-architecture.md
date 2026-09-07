@@ -11,8 +11,6 @@ one of two webviews; the connections sidebar is the other, and
 ```
 ┌────────────────────────────────────────────────────────────────────────┐
 │ ● Billing, production                        [Connected]   [ ⋯ ]       │  header
-├────────────────────────────────────────────────────────────────────────┤
-│ 🔴 PROD  Production │ Read-only by default. Connecting asks first.     │  environment banner
 ├──────────────────────┬─────────────────────────────────────────────────┤
 │ Identity             │ Connection details    ( Manual · String )       │
 │                      │  ┌───────────────────────────────────────────┐  │
@@ -27,7 +25,7 @@ one of two webviews; the connections sidebar is the other, and
 │                      │  ▸ Transport  ▸ Network  ▸ Security            │  lazy groups
 │                      │  ▸ Session    ▸ Driver                         │
 ├──────────────────────┴─────────────────────────────────────────────────┤
-│ CONNECTION SUMMARY   server · database · auth · environment · transport│  never scrolls away
+│ 🔴 PROD Production │ Connecting asks first.  │ server · db · auth · TLS│  summary strip
 ├────────────────────────────────────────────────────────────────────────┤
 │ ✓ Connected in 38 ms · SQL Server 2022 · devuser · Read-write          │  result strip
 ├────────────────────────────────────────────────────────────────────────┤
@@ -35,8 +33,8 @@ one of two webviews; the connections sidebar is the other, and
 └────────────────────────────────────────────────────────────────────────┘
 ```
 
-Everything except the details column holds still: the header, the banner,
-identity, the summary, the result strip and the action bar. The details column
+Everything except the details column holds still: the header, identity, the
+summary, the result strip and the action bar. The details column
 is the only thing that scrolls, so identity stays readable however far down the
 form you are, and Connect is always where you left it.
 
@@ -69,7 +67,6 @@ index.tsx
         ├── EmptyState               when nothing is selected
         └── (editor)
             ├── Header               name, engine, saved/dirty/connected, ⋯ menu
-            ├── EnvironmentBanner    badge + spelled-out name + the guard in force
             ├── columns
             │   ├── IdentityPanel    name, environment, server type
             │   └── details
@@ -81,7 +78,7 @@ index.tsx
             │       │   └── ConnectionStringPanel
             │       └── Panel "Advanced"
             │           └── AdvancedGroups → Disclosure ×5
-            ├── ConnectionSummary
+            ├── ConnectionSummary    one row: environment left, four facts right
             ├── TestResult
             ├── ActionBar
             └── ProductionConfirm    modal, focus-trapped

@@ -8,10 +8,10 @@ import { AuthSection } from './components/AuthSection';
 import { ConnectionStringPanel } from './components/ConnectionStringPanel';
 import { ConnectionSummary } from './components/ConnectionSummary';
 import { EmptyState } from './components/EmptyState';
-import { EnvironmentBanner, ProductionWarning } from './components/EnvironmentBanner';
 import { Header } from './components/Header';
 import { IdentityPanel } from './components/IdentityPanel';
 import { ProductionConfirm } from './components/ProductionConfirm';
+import { ProductionWarning } from './components/ProductionWarning';
 import { ServerSection } from './components/ServerSection';
 import { TestResult } from './components/TestResult';
 import { Panel } from './primitives/Panel';
@@ -33,7 +33,6 @@ export function App() {
   return (
     <div className="editor">
       <Header />
-      {environment ? <EnvironmentBanner environment={environment} /> : null}
 
       <div className="columns">
         <IdentityPanel />

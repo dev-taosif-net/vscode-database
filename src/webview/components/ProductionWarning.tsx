@@ -1,39 +1,12 @@
-import { EnvironmentId, environmentMeta } from '../../types';
 import { setField, useSelect, useUpdate } from '../state/editor';
 import { Codicon } from '../primitives/Codicon';
-
-/**
- * The environment, said loudly.
- *
- * Colour alone would fail a monochrome screen and a good share of readers, so
- * every reading is repeated three ways: the badge text, the spelled-out name,
- * and the sentence naming the guard that is actually in force.
- */
-export function EnvironmentBanner({ environment }: { environment: EnvironmentId }) {
-  const meta = environmentMeta(environment);
-  const production = environment === 'prod';
-
-  return (
-    <div className={`env-banner env-${environment}`} role="status" aria-live="polite">
-      <span className="env-mark" aria-hidden="true">
-        <Codicon name={production ? 'shield' : 'circle-filled'} />
-      </span>
-      <div className="env-names">
-        <span className="env-short">{meta.short}</span>
-        <span className="env-full">{meta.full}</span>
-      </div>
-      <span className="env-rule" aria-hidden="true" />
-      <p className="env-guard">{meta.guard}</p>
-    </div>
-  );
-}
 
 /**
  * The standing warning on a production connection, and the one place that says
  * whether this connection can write.
  *
- * The banner above states what the environment means, which never changes. What
- * changes is this connection's own session mode, so it is stated here and
+ * The summary strip states what the environment means, which never changes.
+ * What changes is this connection's own session mode, so it is stated here and
  * changed here. It was previously only reachable through Advanced, Security,
  * which is a poor place to keep the answer to "can this write to production".
  */
