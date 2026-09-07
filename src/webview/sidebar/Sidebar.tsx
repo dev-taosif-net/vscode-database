@@ -297,20 +297,6 @@ export function Sidebar(): JSX.Element {
         }
         return;
 
-      case 'ContextMenu':
-        if (item.kind === 'row') {
-          event.preventDefault();
-          post({ type: 'menu', id: item.id });
-        }
-        return;
-
-      case 'F10':
-        if (event.shiftKey && item.kind === 'row') {
-          event.preventDefault();
-          post({ type: 'menu', id: item.id });
-        }
-        return;
-
       case '*': {
         event.preventDefault();
         const was = listStore.getState().collapsed;

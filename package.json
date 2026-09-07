@@ -78,7 +78,7 @@
       },
       {
         "command": "databaseTools.connect",
-        "title": "Connect to a Database",
+        "title": "Connect",
         "category": "Database",
         "icon": "$(plug)"
       },
@@ -99,6 +99,36 @@
         "title": "Delete Connection",
         "category": "Database",
         "icon": "$(trash)"
+      },
+      {
+        "command": "databaseTools.editConnection",
+        "title": "Edit Connection",
+        "category": "Database",
+        "icon": "$(edit)"
+      },
+      {
+        "command": "databaseTools.addFavourite",
+        "title": "Add to Favourites",
+        "category": "Database",
+        "icon": "$(star-add)"
+      },
+      {
+        "command": "databaseTools.removeFavourite",
+        "title": "Remove from Favourites",
+        "category": "Database",
+        "icon": "$(star-delete)"
+      },
+      {
+        "command": "databaseTools.duplicateConnection",
+        "title": "Duplicate Connection",
+        "category": "Database",
+        "icon": "$(files)"
+      },
+      {
+        "command": "databaseTools.copyServerAddress",
+        "title": "Copy Server Address",
+        "category": "Database",
+        "icon": "$(copy)"
       }
     ],
     "configuration": {
@@ -162,6 +192,26 @@
         {
           "command": "databaseTools.collapseAllGroups",
           "when": "databaseTools.grouped"
+        },
+        {
+          "command": "databaseTools.editConnection",
+          "when": "false"
+        },
+        {
+          "command": "databaseTools.addFavourite",
+          "when": "false"
+        },
+        {
+          "command": "databaseTools.removeFavourite",
+          "when": "false"
+        },
+        {
+          "command": "databaseTools.duplicateConnection",
+          "when": "false"
+        },
+        {
+          "command": "databaseTools.copyServerAddress",
+          "when": "false"
         }
       ],
       "view/title": [
@@ -204,6 +254,48 @@
           "command": "databaseTools.showFlatList",
           "when": "view == databaseTools.connections && databaseTools.grouped",
           "group": "2_view@1"
+        }
+      ],
+      "webview/context": [
+        {
+          "command": "databaseTools.connect",
+          "when": "webviewSection == 'connection' && !dbConnectionLive",
+          "group": "1_session@1"
+        },
+        {
+          "command": "databaseTools.disconnect",
+          "when": "webviewSection == 'connection' && dbConnectionLive",
+          "group": "1_session@1"
+        },
+        {
+          "command": "databaseTools.editConnection",
+          "when": "webviewSection == 'connection'",
+          "group": "2_profile@1"
+        },
+        {
+          "command": "databaseTools.addFavourite",
+          "when": "webviewSection == 'connection' && !dbConnectionPinned",
+          "group": "2_profile@2"
+        },
+        {
+          "command": "databaseTools.removeFavourite",
+          "when": "webviewSection == 'connection' && dbConnectionPinned",
+          "group": "2_profile@2"
+        },
+        {
+          "command": "databaseTools.duplicateConnection",
+          "when": "webviewSection == 'connection'",
+          "group": "2_profile@3"
+        },
+        {
+          "command": "databaseTools.copyServerAddress",
+          "when": "webviewSection == 'connection'",
+          "group": "3_copy@1"
+        },
+        {
+          "command": "databaseTools.deleteConnection",
+          "when": "webviewSection == 'connection'",
+          "group": "4_danger@1"
         }
       ]
     },

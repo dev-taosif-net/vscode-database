@@ -84,12 +84,23 @@ export const Row = memo(function Row(props: {
       aria-label={accessibleName(row, state, session?.failure)}
       data-id={id}
       data-hit={hit}
+      // Right-click is answered by the workbench, not by the page. A menu
+      // drawn inside the webview cannot escape the panel's bounds and would be
+      // clipped by the sidebar at every width that matters; this one is a real
+      // workbench menu, positioned, themed and keyboard-driven by VS Code. The
+      // two `dbConnection` keys are read by the `webview/context` `when`
+      // clauses in the manifest, which is what makes one entry say Connect and
+      // the next row's say Disconnect.
+      data-vscode-context={contextFor(id, state, pinned)}
       // Roving tabindex: the cursor row is the tree's single tab stop, and
       // every other item — rows, headers, and every button in the rail — is
       // -1, so Tab crosses the whole list in one press the way a tree does.
       tabIndex={cursor ? 0 : -1}
       title={address(row)}
       style={{ top, height: H.row }}
+      onContextMenu={() => {
+        cursorStore.setState((s) => (s.cursorId === id ? s : { ...s, cursorId: id }));
+      }}
       onClick={() => {
         cursorStore.setState((s) => (s.cursorId === id ? s : { ...s, cursorId: id }));
         // The tree this replaced opened the editor on a single click, and the
@@ -223,9 +234,9 @@ function StateBadge({ state }: { state: ConnectionState }) {
  *
  * That is exactly how the workbench's own inline tree actions behave, so it is
  * not a regression, but it is not good either — which is why every action here
- * is also on the `⋯` quick pick and on a direct key, and the quick pick is the
- * same menu at every width, including the narrow one where the stylesheet
- * leaves only two of these buttons standing.
+ * is also on the right-click menu and on a direct key, and that menu is the
+ * same at every width, including the narrow one where the stylesheet leaves
+ * only two of these buttons standing.
  */
 function ActionRail({ id, state, pinned }: { id: string; state: ConnectionState; pinned: boolean }) {
   const flight = state === 'connecting' || state === 'testing';
@@ -245,7 +256,6 @@ function ActionRail({ id, state, pinned }: { id: string; state: ConnectionState;
         label={pinned ? 'Remove from favourites' : 'Add to favourites'}
         onPress={() => post({ type: 'favourite', id, on: !pinned })}
       />
-      <RailButton icon="ellipsis" label="More actions" onPress={() => post({ type: 'menu', id })} />
     </span>
   );
 }
@@ -284,6 +294,25 @@ function Marked({ text, needle }: { text: string; needle: string }) {
       {segments(text, needle).map((run, i) => (run.hit ? <mark key={i}>{run.text}</mark> : run.text))}
     </>
   );
+}
+
+/**
+ * The `data-vscode-context` payload, as the attribute wants it: a JSON string.
+ *
+ * `webviewSection` is what every `when` clause in the manifest keys off, and
+ * `preventDefaultContextMenuItems` drops the webview's own Copy and Paste,
+ * which mean nothing on a list row. The state has to be in here rather than
+ * looked up host-side, because the menu is built from `when` clauses before any
+ * command runs.
+ */
+function contextFor(id: string, state: ConnectionState, pinned: boolean): string {
+  return JSON.stringify({
+    webviewSection: 'connection',
+    connectionId: id,
+    dbConnectionLive: state === 'connected',
+    dbConnectionPinned: pinned,
+    preventDefaultContextMenuItems: true
+  });
 }
 
 /** What the row draws when it has room, for the tooltip when it has not. */

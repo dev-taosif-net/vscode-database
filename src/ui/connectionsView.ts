@@ -155,10 +155,6 @@ export class ConnectionsView implements vscode.WebviewViewProvider, vscode.Dispo
         await this.store.setFavourite(message.id, message.on);
         return;
 
-      case 'menu':
-        await this.showMenu(message.id);
-        return;
-
       case 'new':
         await vscode.commands.executeCommand('databaseTools.newConnection');
         return;
@@ -190,74 +186,6 @@ export class ConnectionsView implements vscode.WebviewViewProvider, vscode.Dispo
         await this.context.globalState.update(COLLAPSED_KEY, [...this.collapsed]);
         return;
 
-      default:
-        return;
-    }
-  }
-
-  /**
-   * The row's overflow button. It is a quick pick rather than a menu drawn in
-   * the page, because a menu inside a webview cannot escape the panel's bounds
-   * and would be clipped by the sidebar it lives in.
-   */
-  private async showMenu(id: string): Promise<void> {
-    const profile = this.store.get(id);
-    if (!profile) {
-      return;
-    }
-    const connected = this.manager.isConnected(id);
-    const pinned = this.store.isFavourite(id);
-
-    const items: Array<vscode.QuickPickItem & { action: string }> = [
-      connected
-        ? { label: '$(debug-disconnect) Disconnect', action: 'disconnect' }
-        : { label: '$(plug) Connect', action: 'connect' },
-      { label: '$(edit) Edit connection', action: 'open' },
-      pinned
-        ? { label: '$(star-delete) Remove from favourites', action: 'unpin' }
-        : { label: '$(star-add) Add to favourites', action: 'pin' },
-      { label: '$(files) Duplicate', action: 'duplicate' },
-      { label: '$(copy) Copy the server address', action: 'copyHost' },
-      { label: '$(trash) Delete', action: 'delete' }
-    ];
-
-    const pick = await vscode.window.showQuickPick(items, {
-      title: profile.name || profile.host,
-      placeHolder: 'Choose an action'
-    });
-    if (!pick) {
-      return;
-    }
-
-    switch (pick.action) {
-      case 'connect':
-        await vscode.commands.executeCommand('databaseTools.connect', id);
-        return;
-      case 'disconnect':
-        await this.manager.disconnect(id);
-        return;
-      case 'open':
-        await vscode.commands.executeCommand('databaseTools.openConnections', id);
-        return;
-      case 'pin':
-        await this.store.setFavourite(id, true);
-        return;
-      case 'unpin':
-        await this.store.setFavourite(id, false);
-        return;
-      case 'duplicate': {
-        const copy = await this.store.duplicate(id);
-        if (copy) {
-          await vscode.commands.executeCommand('databaseTools.openConnections', copy.id);
-        }
-        return;
-      }
-      case 'copyHost':
-        await vscode.env.clipboard.writeText(`${profile.host}${profile.port ? `:${profile.port}` : ''}`);
-        return;
-      case 'delete':
-        await vscode.commands.executeCommand('databaseTools.deleteConnection', id);
-        return;
       default:
         return;
     }

@@ -8,10 +8,11 @@ import { ConnectionProfile, environmentLabel } from './types';
 
 /**
  * A command arrives from the palette with nothing, from the sidebar with a
- * profile id, and from a menu with whatever context that menu carries. The
- * webview replaced the tree, so a `TreeItem` is no longer one of the shapes.
+ * profile id, and from the row's right-click menu with the object that row
+ * put in its `data-vscode-context`. The webview replaced the tree, so a
+ * `TreeItem` is no longer one of the shapes.
  */
-type CommandTarget = string | undefined;
+type CommandTarget = string | { connectionId?: unknown } | undefined;
 
 /**
  * Phase 1: everything up to and including an open connection. Nothing here
@@ -124,6 +125,54 @@ export function activate(context: vscode.ExtensionContext): void {
       }
       await manager.disconnect(profile.id);
       await store.remove(profile.id);
+    }),
+
+    /*
+     * The rest of the row's right-click menu.
+     *
+     * These five were a quick pick behind a `⋯` button until the menu became a
+     * real workbench menu, and a menu item can invoke nothing but a command —
+     * so each of them is one, contributed to `webview/context` and hidden from
+     * the palette, where there would be no row to act on.
+     */
+
+    vscode.commands.registerCommand('databaseTools.editConnection', (target?: CommandTarget) => {
+      const id = targetId(target);
+      if (id) {
+        ConnectionsPanel.show(context, store, manager, id);
+      }
+    }),
+
+    vscode.commands.registerCommand('databaseTools.addFavourite', async (target?: CommandTarget) => {
+      const id = targetId(target);
+      if (id) {
+        await store.setFavourite(id, true);
+      }
+    }),
+
+    vscode.commands.registerCommand('databaseTools.removeFavourite', async (target?: CommandTarget) => {
+      const id = targetId(target);
+      if (id) {
+        await store.setFavourite(id, false);
+      }
+    }),
+
+    vscode.commands.registerCommand('databaseTools.duplicateConnection', async (target?: CommandTarget) => {
+      const id = targetId(target);
+      const copy = id ? await store.duplicate(id) : undefined;
+      if (copy) {
+        // Straight into the editor on the copy: it carries neither the source's
+        // credential nor a name anyone means to keep.
+        ConnectionsPanel.show(context, store, manager, copy.id);
+      }
+    }),
+
+    vscode.commands.registerCommand('databaseTools.copyServerAddress', async (target?: CommandTarget) => {
+      const id = targetId(target);
+      const profile = id ? store.get(id) : undefined;
+      if (profile) {
+        await vscode.env.clipboard.writeText(`${profile.host}${profile.port ? `:${profile.port}` : ''}`);
+      }
     })
   );
 
@@ -136,13 +185,21 @@ export function deactivate(): void {
 
 /**
  * The profile id behind a command argument. Commands are invoked dynamically,
- * so the shape is checked rather than trusted: the palette passes nothing and a
- * menu can pass its own context object, and both must land on `undefined` so
- * `pickProfile` takes over instead of a connection being opened against a
- * stringified object.
+ * so the shape is checked rather than trusted: the palette passes nothing, the
+ * sidebar passes an id, and the row menu passes an object. Anything that is
+ * not one of those lands on `undefined` so `pickProfile` takes over, instead
+ * of a connection being opened against a stringified object.
  */
 function targetId(target: CommandTarget): string | undefined {
-  return typeof target === 'string' ? target : undefined;
+  if (typeof target === 'string') {
+    return target;
+  }
+  // The workbench hands a context menu's whole context object to the command,
+  // and the row is the only thing in this extension that writes one — but it
+  // reaches the host as JSON parsed out of an attribute, so the id is checked
+  // rather than trusted, exactly as a string argument is.
+  const id = target && typeof target === 'object' ? target.connectionId : undefined;
+  return typeof id === 'string' ? id : undefined;
 }
 
 async function pickProfile(store: ConnectionStore, verb: string): Promise<ConnectionProfile | undefined> {

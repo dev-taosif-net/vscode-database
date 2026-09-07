@@ -280,8 +280,18 @@ actually moved rather than every header on screen.
 `ActionRail`'s buttons carry `tabindex="-1"` and are never in the tab order.
 That is exactly how a native `TreeView`'s inline actions behave, so it is not a
 regression, but it is not good either — every action on the rail is also a
-direct key or an entry in the `⋯` quick pick, which is the same menu at every
-width.
+direct key or an entry in the row's right-click menu, which is the same menu
+at every width.
+
+That menu is a workbench menu rather than one drawn in the page, because a
+page-drawn menu cannot escape the panel's bounds and would be clipped by the
+sidebar at every width that matters. The row carries a `data-vscode-context`
+attribute — `webviewSection`, the profile id, and whether the row is live and
+pinned — and the manifest contributes the entries to `webview/context`, whose
+`when` clauses read those keys. That is what lets one row's menu say Connect
+and the next row's say Disconnect. Each entry invokes a command, because a
+menu item has nothing else to invoke, so the six actions are six commands
+hidden from the palette where there would be no row to act on.
 
 The rail's text fade is `-webkit-mask-image` on `.run`, not a colour gradient.
 A colour gradient has to fade to whatever the row's background currently is —
@@ -308,7 +318,7 @@ with its own acquire, typed to `SidebarWebviewMessage`.
         │          ─── sessions ────────▶  sessionStore │
         │          ─── reveal ──────────▶  cursorStore ─┴─▶ Geometry ─▶ rows
         ▲
-        └── open/connect/disconnect/cancel/favourite/menu/filtered ── post
+        └── open/connect/disconnect/cancel/favourite/filtered ────── post
 ```
 
 Three stores, all built by `state/store.ts` — the same fifty-line
@@ -851,7 +861,7 @@ the top.
 | `Enter` | open the connection editor | toggle |
 | `Space` | connect if closed, disconnect if open, cancel if in flight | toggle |
 | `Delete` | `delete`; the host shows its own modal confirmation | — |
-| `Shift+F10`, `ContextMenu` | `menu`; the host's quick pick | — |
+| `Shift+F10`, `ContextMenu` | nothing; the browser turns both into a `contextmenu` event and the workbench menu follows from the row's `data-vscode-context` | — |
 | `*` | expand every group | same |
 | any printable character | focus moves to the search box and the character is inserted | same |
 
@@ -927,7 +937,7 @@ and you can still name every one; that is the test.
 ```
 src/shared/sidebar.ts             the host/webview contract, compiled by both
 src/ui/connectionsView.ts         the WebviewViewProvider: CSP, nonce, badge,
-                                  description, the row's ⋯ quick pick
+                                  description, grouping, sort and folding
 src/webview/
   state/store.ts                  shared with the editor, unchanged
   primitives/{Codicon,EngineMark}.tsx    reused unchanged

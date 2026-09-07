@@ -862,8 +862,8 @@ mark {
 /*
  * Buttons are `tabindex="-1"` and never in the tab order, exactly as the
  * native tree's inline actions behave. The keyboard path to every one of them
- * is a direct key or the `⋯` menu, which is the same menu at every width.
- * Only opacity transitions; nothing here may animate a layout property.
+ * is a direct key or the right-click menu, which is the same menu at every
+ * width. Only opacity transitions; nothing here may animate a layout property.
  */
 .rail {
   position: absolute;
@@ -913,8 +913,9 @@ mark {
 /*
  * The rail renders every button it will ever show and CSS decides how many
  * survive, because the panel holds no breakpoint numbers in JavaScript. The
- * first button is the primary session action and the last is `⋯`; those two
- * are the pair that survives the narrowest panel.
+ * first button is the primary session action and the last is the pin; those
+ * two are the pair that survives the narrowest panel. Everything the rail
+ * drops is still on the row's right-click menu, which never narrows.
  */
 .rail-btn:not(:first-child):not(:last-child) {
   display: none;
@@ -1226,10 +1227,10 @@ mark {
     display: flex;
   }
 
-  /* Four 20px buttons. The mask is derived from this number rather than
+  /* Three 20px buttons. The mask is derived from this number rather than
      carrying its own, so a rail that grows cannot outrun its own fade. */
   .row {
-    --rail-open: 80px;
+    --rail-open: 60px;
   }
 }
 

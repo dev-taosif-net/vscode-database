@@ -115,8 +115,6 @@ export type SidebarWebviewMessage =
   | { type: 'delete'; id: string }
   | { type: 'duplicate'; id: string }
   | { type: 'favourite'; id: string; on: boolean }
-  /** The row's overflow button. The host answers with its own quick pick. */
-  | { type: 'menu'; id: string }
   | { type: 'new' }
   /**
    * Whether anything is filtered, and how much survived. `matched` is here
