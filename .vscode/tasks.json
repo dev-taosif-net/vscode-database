@@ -4,14 +4,40 @@
     {
       "type": "npm",
       "script": "build",
-      "problemMatcher": "$esbuild",
+      // esbuild's own error output is four lines wide and no single-line
+      // matcher can read it, so the one-shot build reports through its exit
+      // code and the terminal. The watch task below is the one that has to be
+      // machine-readable, and it prints a shape written for the purpose.
+      "problemMatcher": [],
       "group": { "kind": "build", "isDefault": true }
     },
     {
       "type": "npm",
       "script": "watch",
-      "problemMatcher": "$esbuild-watch",
-      "isBackground": true
+      "isBackground": true,
+      "group": "build",
+      "problemMatcher": {
+        "owner": "esbuild",
+        "source": "esbuild",
+        "fileLocation": ["relative", "${workspaceFolder}"],
+        "pattern": {
+          "regexp": "^(.+):(\\d+):(\\d+): (error|warning): (.+)$",
+          "file": 1,
+          "line": 2,
+          "column": 3,
+          "severity": 4,
+          "message": 5
+        },
+        // A launch waits on these two lines. Without them the task never
+        // reports that it finished a build and the debug session either hangs
+        // or starts against a half-written bundle.
+        "background": {
+          "activeOnStart": true,
+          "beginsPattern": "^\\[build\\] started$",
+          "endsPattern": "^\\[build\\] finished$"
+        }
+      },
+      "presentation": { "reveal": "silent", "panel": "dedicated" }
     }
   ]
 }

@@ -1,0 +1,15 @@
+{
+  // The debugger's Network view kills this extension host.
+  //
+  // On a debug launch VS Code sends `enableNetworking`, the debugger turns on
+  // the CDP Network domain, and node pulls `internal/inspector/network_http`
+  // and the worker_threads machinery into the extension host. The process
+  // aborts within milliseconds, every time, taking the development window with
+  // it. Running without the debugger never touches this and is fine.
+  //
+  // Nothing in this repository can opt out of it: the `extensionHost` debug
+  // type has no `experimentalNetworking` attribute, so the setting is the only
+  // switch. It costs a feature this project has no use for, since the
+  // extension talks to databases over drivers rather than over http.
+  "debug.javascript.enableNetworkView": false
+}

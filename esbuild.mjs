@@ -65,13 +65,81 @@ async function copyCodicons() {
   await cp(`${from}/codicon.css`, 'dist/webview/codicon.css');
 }
 
+/**
+ * One diagnostic per line, in the shape `.vscode/tasks.json` reads.
+ *
+ * esbuild draws a four-line frame around every error, which is the nicer thing
+ * to read in a terminal and the impossible thing to parse from a task. Watch
+ * mode is the build a task watches, so watch mode prints this instead.
+ */
+function report(messages, severity) {
+  for (const message of messages) {
+    const where = message.location
+      ? `${message.location.file}:${message.location.line}:${message.location.column + 1}`
+      : 'esbuild:0:0';
+    console.log(`${where}: ${severity}: ${message.text}`);
+  }
+}
+
+/**
+ * The two lines a launch waits on.
+ *
+ * `pending` counts builds in flight across all three contexts rather than per
+ * context, so one edit is one `started` and one `finished` however many bundles
+ * it happens to touch. The three contexts do not begin in lockstep, though, so
+ * a count that reaches zero is not proof the edit is done being built: the
+ * finish is held for a quiet moment and withdrawn if another bundle starts
+ * inside it. A launch that believes a half-written `dist` is finished is
+ * exactly the failure this file is here to avoid.
+ */
+const QUIET = 100;
+let pending = 0;
+let announced = false;
+let idle = null;
+
+const marker = {
+  name: 'build-markers',
+  setup(build) {
+    build.onStart(() => {
+      if (idle !== null) {
+        clearTimeout(idle);
+        idle = null;
+      }
+      if (pending++ === 0 && !announced) {
+        announced = true;
+        console.log('[build] started');
+      }
+    });
+    build.onEnd((result) => {
+      report(result.warnings, 'warning');
+      report(result.errors, 'error');
+      if (--pending > 0) {
+        return;
+      }
+      idle = setTimeout(() => {
+        idle = null;
+        announced = false;
+        console.log('[build] finished');
+      }, QUIET);
+    });
+  }
+};
+
+const configs = [host, webview, styles];
+
 if (watch) {
   await copyCodicons();
-  for (const options of [host, webview, styles]) {
-    const ctx = await context(options);
-    await ctx.watch();
-  }
+  const contexts = await Promise.all(
+    configs.map((options) => context({ ...options, logLevel: 'silent', plugins: [marker] }))
+  );
+  await Promise.all(contexts.map((ctx) => ctx.watch()));
 } else {
   await copyCodicons();
-  await Promise.all([host, webview, styles].map((options) => build(options)));
+  try {
+    await Promise.all(configs.map((options) => build(options)));
+  } catch {
+    // esbuild has already printed the failure at `logLevel: 'info'`. All this
+    // has to do is make the task fail rather than exit zero on a broken build.
+    process.exitCode = 1;
+  }
 }

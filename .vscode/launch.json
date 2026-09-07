@@ -6,8 +6,17 @@
       "type": "extensionHost",
       "request": "launch",
       "args": ["--extensionDevelopmentPath=${workspaceFolder}"],
-      "outFiles": ["${workspaceFolder}/dist/**/*.js"],
-      "preLaunchTask": "npm: build"
+      // Only the host bundle runs in node. The two webview bundles are browser
+      // code carrying source maps several megabytes wide, and `dist/**/*.js`
+      // handed all of them to a debugger that can do nothing with them.
+      "outFiles": ["${workspaceFolder}/dist/extension.js"],
+      // The watch build, not the production one: it emits source maps, leaves
+      // names alone, and a second launch reuses the running task instead of
+      // rebuilding the whole extension.
+      "preLaunchTask": "npm: watch",
+      // Temporary. Writes the debug adapter's own log so the launch that
+      // kills the extension host can be read back. Remove once it is.
+      "trace": true
     }
   ]
 }
