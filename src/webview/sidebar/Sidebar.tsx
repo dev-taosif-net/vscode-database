@@ -255,9 +255,6 @@ export function Sidebar(): JSX.Element {
         return;
 
       case 'Enter':
-        if (target.closest('.rail')) {
-          return;
-        }
         event.preventDefault();
         if (item.kind === 'group') {
           fold(item.environment, !item.collapsed);
@@ -267,9 +264,6 @@ export function Sidebar(): JSX.Element {
         return;
 
       case ' ':
-        if (target.closest('.rail')) {
-          return;
-        }
         event.preventDefault();
         if (item.kind === 'group') {
           fold(item.environment, !item.collapsed);

@@ -266,8 +266,7 @@ src/webview/sidebar/index.tsx
         │   │   ├── StateGlyph      disc / ring / triangle / arc, plus the lock
         │   │   ├── EngineMark      the existing primitive, size 16, no plate
         │   │   ├── NameRun         env badge? · name · host head+tail · db
-        │   │   ├── StateBadge      LIVE / FAIL / TEST / nothing
-        │   │   └── ActionRail      hover and focus-within only; tabindex=-1
+        │   │   └── StateBadge      LIVE / FAIL / TEST / nothing
         │   └── NoMatch             kind: 'nomatch'
         │
         └── Footer
@@ -282,13 +281,15 @@ props on the `FlatItem`, including the `open` count that makes a header say
 `18 · 2 open`, so a session change re-renders at most the headers whose number
 actually moved rather than every header on screen.
 
-`ActionRail`'s buttons carry `tabindex="-1"` and are never in the tab order.
-That is exactly how a native `TreeView`'s inline actions behave, so it is not a
-regression, but it is not good either — every action on the rail is also a
-direct key or an entry in the row's right-click menu, which is the same menu
-at every width.
+A row draws no controls. It carried a hover rail of inline buttons — the
+session action, edit, pin — and they are gone: they appeared only on the row
+under the pointer, they were `tabindex="-1"` and so never in the tab order,
+and the stylesheet dropped them one by one as the panel narrowed. Every one of
+them was already on the right-click menu, which is reachable at every width,
+from the keyboard, and without hunting for a target 20px wide. Hovering a row
+now changes its ground and nothing else.
 
-That menu is a workbench menu rather than one drawn in the page, because a
+The menu is a workbench menu rather than one drawn in the page, because a
 page-drawn menu cannot escape the panel's bounds and would be clipped by the
 sidebar at every width that matters. The row carries a `data-vscode-context`
 attribute — `webviewSection`, the profile id, and whether the row is live and
@@ -297,16 +298,6 @@ pinned — and the manifest contributes the entries to `webview/context`, whose
 and the next row's say Disconnect. Each entry invokes a command, because a
 menu item has nothing else to invoke, so the six actions are six commands
 hidden from the palette where there would be no row to act on.
-
-The rail's text fade is `-webkit-mask-image` on `.run`, not a colour gradient.
-A colour gradient has to fade to whatever the row's background currently is —
-plain, hover, inactive selection, active selection — and CSS cannot name that
-composite. A mask does not care what is behind it, which is also why it survives
-high contrast and forced colours. But masking creates a stacking context and can
-force a composited layer, so the rule lives only under `.row:hover` and
-`.row:focus-within` and never on the base `.row`: at most one row is masked at
-any moment. If a profiler ever shows a layer per row, that selector has been
-widened, and the fix is to narrow it back rather than to replace the mask.
 
 `primitives/Codicon.tsx` and `primitives/EngineMark.tsx` are reused from the
 editor unchanged. Nothing else is shared, and in particular **nothing under
@@ -471,9 +462,9 @@ and no reading.
 Pins live in `globalState` beside the profiles rather than inside them, because
 a pin is a reading of the list rather than a property of the connection: pinning
 never rewrites `updatedAt` and never appears as a change the editor would offer
-to save. The rail's star posts `{type:'favourite'}` and waits for the round
-trip; there is no optimistic local toggle, because the list is redrawn from one
-source of truth.
+to save. Pinning is a menu command like any other and the host owns it; there
+is no optimistic local toggle, because the list is redrawn from one source of
+truth.
 
 **Searching.** `matchRow` returns `null` for a row the query removed, an empty
 array when there is no query, and otherwise the list of fields that matched —
@@ -602,15 +593,14 @@ the tier table in JavaScript, where it could drift from the stylesheet during a
 sash drag.
 
 **Node budget.** At 260px in a 700px sidebar, 28 rows are visible; plus 16
-overscan and up to 5 headers the window is about 49 elements. A row is six nodes
-at rest and ten while hovered. So roughly **300 nodes, constant**, at 84
-connections or 8,400. Per frame: one binary search of seven comparisons, one
-transform write, and a reconcile only when the window index actually moves.
+overscan and up to 5 headers the window is about 49 elements, and a row is six
+nodes whether or not the pointer is on it. So roughly **300 nodes, constant**,
+at 84 connections or 8,400. Per frame: one binary search of seven comparisons,
+one transform write, and a reconcile only when the window index actually moves.
 
 **Motion.** Only the `loading` glyph animates, and only on the rows that are
 connecting or testing — at most a handful, usually one, because attempts are
-user-initiated. The rail transitions `opacity` only, 80ms, never a layout
-property. The twistie rotates in 100ms. All of it is zeroed by the
+user-initiated. The twistie rotates in 100ms. All of it is zeroed by the
 `prefers-reduced-motion` block in `tokens.css`.
 
 ## The vertical arithmetic, and what it cost
@@ -641,8 +631,8 @@ The tree this replaced showed `(665 − 4 × 22) / 22 = 26` rows, and told you t
 host but not the state or the database.
 
 **So the new view costs four rows.** What the four rows buy: a search box that
-is always on screen, a hover rail, a state readout for the cursor row, a counts
-footer, and a production alarm. That is the trade, stated plainly rather than
+is always on screen, a state readout for the cursor row, a counts footer, and a
+production alarm. That is the trade, stated plainly rather than
 hidden in a screenshot at 900px. If it is ever judged too expensive, the search
 band is the first thing to make collapsible.
 
@@ -676,8 +666,7 @@ asymmetry is deliberate: a connected row already carries three other marks — a
 filled disc, a 600-weight name, a bright ribbon tick — so its word is the
 cheapest thing to lose, while failure's amber triangle could be mistaken for
 UAT's amber by someone who has not learned the vocabulary, and production is
-where a missing word costs something. The placeholder shortens to `Filter` and
-the rail drops to two buttons.
+where a missing word costs something. The placeholder shortens to `Filter`.
 
 **sm.** The badge returns for all four states. This is the biggest legibility
 gain per pixel in the system: a state word beats twenty more characters of a
@@ -958,7 +947,7 @@ src/webview/
                                   the rAF loop, the overlay transform
     StickyHeader.tsx              the aria-hidden overlay and its click proxies
     GroupHeader.tsx               group and pinned headers
-    Row.tsx                       StateGlyph, NameRun, StateBadge, ActionRail
+    Row.tsx                       StateGlyph, NameRun, StateBadge
     Footer.tsx                    ProductionBand, Counts, Readout
     EmptyState.tsx                the rebuilt viewsWelcome
   styles/tokens.css               the shared hues, radii, motion, .sr-only,

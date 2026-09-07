@@ -92,9 +92,10 @@ export const Row = memo(function Row(props: {
       // clauses in the manifest, which is what makes one entry say Connect and
       // the next row's say Disconnect.
       data-vscode-context={contextFor(id, state, pinned)}
-      // Roving tabindex: the cursor row is the tree's single tab stop, and
-      // every other item — rows, headers, and every button in the rail — is
-      // -1, so Tab crosses the whole list in one press the way a tree does.
+      // Roving tabindex: the cursor row is the tree's single tab stop and
+      // every other item is -1, so Tab crosses the whole list in one press
+      // the way a tree does. The row has no controls of its own to tab
+      // through: every action on it is on the right-click menu.
       tabIndex={cursor ? 0 : -1}
       title={address(row)}
       style={{ top, height: H.row }}
@@ -114,7 +115,6 @@ export const Row = memo(function Row(props: {
       </span>
       <NameRun row={row} label={label} showBadge={showBadge} needle={needle} />
       <StateBadge state={state} />
-      <ActionRail id={id} state={state} pinned={pinned} />
     </div>
   );
 });
@@ -227,57 +227,6 @@ function StateBadge({ state }: { state: ConnectionState }) {
     return <span className="badge badge-test">TEST</span>;
   }
   return null;
-}
-
-/**
- * Hover and focus-within only, and every button is `tabindex="-1"`.
- *
- * That is exactly how the workbench's own inline tree actions behave, so it is
- * not a regression, but it is not good either — which is why every action here
- * is also on the right-click menu and on a direct key, and that menu is the
- * same at every width, including the narrow one where the stylesheet leaves
- * only two of these buttons standing.
- */
-function ActionRail({ id, state, pinned }: { id: string; state: ConnectionState; pinned: boolean }) {
-  const flight = state === 'connecting' || state === 'testing';
-
-  return (
-    <span className="rail">
-      {flight ? (
-        <RailButton icon="stop-circle" label="Cancel the attempt" onPress={() => post({ type: 'cancel', id })} />
-      ) : state === 'connected' ? (
-        <RailButton icon="debug-disconnect" label="Disconnect" onPress={() => post({ type: 'disconnect', id })} />
-      ) : (
-        <RailButton icon="plug" label="Connect" onPress={() => post({ type: 'connect', id })} />
-      )}
-      <RailButton icon="edit" label="Edit connection" onPress={() => post({ type: 'open', id })} />
-      <RailButton
-        icon={pinned ? 'pinned' : 'pin'}
-        label={pinned ? 'Remove from favourites' : 'Add to favourites'}
-        onPress={() => post({ type: 'favourite', id, on: !pinned })}
-      />
-    </span>
-  );
-}
-
-function RailButton({ icon, label, onPress }: { icon: string; label: string; onPress: () => void }) {
-  return (
-    <button
-      type="button"
-      className="rail-btn"
-      tabIndex={-1}
-      title={label}
-      aria-label={label}
-      onClick={(event) => {
-        // Without this the row underneath also fires and opens the editor on
-        // every disconnect.
-        event.stopPropagation();
-        onPress();
-      }}
-    >
-      <Codicon name={icon} />
-    </button>
-  );
 }
 
 /**

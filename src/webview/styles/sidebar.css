@@ -7,7 +7,9 @@
  * names, not as a hundred rows of prose, and every rule below serves that.
  * The left rail is 0..44px and text begins at x=52 at every width and in
  * every state. Nothing moves it — not a badge, not a hover, not a selection —
- * because a glyph column that jogs by four pixels stops being a column.
+ * because a glyph column that jogs by four pixels stops being a column. A row
+ * draws no controls of its own either: hovering one changes its ground and
+ * nothing else, and every action on it is on the right-click menu.
  *
  * The ground tokens are defined here and not in `tokens.css`. The editor's
  * `--bg` is `--vscode-editor-background`, which is #1f1f1f inside Dark
@@ -71,9 +73,6 @@
      has to subtract this by hand or its copy of a header sits eight pixels
      right of every real one — visible as a count that will not line up. */
   --gutter: 8px;
-  /* How much of the row's right edge the hover rail covers, per tier. The
-     text mask is derived from it so the two can never drift apart. */
-  --rail-open: 46px;
 }
 
 /*
@@ -623,34 +622,6 @@ body {
   overflow: hidden;
 }
 
-/*
- * The rail's fade is a mask, not a colour gradient. A colour gradient has to
- * fade to whatever the row's background currently is — plain, hover, inactive
- * selection, active selection — and CSS cannot name that composite. A mask
- * does not care what is behind it, which is also why it survives high contrast
- * and forced colors.
- *
- * It is applied only under :hover and :focus-within and must never move to the
- * base rule. Masking creates a stacking context and can force a composited
- * layer; thirty masked rows is thirty GPU layers on a list that has to scroll
- * at 60fps. At most one row is masked at any moment. If a profiler ever shows
- * a layer per row, this selector has been widened and the fix is to narrow it
- * back, not to swap the mask for a colour.
- */
-.row:hover .run,
-.row:focus-within .run {
-  -webkit-mask-image: linear-gradient(
-    90deg,
-    #000 calc(100% - var(--rail-open)),
-    transparent calc(100% - var(--rail-open) + 24px)
-  );
-  mask-image: linear-gradient(
-    90deg,
-    #000 calc(100% - var(--rail-open)),
-    transparent calc(100% - var(--rail-open) + 24px)
-  );
-}
-
 /* A row lifted into the pinned section, or any row in flat mode, has no header
    above it saying what environment it is in, so it says so itself. */
 .env-badge {
@@ -827,79 +798,6 @@ mark {
 .env-prod .badge-live {
   background: var(--env-ink);
   color: var(--bg);
-}
-
-/* The rail overlays the right edge of the row, so the badge goes with the text
-   it would otherwise sit on top of. A connected row still says so through the
-   filled disc, the 600-weight name and the bright ribbon tick — the badge is
-   its fourth carrier, not its only one. */
-.row:hover .badge,
-.row:focus-within .badge {
-  opacity: 0;
-}
-
-/* ------------------------------------------------------------ hover rail */
-
-/*
- * Buttons are `tabindex="-1"` and never in the tab order, exactly as the
- * native tree's inline actions behave. The keyboard path to every one of them
- * is a direct key or the right-click menu, which is the same menu at every
- * width. Only opacity transitions; nothing here may animate a layout property.
- */
-.rail {
-  position: absolute;
-  right: 8px;
-  top: 0;
-  bottom: 0;
-  z-index: 2;
-  display: flex;
-  align-items: center;
-  opacity: 0;
-  pointer-events: none;
-  transition: opacity 80ms ease;
-}
-
-.row:hover .rail,
-.row:focus-within .rail {
-  opacity: 1;
-  pointer-events: auto;
-}
-
-.rail-btn {
-  flex: none;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 20px;
-  height: 20px;
-  padding: 0;
-  border: 0;
-  border-radius: 3px;
-  background: none;
-  color: var(--fg-dim);
-  font-size: 16px;
-  cursor: pointer;
-}
-
-.rail-btn:hover {
-  background: var(--toolbar-hover);
-  color: var(--fg);
-}
-
-.rail-btn:focus-visible {
-  outline: 1px solid var(--focus);
-  outline-offset: -1px;
-}
-
-/*
- * The rail renders every button it will ever show and CSS decides how many
- * survive, because the panel holds no breakpoint numbers in JavaScript. The
- * first button is the primary session action and the last is the pin; those
- * two are the pair that survives the narrowest panel. Everything the rail
- * drops is still on the row's right-click menu, which never narrows.
- */
-.rail-btn:not(:first-child):not(:last-child) {
-  display: none;
 }
 
 /* ------------------------------------------------- no match, empty state */
@@ -1203,16 +1101,6 @@ mark {
   .badge-test {
     display: inline-flex;
   }
-
-  .rail-btn:not(:first-child):not(:last-child) {
-    display: flex;
-  }
-
-  /* Three 20px buttons. The mask is derived from this number rather than
-     carrying its own, so a rail that grows cannot outrun its own fade. */
-  .row {
-    --rail-open: 60px;
-  }
 }
 
 /* md — 256px, the canonical drawing. 192px of elastic; 148px of text after the
@@ -1492,8 +1380,4 @@ body.vscode-high-contrast-light .list:focus-within .row.is-selected {
     color: HighlightText;
   }
 
-  .rail-btn:hover {
-    background: Highlight;
-    color: HighlightText;
-  }
 }
