@@ -839,6 +839,142 @@ textarea::placeholder {
   margin-top: 2px;
 }
 
+/* ------------------------------------------------- inline field labels */
+
+/*
+ * In the form column a field reads as `label: control` on one line rather
+ * than a label with the control stacked under it. Two rows of chrome per
+ * field became one, which is most of a screen back across the length of the
+ * advanced groups, and the labels settle into a column the eye can run down
+ * instead of a zig-zag.
+ *
+ * Every child is pinned to the control column and the label alone is pulled
+ * back into the first one. Auto-placement would otherwise fold a field's
+ * third child -- the warning under the database row, the forget link under
+ * the password -- back beneath the label, which is exactly where it must
+ * not go.
+ *
+ * Identity is left stacked on purpose. It is a 320px column, and a label
+ * column there would leave a box too narrow to read a connection name in.
+ */
+.details {
+  --label-col: 132px;
+  --label-gap: 12px;
+  container-type: inline-size;
+  container-name: details;
+}
+
+.details .field {
+  display: grid;
+  grid-template-columns: var(--label-col) minmax(0, 1fr);
+  column-gap: var(--label-gap);
+  row-gap: 5px;
+  align-items: start;
+}
+
+.details .field > * {
+  grid-column: 2;
+  min-width: 0;
+}
+
+.details .field > label,
+.details .field > .label {
+  grid-column: 1;
+  grid-row: 1;
+  display: flex;
+  align-items: center;
+  /* The required star is its own element, and flex eats the space before it. */
+  gap: 3px;
+  /*
+   * Holds the label against the middle of a 30px control, and keeps a label
+   * that wraps to two lines centred on that control rather than riding
+   * above it.
+   */
+  min-height: 30px;
+  margin-bottom: 0;
+  line-height: 1.35;
+}
+
+.details .field > .hint,
+.details .field > .note,
+.details .field > .link-btn {
+  margin-top: 0;
+}
+
+.details .field > .link-btn {
+  justify-self: start;
+}
+
+/*
+ * A row is one line tall now, so the old 16px between them reads as a gap
+ * rather than a rhythm.
+ */
+.details .stack:not(.wide) {
+  gap: 11px;
+}
+
+/*
+ * The narrow half of a split row labels itself from its own text: `Port`
+ * has no business reserving the width of `Name in certificate`. Its hint is
+ * the one part wider than the pair above it, so it spans both columns and
+ * is held to a single line.
+ */
+.details .row.split > .field + .field {
+  grid-template-columns: auto auto;
+}
+
+.details .row.split > .field + .field > .hint {
+  grid-column: 1 / -1;
+  white-space: nowrap;
+}
+
+/*
+ * A checkbox has no label of its own to sit in the first column, so it
+ * borrows that column's width and lines up under the controls above it.
+ */
+.details .check {
+  padding-left: calc(var(--label-col) + var(--label-gap));
+}
+
+/*
+ * The reading under the server row is pulled up against it, and the row it
+ * hangs from is shorter than it used to be.
+ */
+.details .probe {
+  margin-top: -2px;
+}
+
+/*
+ * Under this width the label column costs more than it returns: what it
+ * leaves for the control is narrower than the server names being typed into
+ * it. The column is measured on the form itself rather than the window,
+ * because the form doubles in width the moment identity moves above it.
+ */
+@container details (max-width: 440px) {
+  .details .field {
+    display: block;
+  }
+
+  .details .field > label,
+  .details .field > .label {
+    display: block;
+    min-height: 0;
+    margin-bottom: 6px;
+  }
+
+  .details .field > .hint {
+    margin-top: 6px;
+  }
+
+  .details .field > .link-btn {
+    margin-top: 8px;
+  }
+
+  .details .check {
+    padding-left: 0;
+  }
+}
+
 /* -------------------------------------------------------------- probing */
 
 .probe {
@@ -1071,6 +1207,92 @@ textarea::placeholder {
 .note code {
   font-family: var(--vscode-editor-font-family, monospace);
   font-size: 11.5px;
+}
+
+/* -------------------------------------------------------- pasted string */
+
+/*
+ * What a pasted connection string was read as, and the three things that can
+ * be done with it without going by way of the fields.
+ *
+ * It is bordered and sunken rather than plain, because it carries buttons that
+ * reach a live server: it has to read as a thing with an edge, not as more
+ * form. The left rule is the pass colour and repeats the icon in its head, so
+ * the recognised state is never carried by colour alone.
+ */
+.parsed {
+  display: grid;
+  gap: 10px;
+  padding: 12px 14px;
+  border: 1px solid var(--bd);
+  border-left: 3px solid var(--ok);
+  border-radius: var(--radius);
+  background: var(--bg-sunken);
+  animation: fade var(--motion) ease;
+}
+
+.parsed-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12.5px;
+  color: var(--fg);
+}
+
+.parsed-head .glyph {
+  flex-shrink: 0;
+  font-size: 14px;
+  color: var(--ok);
+}
+
+.parsed-head strong {
+  font-weight: 600;
+  color: var(--fg-strong);
+}
+
+/*
+ * Label and value on one line, with the labels in a column of their own. Four
+ * facts read this way are four lines shorter than four stacked pairs, and the
+ * pane they sit in is already the longest thing on the page.
+ */
+.parsed-facts {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 5px 14px;
+  margin: 0;
+  font-size: 12px;
+}
+
+.parsed-fact {
+  display: contents;
+}
+
+.parsed-fact dt {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--fg-dim);
+}
+
+.parsed-icon {
+  font-size: 13px;
+}
+
+.parsed-fact dd {
+  min-width: 0;
+  margin: 0;
+  color: var(--fg-strong);
+  overflow-wrap: anywhere;
+}
+
+.parsed-fact.bad dt,
+.parsed-fact.bad dd {
+  color: var(--bad);
+}
+
+/* The card sets its own rhythm with a grid gap; the stock margins double it. */
+.parsed > .hint {
+  margin: 0;
 }
 
 /* -------------------------------------------------------------- summary */

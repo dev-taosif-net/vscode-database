@@ -1,8 +1,17 @@
 import { useEffect } from 'react';
 import { HostMessage } from '../shared/protocol';
-import { applyHostMessage, isDirty, isValid, setMethod, useSelect, useStore, useUpdate } from './state/editor';
+import {
+  applyHostMessage,
+  effective,
+  isDirty,
+  isValid,
+  setMethod,
+  useSelect,
+  useStore,
+  useUpdate
+} from './state/editor';
 import { post } from './state/vscode';
-import { payloadOf, ActionBar } from './components/ActionBar';
+import { commitPastedString, payloadOf, ActionBar } from './components/ActionBar';
 import { AdvancedGroups } from './components/AdvancedGroups';
 import { AuthSection } from './components/AuthSection';
 import { ConnectionStringPanel } from './components/ConnectionStringPanel';
@@ -122,7 +131,9 @@ function useHostMessages(): void {
  * can ask before moving to another connection.
  */
 function useDirtyReporting(): void {
-  const dirty = useSelect(isDirty);
+  // A string in the paste box is work the action bar will use, so leaving the
+  // connection would lose it and the host has to ask.
+  const dirty = useSelect((state) => isDirty(effective(state)));
   useEffect(() => {
     post({ type: 'dirty', dirty });
   }, [dirty]);
@@ -132,19 +143,30 @@ function useShortcuts(): void {
   const store = useStore();
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
-      const state = store.getState();
-      const payload = payloadOf(state);
-      if (!payload) {
+      const current = store.getState();
+      if (!current.draft) {
         return;
       }
       const mod = event.ctrlKey || event.metaKey;
 
-      if (event.key === 'Escape' && state.host.busy === payload.id) {
+      if (event.key === 'Escape' && current.host.busy === current.draft.id) {
         event.preventDefault();
-        post({ type: 'cancel', id: payload.id });
+        post({ type: 'cancel', id: current.draft.id });
         return;
       }
-      if (!isValid(state)) {
+      const shortcut =
+        (mod && event.key === 'Enter') ||
+        (mod && event.key.toLowerCase() === 's') ||
+        (event.altKey && event.key.toLowerCase() === 't');
+      if (!shortcut || !isValid(effective(current))) {
+        return;
+      }
+
+      // The shortcuts reach the same three actions as the footer, so a pasted
+      // string has to be laid over the draft here too.
+      const state = commitPastedString(store);
+      const payload = payloadOf(state);
+      if (!payload) {
         return;
       }
       if (mod && event.key === 'Enter') {
@@ -157,7 +179,7 @@ function useShortcuts(): void {
       } else if (mod && event.key.toLowerCase() === 's') {
         event.preventDefault();
         post({ type: 'save', ...payload });
-      } else if (event.altKey && event.key.toLowerCase() === 't') {
+      } else {
         event.preventDefault();
         post({ type: 'test', ...payload });
       }

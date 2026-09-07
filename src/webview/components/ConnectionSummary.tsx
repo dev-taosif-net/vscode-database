@@ -1,5 +1,5 @@
 import { environmentMeta, transportLabel, transportStrength } from '../../types';
-import { useSelect } from '../state/editor';
+import { effective, useSelect } from '../state/editor';
 import { Codicon } from '../primitives/Codicon';
 
 /**
@@ -21,7 +21,10 @@ import { Codicon } from '../primitives/Codicon';
  * right without having to find where the second one starts.
  */
 export function ConnectionSummary() {
-  const draft = useSelect((state) => state.draft);
+  // The draft the action bar directly below would act on, which is the fields
+  // with any pasted string laid over them. A strip that answers "what am I
+  // about to connect to" has to answer it about the press that follows it.
+  const draft = useSelect((state) => effective(state).draft);
   if (!draft) {
     return null;
   }
