@@ -118,10 +118,12 @@ export class ConnectionsPanel {
     this.disposables.push(
       this.panel.onDidDispose(() => this.dispose()),
       this.panel.webview.onDidReceiveMessage((message: WebviewMessage) => {
-        // A handler that throws used to take its rejection with it and leave
-        // the editor sitting on a spinner that nothing would ever clear.
+        // A handler that throws used to take its rejection with it: nothing
+        // was said, and the page was left showing whatever it had. Clearing
+        // `busy` is deliberately not done here — an attempt owns its own entry
+        // and drops it in its `finally`, and guessing from here would clear the
+        // spinner of an attempt that is still running.
         void this.onMessage(message).catch((error) => {
-          this.busy.delete(this.selectedId ?? '');
           void vscode.window.showErrorMessage(
             `The connection editor could not finish that: ${describe(error)}`
           );
