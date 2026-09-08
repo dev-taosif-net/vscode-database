@@ -16,6 +16,7 @@ import { SqlLanguageProviders } from './query/language/providers';
 import { ActiveTab } from './ui/activeTab';
 import { ConnectionsPanel } from './ui/connectionsPanel';
 import { ConnectionsView } from './ui/connectionsView';
+import { CurrentConnection } from './ui/currentConnection';
 import { DetailsView, HistoryView } from './ui/panelViews';
 import { ObjectCommands, contextOf } from './ui/objectCommands';
 import { QueryBridge } from './ui/queryBridge';
@@ -69,7 +70,10 @@ export function activate(context: vscode.ExtensionContext): void {
   const manager = new ConnectionManager(store, output);
   const catalog = new CatalogService(store, manager, output);
   const statusBar = new ConnectionStatusBar(store, manager);
-  const view = new ConnectionsView(context, store, manager, catalog);
+  // Written by the explorer, read by New Query. One fact, so the command does
+  // not have to reach into the view to ask which row the cursor is on.
+  const current = new CurrentConnection(store);
+  const view = new ConnectionsView(context, store, manager, catalog, current);
 
   const storageDir = vscode.Uri.joinPath(context.globalStorageUri, 'results').fsPath;
   const historyDir = vscode.Uri.joinPath(context.globalStorageUri, 'history').fsPath;
@@ -113,6 +117,7 @@ export function activate(context: vscode.ExtensionContext): void {
     resultsView,
     detailsView,
     active,
+    current,
     output
   );
 

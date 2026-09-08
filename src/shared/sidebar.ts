@@ -188,4 +188,15 @@ export type SidebarWebviewMessage =
    * in the tree changes because of it, and a window with the panel closed
    * ignores it entirely.
    */
-  | { type: 'selectObject'; profileId: string; ref: FavouriteRef };
+  | { type: 'selectObject'; profileId: string; ref: FavouriteRef }
+  /**
+   * The cursor landed inside a connection — on its row, or on any folder,
+   * schema, object or column below it.
+   *
+   * This is what makes New Query a button rather than a question. The host has
+   * no other way to know which connection the user is looking at: the cursor
+   * is the panel's own state, and `selectedId` only follows the editor. Like
+   * `selectObject` it is a notification and changes nothing in the tree, so a
+   * dropped one costs a fallback rather than a wrong answer.
+   */
+  | { type: 'selectConnection'; id: string };

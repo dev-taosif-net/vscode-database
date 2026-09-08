@@ -13,6 +13,7 @@ import { formatSql, optionsFrom } from '../query/format';
 import { FavouriteRef, KINDS } from '../shared/catalog';
 import { ConnectionProfile, DriverKind, environmentLabel, errorMessage } from '../types';
 import { ActiveTab } from './activeTab';
+import { CurrentConnection } from './currentConnection';
 import { ObjectTarget, objectTarget } from './objectCommands';
 import { DetailsView } from './panelViews';
 import { ResultsView } from './resultsView';
@@ -44,6 +45,7 @@ export class QueryCommands implements vscode.Disposable {
     private readonly resultsView: ResultsView,
     private readonly detailsView: DetailsView,
     private readonly active: ActiveTab,
+    private readonly current: CurrentConnection,
     private readonly output: vscode.LogOutputChannel
   ) {}
 
@@ -312,15 +314,80 @@ export class QueryCommands implements vscode.Disposable {
 
   /* ---------------------------------------------------------- new and save */
 
+  /**
+   * New Query, and it asks nothing when it can avoid asking.
+   *
+   * It used to go straight to a quick pick unless the row's own menu had
+   * handed it a profile, which meant the button in the explorer's title bar —
+   * the one anybody pressing New Query is actually pressing — answered with a
+   * list of every connection in the estate, on top of an explorer that was
+   * already showing which one the user meant. `currentConnection` is that
+   * answer, and the rest of the chain below it is there so the button still
+   * works in a window where the explorer has never been touched.
+   *
+   * The pick survives as the last resort and not as the default. It is the
+   * right answer to a genuinely ambiguous question — several connections,
+   * nothing open, nothing selected — and the wrong answer to every other one.
+   */
   private async newQuery(target?: unknown): Promise<void> {
     const id = typeof target === 'string' ? target : (target as { connectionId?: string })?.connectionId;
-    const profile = id ? this.store.get(id) : await this.pick('New query against');
+    const profile = (id ? this.store.get(id) : this.implied()) ?? (await this.pick('New query against'));
     if (!profile) {
       return;
     }
     const uri = this.files.uniqueQuery(profile.id, 'Query');
     const document = await vscode.workspace.openTextDocument(uri);
     await vscode.window.showTextDocument(document, { preview: false });
+
+    /*
+     * Opened first, connected second, and the order is the point.
+     *
+     * The tab is bound by its own address, so it is a real query tab the
+     * moment it appears whether or not a session exists yet; connecting first
+     * would put a progress notification between the button and the editor for
+     * no gain. `connect` reports its own failure, and a tab against a
+     * connection that refused is still worth having — the SQL is typed, and
+     * Run will say what is wrong.
+     */
+    if (!this.manager.isConnected(profile.id)) {
+      await vscode.commands.executeCommand('databaseTools.connect', profile.id);
+    }
+  }
+
+  /**
+   * Which connection a new query means, when nobody has said.
+   *
+   * Four readings of "the current connection", in the order they answer the
+   * question. The explorer's cursor wins because the button lives in the
+   * explorer's title bar and the cursor is what the user is pointing at. The
+   * active tab is next, so New Query from a query against UAT opens another
+   * one against UAT. Then the two cases where there is only one thing it could
+   * mean: one open session, or one connection at all.
+   *
+   * Undefined means the question is genuinely open, and the caller asks.
+   */
+  private implied(): ConnectionProfile | undefined {
+    const cursor = this.current.value;
+    if (cursor) {
+      return this.store.get(cursor);
+    }
+
+    const tab =
+      vscode.window.activeTextEditor?.document.uri ??
+      (this.active.value ? vscode.Uri.parse(this.active.value) : undefined);
+    const bound = tab ? this.bindings.get(tab) : undefined;
+    const profile = bound ? this.store.get(bound) : undefined;
+    if (profile) {
+      return profile;
+    }
+
+    const open = this.manager.activeIds();
+    if (open.length === 1) {
+      return this.store.get(open[0]);
+    }
+
+    const all = this.store.all();
+    return all.length === 1 ? all[0] : undefined;
   }
 
   private async saveQuery(): Promise<void> {

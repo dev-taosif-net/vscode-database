@@ -7,7 +7,7 @@ import { EmptyState } from './EmptyState';
 import { Footer } from './Footer';
 import { SearchBand } from './SearchBand';
 import { ListHandle, VirtualList } from './VirtualList';
-import { FlatItem, expansionOf, isHeader } from './model';
+import { FlatItem, expansionOf, isHeader, profileOfKey } from './model';
 import {
   ListState,
   applyCatalogError,
@@ -172,6 +172,30 @@ export function Sidebar(): JSX.Element {
     };
     window.addEventListener('focus', onFocus);
     return () => window.removeEventListener('focus', onFocus);
+  }, []);
+
+  /**
+   * Tells the host which connection the cursor is inside, so a command run
+   * from the title bar knows what "this connection" means.
+   *
+   * Subscribed rather than posted from the rows, because the cursor moves from
+   * five places — a click on a connection, a click on anything in its tree,
+   * an arrow key, a reveal from the editor, and Enter out of the search box —
+   * and four of them are nowhere near `Row`. One subscription on the store all
+   * five already write to is the only version that cannot miss one.
+   *
+   * It posts on a change of connection and not on a change of cursor, so
+   * walking twenty columns of one table is one message and not twenty.
+   */
+  useEffect(() => {
+    let last: string | null = null;
+    return cursorStore.subscribe(() => {
+      const id = profileOfKey(cursorStore.getState().cursorId);
+      if (id && id !== last) {
+        last = id;
+        post({ type: 'selectConnection', id });
+      }
+    });
   }, []);
 
   useEffect(

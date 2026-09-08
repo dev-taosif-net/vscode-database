@@ -13,6 +13,7 @@ import {
 } from '../shared/sidebar';
 import { FavouriteRef, ObjectPageRequest } from '../shared/catalog';
 import { ConnectionProfile, ENVIRONMENTS, EnvironmentId, errorMessage, firstLine } from '../types';
+import { CurrentConnection } from './currentConnection';
 import { webviewHtml } from './webviewHtml';
 
 const GROUPED_KEY = 'databaseTools.view.grouped';
@@ -54,7 +55,8 @@ export class ConnectionsView implements vscode.WebviewViewProvider, vscode.Dispo
     private readonly context: vscode.ExtensionContext,
     private readonly store: ConnectionStore,
     private readonly manager: ConnectionManager,
-    private readonly catalog: CatalogService
+    private readonly catalog: CatalogService,
+    private readonly current: CurrentConnection
   ) {
     const memento = context.globalState;
     this.grouped = memento.get<boolean>(GROUPED_KEY, true);
@@ -137,6 +139,7 @@ export class ConnectionsView implements vscode.WebviewViewProvider, vscode.Dispo
 
       case 'open':
         this.selectedId = message.id;
+        this.current.set(message.id);
         await vscode.commands.executeCommand('databaseTools.openConnections', message.id);
         return;
 
@@ -200,6 +203,13 @@ export class ConnectionsView implements vscode.WebviewViewProvider, vscode.Dispo
         // window without it drops this on the floor, which is why the explorer
         // does not have to know whether the panel exists.
         this.selectionEmitter.fire({ profileId: message.profileId, ref: message.ref });
+        return;
+
+      case 'selectConnection':
+        // Recorded and nothing else. In particular no `postState`: this
+        // arrives on every arrow key, and answering it with the whole row
+        // array would hand every windowed row a new identity to walk a tree.
+        this.current.set(message.id);
         return;
 
       default:
@@ -400,6 +410,10 @@ export class ConnectionsView implements vscode.WebviewViewProvider, vscode.Dispo
       return;
     }
     this.selectedId = id;
+    // The cursor is about to be moved onto this row, and the panel will say so
+    // itself. Setting it here as well is what makes the first New Query after
+    // a reveal work in a window whose sidebar has never been focused.
+    this.current.set(id);
     await this.postState();
     await this.send({ type: 'reveal', id });
   }

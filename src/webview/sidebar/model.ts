@@ -417,6 +417,33 @@ function gkey(profileId: string, node: string): string {
 }
 
 /**
+ * The connection a cursor key belongs to, or null when the cursor is on a
+ * section header rather than inside a connection.
+ *
+ * Every key in the panel is built here, and every one of them below a
+ * connection starts with that connection's profile id, so this reads the
+ * answer off the key rather than looking the item up in the flattened array.
+ * That matters because the caller is a subscription that fires on every arrow
+ * key: a lookup would need the geometry, and the geometry is the one thing in
+ * the panel that is expensive to hold on to.
+ *
+ * The three headers are the exceptions, and `results` is the one inversion —
+ * its key names the connection second because the band belongs to the search
+ * and not to the row.
+ */
+export function profileOfKey(key: string | null): string | null {
+  if (!key) {
+    return null;
+  }
+  const cut = key.indexOf(SEP);
+  if (cut < 0) {
+    return key === 'pinned' || key === 'nomatch' || key.startsWith('environment:') ? null : key;
+  }
+  const head = key.slice(0, cut);
+  return head === 'results' ? key.slice(cut + 1) : head;
+}
+
+/**
  * The whole list, as one array of positioned things.
  *
  * A function of structure only — profiles, grouping, sort, folding, the query,
