@@ -27,13 +27,13 @@ import {
  *
  * The rail lost a slot as well. The engine mark sat between the state glyph
  * and the name — the position the eye lands on — answering a question nobody
- * scanning a list is asking, in a full-colour gradient at 16px. It is now at
- * the trailing edge beside the session button, where a column of engine marks
- * is still scannable and competes with nothing. That leaves three slots before
- * the name instead of five and puts it at x=47, which is also what repairs the
- * indent: a folder inside this connection starts at 57, one `--indent` to the
- * right, where before it started at 57 against a parent at 70 and the tree
- * stepped backwards at its first level.
+ * scanning a list is asking, in a full-colour gradient at 16px. It is now the
+ * last thing in the row, past the session button, where a column of engine
+ * marks along the panel's edge is still scannable and competes with nothing.
+ * That leaves three slots before the name instead of five and puts it at
+ * x=47, which is also what repairs the indent: a folder inside this connection
+ * starts at 57, one `--indent` to the right, where before it started at 57
+ * against a parent at 70 and the tree stepped backwards at its first level.
  *
  * Every prop here is a primitive and every one of them is stable for the life
  * of the row, which is the whole point: scrolling by one pixel changes nothing
@@ -177,10 +177,12 @@ export const Row = memo(function Row(props: {
           the row's own layout knowing they exist. */}
       <span className="pad" />
       <StateBadge state={state} />
+      <RowActions id={id} state={state} />
+      {/* Last in the row, past the session button, so the marks run down the
+          panel's edge as a column of their own. */}
       <span className="engine" aria-hidden="true">
         <EngineMark driver={row.driver} size={14} />
       </span>
-      <RowActions id={id} state={state} />
     </div>
   );
 });

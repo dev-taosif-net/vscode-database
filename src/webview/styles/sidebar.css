@@ -123,6 +123,11 @@ body {
 
 body {
   margin: 0;
+  /* The workbench serves every webview with its own default stylesheet, and
+     that sheet gives the body `padding: 0 20px`. Forty pixels of a 300px
+     panel spent on nothing, and every x below assumes the panel's own edge is
+     x=0; the workspace stylesheet resets it for the same reason. */
+  padding: 0;
   overflow: hidden;
   color: var(--fg);
   background: var(--bg);
@@ -629,14 +634,14 @@ body {
 }
 
 /*
- * The engine mark, second from the end of the row.
+ * The engine mark, last in the row.
  *
  * It used to sit at 46..62, between the state glyph and the name, which is the
  * position the eye lands on. A full-colour vendor tile there answers a
  * question nobody scanning a list is asking, and it cost the name twenty-three
- * pixels and the tree its indent. At the trailing edge, with only the session
- * button after it, the marks still form a column you can run down, and they
- * compete with nothing.
+ * pixels and the tree its indent. At the right edge, past the session button,
+ * the marks form a column down the panel's own edge that you can run down,
+ * and they compete with nothing.
  */
 .engine {
   flex: none;
@@ -645,7 +650,7 @@ body {
   justify-content: center;
   width: 14px;
   height: 14px;
-  margin-left: 6px;
+  margin-left: 4px;
   opacity: 0.85;
 }
 
