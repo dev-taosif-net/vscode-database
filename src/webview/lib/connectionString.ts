@@ -70,7 +70,7 @@ export function parseConnectionString(raw: string): ParsedConnection | null {
  * quotes; libpq separates on whitespace and quotes with '. A password holding
  * a separator is common enough that the quoting has to be honoured.
  */
-export function splitPairs(text: string): [string, string][] {
+function splitPairs(text: string): [string, string][] {
   const bySemicolon = text.includes(';');
   const pairs: [string, string][] = [];
   let i = 0;
@@ -227,9 +227,6 @@ function fromMssqlPairs(pairs: [string, string][]): ParsedConnection {
         }
         break;
       }
-      case 'multipleactiveresultsets':
-        patch.multipleActiveResultSets = isTrue(value);
-        break;
       case 'multisubnetfailover':
         patch.multiSubnetFailover = isTrue(value);
         break;

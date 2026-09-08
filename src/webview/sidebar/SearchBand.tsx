@@ -1,14 +1,14 @@
-import { KeyboardEvent, MutableRefObject, useEffect, useMemo, useState } from 'react';
+import { KeyboardEvent, MutableRefObject, useEffect, useState } from 'react';
 import { SidebarHostMessage } from '../../shared/sidebar';
 import { Codicon } from '../primitives/Codicon';
 import { useStoreSelector } from '../state/store';
 import { post } from './api';
-import { matchRow } from './model';
-import { ListState, hitsStore, listStore, searchObjects } from './state';
+import { Counts, ListState, countsStore, listStore, searchObjects } from './state';
 
-const selRows = (s: ListState) => s.rows;
+const selCount = (s: ListState) => s.rows.length;
 const selQuery = (s: ListState) => s.query;
-const selHits = (n: number) => n;
+const selMatched = (c: Counts) => c.matched;
+const selHits = (c: Counts) => c.objectHits;
 
 function setQuery(value: string): void {
   listStore.setState((s) => (s.query === value ? s : { ...s, query: value }));
@@ -29,16 +29,13 @@ interface Props {
  * into the view description, and it cannot count what it cannot see.
  */
 export function SearchBand({ inputRef, onLeave }: Props): JSX.Element {
-  const rows = useStoreSelector(listStore, selRows);
+  const total = useStoreSelector(listStore, selCount);
   const query = useStoreSelector(listStore, selQuery);
-  const objectHits = useStoreSelector(hitsStore, selHits);
+  const matched = useStoreSelector(countsStore, selMatched);
+  const objectHits = useStoreSelector(countsStore, selHits);
   const [announce, setAnnounce] = useState('');
 
   const needle = query.trim().toLowerCase();
-  const matched = useMemo(
-    () => (needle ? rows.reduce((n, row) => (matchRow(row, needle) ? n + 1 : n), 0) : rows.length),
-    [rows, needle]
-  );
 
   useEffect(() => {
     const id = window.setTimeout(() => post({ type: 'filtered', on: needle.length > 0, matched }), 200);
@@ -73,7 +70,7 @@ export function SearchBand({ inputRef, onLeave }: Props): JSX.Element {
       return;
     }
     const id = window.setTimeout(() => {
-      const connections = `${matched} of ${rows.length} connections match`;
+      const connections = `${matched} of ${total} connections match`;
       setAnnounce(
         objectHits > 0
           ? `${connections}, and ${objectHits} database ${objectHits === 1 ? 'object' : 'objects'}`
@@ -81,7 +78,7 @@ export function SearchBand({ inputRef, onLeave }: Props): JSX.Element {
       );
     }, 500);
     return () => window.clearTimeout(id);
-  }, [needle, matched, rows.length, objectHits]);
+  }, [needle, matched, total, objectHits]);
 
   useEffect(() => {
     const onMessage = (event: MessageEvent<SidebarHostMessage>): void => {

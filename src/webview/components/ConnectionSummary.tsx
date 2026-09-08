@@ -1,57 +1,62 @@
-import { environmentMeta, transportLabel, transportStrength } from '../../types';
-import { effective, useSelect } from '../state/editor';
+import { defaultPort, environmentMeta, transportLabel, transportStrength } from '../../types';
+import { AppState, Problem, effective, problems, useSelect } from '../state/editor';
 import { Codicon } from '../primitives/Codicon';
 
+const AUTH_NAMES = {
+  sql: 'SQL Server login',
+  'entra-mfa': 'Microsoft Entra ID',
+  ntlm: 'Windows NTLM',
+  password: 'SCRAM password',
+  certificate: 'Client certificate',
+  none: 'No credential'
+} as const;
+
+interface Item {
+  icon: string;
+  label: string;
+  value: string;
+  tone?: 'ok' | 'warn' | 'bad';
+  /** True when the value is a gap rather than a fact, so it is read as one. */
+  missing?: boolean;
+}
+
 /**
- * The standing answer to "what am I about to connect to".
+ * The standing answer to "what am I about to connect to", and to "what is
+ * still missing".
  *
- * It sits above the action bar and never scrolls away, so the environment and
- * the target are readable at the moment the decision is made rather than three
- * screens up.
+ * It sits above the action bar and never scrolls away, so the environment,
+ * the target and every gap in it are readable at the moment the decision is
+ * made rather than three screens up. A missing server does not say "Not set
+ * yet" in the same grey as a fact: it says "Missing" with a warning mark, in
+ * the warning colour, so the reason Connect is unavailable is on screen
+ * beside the button that is.
  *
  * The environment leads it, in the loud treatment the banner used to carry at
- * the top of the page. Saying it twice, once under the header and once here,
- * only taught the eye to skip both; said once, in the strip the decision is
- * actually made in, it is read. Colour alone would fail a monochrome screen
- * and a good share of readers, so the reading is still repeated three ways:
- * the badge text, the spelled-out name, and the guard in force.
- *
- * The environment and the facts share one row. Two stacked rows cost height
- * the details column needs more, and the eye reads a single line left to
- * right without having to find where the second one starts.
+ * the top of the page. Colour alone would fail a monochrome screen and a good
+ * share of readers, so the reading is still repeated three ways: the badge
+ * text, the spelled-out name, and the guard in force.
  */
 export function ConnectionSummary() {
   // The draft the action bar directly below would act on, which is the fields
   // with any pasted string laid over them. A strip that answers "what am I
   // about to connect to" has to answer it about the press that follows it.
-  const draft = useSelect((state) => effective(state).draft);
+  const state = useSelect(effective);
+  const draft = state.draft;
   if (!draft) {
     return null;
   }
 
+  const gaps = problems(state);
   const meta = environmentMeta(draft.environment);
   const production = draft.environment === 'prod';
   const strength = transportStrength(draft);
-  const port = draft.port ?? (draft.driver === 'mssql' ? 1433 : 5432);
-  const authName =
-    draft.driver === 'mssql'
-      ? { sql: 'SQL Server login', 'entra-mfa': 'Microsoft Entra ID', ntlm: 'Windows NTLM' }[draft.mssqlAuth]
-      : { password: 'SCRAM password', certificate: 'Client certificate', none: 'No credential' }[draft.pgAuth];
+  const port = draft.port ?? defaultPort(draft.driver);
+  const authName = draft.driver === 'mssql' ? AUTH_NAMES[draft.mssqlAuth] : AUTH_NAMES[draft.pgAuth];
 
-  // The environment is stated by the head above and is deliberately not
-  // repeated as a fact here.
-  const items: { icon: string; label: string; value: string; tone?: string }[] = [
-    {
-      icon: 'server',
-      label: 'Server',
-      value: draft.host ? `${draft.host}:${port}` : 'Not set yet'
-    },
+  const items: Item[] = [
+    serverItem(draft.host, port, gaps),
     { icon: 'database', label: 'Database', value: draft.database || "The login's default" },
-    {
-      icon: 'account',
-      label: 'Authentication',
-      value: draft.user ? `${authName} (${draft.user})` : authName
-    },
+    authItem(authName, draft.user, gaps),
     {
       icon: 'shield',
       label: 'Transport',
@@ -77,14 +82,62 @@ export function ConnectionSummary() {
       <dl>
         {items.map((item) => (
           <div key={item.label} className={item.tone ? `summary-item ${item.tone}` : 'summary-item'}>
-            <Codicon name={item.icon} className="summary-icon" />
+            <Codicon name={item.missing ? 'warning' : item.icon} className="summary-icon" />
             <div>
               <dt>{item.label}</dt>
-              <dd>{item.value}</dd>
+              <dd title={item.value}>{item.value}</dd>
             </div>
           </div>
         ))}
       </dl>
+      <MissingNote state={state} />
     </section>
+  );
+}
+
+function serverItem(host: string, port: number, gaps: Problem[]): Item {
+  if (gaps.some((gap) => gap.field === 'host')) {
+    return { icon: 'server', label: 'Server', value: 'Missing', tone: 'warn', missing: true };
+  }
+  if (gaps.some((gap) => gap.field === 'port')) {
+    return { icon: 'server', label: 'Server', value: `${host} · invalid port`, tone: 'warn', missing: true };
+  }
+  return { icon: 'server', label: 'Server', value: `${host}:${port}` };
+}
+
+function authItem(authName: string, user: string, gaps: Problem[]): Item {
+  const missing = gaps.filter((gap) => ['user', 'password', 'clientCertPath', 'clientKeyPath'].includes(gap.field));
+  if (missing.length === 0) {
+    return { icon: 'account', label: 'Authentication', value: user ? `${authName} (${user})` : authName };
+  }
+  const what = missing
+    .map((gap) =>
+      gap.field === 'user'
+        ? 'user name'
+        : gap.field === 'password'
+          ? 'password'
+          : gap.field === 'clientCertPath'
+            ? 'certificate'
+            : 'key'
+    )
+    .join(', ');
+  return { icon: 'account', label: 'Authentication', value: `${authName} · ${what} missing`, tone: 'warn', missing: true };
+}
+
+/**
+ * The gaps as one sentence, for a screen reader and for a pane too narrow to
+ * show four facts at once. Polite, because it changes as the user types and
+ * an assertive region would talk over every keystroke.
+ */
+function MissingNote({ state }: { state: AppState }) {
+  const gaps = problems(state);
+  if (gaps.length === 0) {
+    return null;
+  }
+  const text = gaps.map((gap) => gap.message).join('. ');
+  return (
+    <p className="summary-missing" aria-live="polite">
+      {text}.
+    </p>
   );
 }

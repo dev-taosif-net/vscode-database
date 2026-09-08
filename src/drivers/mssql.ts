@@ -2,7 +2,17 @@ import type { Connection, ConnectionConfiguration, Request as TediousRequest } f
 import { ConnectionProfile, defaultPort } from '../types';
 import { CellValue, ColumnMeta } from '../shared/query';
 import { encodeCell, kindOfSqlType } from '../exec/encode';
-import { ConnectSecrets, Driver, DriverError, DriverSession, OpenResult, RowSink, StreamOutcome } from './types';
+import {
+  ConnectSecrets,
+  Driver,
+  DriverError,
+  DriverSession,
+  OpenResult,
+  RowSink,
+  StreamOutcome,
+  abortError,
+  coerceProperty
+} from './types';
 
 /**
  * Rows handed to the sink at a time.
@@ -269,11 +279,18 @@ class MssqlSession implements DriverSession {
     this.closed = true;
     this.current = undefined;
     await new Promise<void>((resolve) => {
-      this.connection.once('end', () => resolve());
-      this.connection.close();
+      const onEnd = () => {
+        clearTimeout(timer);
+        resolve();
+      };
       // The socket occasionally never reports back on a half-open connection,
       // so the caller is not left waiting on it.
-      setTimeout(resolve, 2000);
+      const timer = setTimeout(() => {
+        this.connection.removeListener('end', onEnd);
+        resolve();
+      }, 2000);
+      this.connection.once('end', onEnd);
+      this.connection.close();
     });
   }
 
@@ -317,7 +334,7 @@ function buildConfig(profile: ConnectionProfile, secrets: ConnectSecrets): Conne
   // Driver properties are the user's own escape hatch, so they are applied
   // last and can override anything decided above.
   for (const property of profile.properties) {
-    options[property.name] = coerce(property.value);
+    options[property.name] = coerceProperty(property.value);
   }
 
   return {
@@ -393,9 +410,7 @@ function connectOnce(connection: Connection, signal?: AbortSignal): Promise<void
     };
     const onAbort = () => {
       connection.close();
-      const error = new Error('The connection attempt was cancelled.');
-      error.name = 'AbortError';
-      finish(error);
+      finish(abortError());
     };
 
     if (signal?.aborted) {
@@ -493,17 +508,6 @@ function shortVersion(banner: string): string {
     return `${match[1]} · ${match[2]}`;
   }
   return firstLine || 'SQL Server';
-}
-
-function coerce(value: string): unknown {
-  if (value === 'true') {
-    return true;
-  }
-  if (value === 'false') {
-    return false;
-  }
-  const n = Number(value);
-  return value !== '' && Number.isFinite(n) ? n : value;
 }
 
 /**

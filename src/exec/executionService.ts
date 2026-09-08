@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 import { ConnectionManager } from '../connections/connectionManager';
 import { ConnectionStore } from '../store/connectionStore';
 import { CellValue, ColumnMeta, TableCursor, cellText } from '../shared/query';
+import { errorMessage } from '../types';
 import { DriverSession, RowSink } from '../drivers/types';
 import { PlanMode, isPlanColumn, parsePlan, wrapForPlan } from '../plan/planService';
 import { ExecutionRecord, ResultStore, SetData } from './resultStore';
@@ -11,6 +12,16 @@ import { classify, confirmProductionWrite, readOnlyRefusal } from './guards';
 
 /** How often a running execution tells the grid it has more rows. */
 const PROGRESS_MS = 120;
+
+/**
+ * How long a superseded execution is given to settle after it is cancelled.
+ *
+ * A session runs one statement at a time, so a second Run on a tab cannot be
+ * sent until the first has stopped. Both drivers settle a cancel within a
+ * round trip; a server that takes longer than this is a server that is not
+ * answering, and the lease is closed under it rather than waited on.
+ */
+const SETTLE_MS = 3000;
 
 export interface RunOptions {
   /** The tab that owns this, as a URI string. It is also the pool's lease key. */
@@ -50,8 +61,16 @@ export class ExecutionService implements vscode.Disposable {
   /** Fires once, when an execution settles. Query history listens to this. */
   readonly onDidFinish = this.onDidFinishEmitter.event;
 
-  /** Tab to the execution currently running on it. */
-  private readonly running = new Map<string, string>();
+  /**
+   * Tab to the execution running on it, and the promise that settles when it
+   * has stopped.
+   *
+   * The promise is what makes a second Run safe. Two statements on one session
+   * are a driver error at best, and a record that the old execution's `finally`
+   * could delete from under the new one used to hide the Cancel button on a
+   * query that was very much still running.
+   */
+  private readonly running = new Map<string, { id: string; settled: Promise<void> }>();
 
   constructor(
     private readonly store: ConnectionStore,
@@ -64,10 +83,6 @@ export class ExecutionService implements vscode.Disposable {
   dispose(): void {
     this.onDidChangeEmitter.dispose();
     this.onDidFinishEmitter.dispose();
-  }
-
-  isRunning(tab: string): boolean {
-    return this.running.has(tab);
   }
 
   /** The rows a fetch stops at, from settings unless the caller overrode it. */
@@ -110,8 +125,8 @@ export class ExecutionService implements vscode.Disposable {
     }
 
     // A second Run on a tab replaces the first. Anything else would leave two
-    // executions writing into one grid.
-    await this.cancelTab(options.tab);
+    // executions writing into one grid — or two statements on one session.
+    await this.supersede(options.tab);
 
     const writes = classify(options.sql).writes.length > 0;
     const planMode = options.plan ?? 'none';
@@ -129,7 +144,9 @@ export class ExecutionService implements vscode.Disposable {
       batchLines: [],
       table: options.table
     });
-    this.running.set(options.tab, record.id);
+    let settle: () => void = () => undefined;
+    const entry = { id: record.id, settled: new Promise<void>((resolve) => (settle = resolve)) };
+    this.running.set(options.tab, entry);
     this.fire(record);
 
     const limit = options.limit ?? this.defaultLimit(profile.id);
@@ -153,13 +170,18 @@ export class ExecutionService implements vscode.Disposable {
       }
     } catch (error) {
       record.status = 'error';
-      record.error = { level: 'error', text: describe(error) };
+      record.error = { level: 'error', text: errorMessage(error) };
       record.messages.push(record.error);
-      this.output.error(`${profile.name}: ${describe(error)}`);
+      this.output.error(`${profile.name}: ${errorMessage(error)}`);
     } finally {
-      this.pool.setBusy(options.tab, false);
-      this.running.delete(options.tab);
+      // Only if this execution is still the one the tab is running. A
+      // superseded execution settles after its replacement has registered.
+      if (this.running.get(options.tab) === entry) {
+        this.pool.setBusy(options.tab, false);
+        this.running.delete(options.tab);
+      }
       record.finishedAt = Date.now();
+      settle();
       this.fire(record);
       if (!options.quiet) {
         this.onDidFinishEmitter.fire(record);
@@ -167,6 +189,45 @@ export class ExecutionService implements vscode.Disposable {
     }
 
     return record;
+  }
+
+  /**
+   * Stops whatever the tab is running and waits for it to have stopped.
+   *
+   * The wait is bounded. A cancel that the server never acknowledges would
+   * otherwise block Run for ever, so after `SETTLE_MS` the lease is released —
+   * which closes the socket and settles the old stream — and the new run opens
+   * a fresh session.
+   */
+  private async supersede(tab: string): Promise<void> {
+    const current = this.running.get(tab);
+    if (!current) {
+      return;
+    }
+    this.pool.cancel(tab);
+    let timer: NodeJS.Timeout | undefined;
+    const timeout = new Promise<'timeout'>((resolve) => {
+      timer = setTimeout(() => resolve('timeout'), SETTLE_MS);
+    });
+    const outcome = await Promise.race([current.settled.then(() => 'settled' as const), timeout]);
+    clearTimeout(timer);
+    if (outcome === 'timeout') {
+      this.output.warn(`${tab}: the running statement did not stop; its session is being closed.`);
+      await this.pool.release(tab);
+      this.running.delete(tab);
+    }
+  }
+
+  /**
+   * Re-announces a record whose shape was changed after it settled.
+   *
+   * The table view patches paging facts onto a finished record — whether there
+   * is a next page, the key the next seek starts from, a server-side sort —
+   * and a webview that heard the record finish a moment earlier would draw the
+   * old facts until something else happened to redraw it.
+   */
+  notify(record: ExecutionRecord): void {
+    this.fire(record);
   }
 
   /**
@@ -264,7 +325,7 @@ export class ExecutionService implements vscode.Disposable {
       const line = (error as { line?: number }).line;
       record.error = {
         level: 'error',
-        text: describe(error),
+        text: errorMessage(error),
         batch: index,
         line: documentLine(batch, line)
       };
@@ -347,8 +408,4 @@ function documentLine(batch: Batch, line: number | undefined): number | undefine
     return undefined;
   }
   return batch.line + line;
-}
-
-function describe(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
 }

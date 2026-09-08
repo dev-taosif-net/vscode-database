@@ -1,23 +1,22 @@
 import * as vscode from 'vscode';
 import { CatalogService } from '../catalog/catalogService';
-import { crudScript, executeScript, qualified, selectTop } from '../catalog/script';
+import { crudScript, executeScript, qualified } from '../catalog/script';
+import { QueryFileSystem } from '../query/queryFs';
 import { ConnectionStore } from '../store/connectionStore';
 import { FavouriteRef, KINDS, ObjectKind, OBJECT_KINDS } from '../shared/catalog';
-import { DriverKind } from '../types';
-
-/** What `Select Top 100` means. The name is the number, so it is not a setting. */
-const TOP = 100;
+import { DriverKind, errorMessage } from '../types';
 
 /**
- * The object row's half of the right-click menu.
+ * The object row's half of the right-click menu: everything that turns an
+ * object into SQL text and nothing that runs it.
  *
- * Every one of these ends in a SQL document rather than in a result grid,
- * because phase 2 has no execution engine: there is no place to put rows yet.
- * That is a real limit and these commands are shaped around it rather than
- * hiding it — each opens an untitled, editable document containing a statement
- * that is complete and correct for the object it came from, which the user runs
- * with whatever they already have. When the grid lands, `Execute` becomes a
- * verb rather than a scaffold, and none of the SQL below has to change.
+ * Every one of these ends in a scratch query tab *bound to the connection the
+ * object came from*. They used to open untitled documents, which was right
+ * when there was no execution engine and wrong the moment there was one: an
+ * untitled document has no Run on its title bar and no connection in its
+ * status bar, so the first thing a person had to do with a generated
+ * statement was repair the tab before they could run it. The verbs that end
+ * in rows — View Data, Select Top, Run… — live in `QueryCommands`.
  */
 
 /**
@@ -57,10 +56,25 @@ export function objectTarget(input: unknown): ObjectTarget | undefined {
   return { profileId, ref: { kind: kind as ObjectKind, schema, name } };
 }
 
+/**
+ * The context object a command expects, built for a caller that has no row to
+ * right-click. The details panel and the palette both use it, so one shape is
+ * checked in one place however a command was invoked.
+ */
+export function contextOf(target: ObjectTarget): Record<string, string> {
+  return {
+    connectionId: target.profileId,
+    objectKind: target.ref.kind,
+    objectSchema: target.ref.schema,
+    objectName: target.ref.name
+  };
+}
+
 export class ObjectCommands {
   constructor(
     private readonly store: ConnectionStore,
     private readonly catalog: CatalogService,
+    private readonly files: QueryFileSystem,
     private readonly output: vscode.LogOutputChannel
   ) {}
 
@@ -75,7 +89,7 @@ export class ObjectCommands {
         try {
           await run(target);
         } catch (error) {
-          const message = error instanceof Error ? error.message : String(error);
+          const message = errorMessage(error);
           this.output.error(`${id}: ${message}`);
           void vscode.window.showErrorMessage(message);
         }
@@ -84,9 +98,8 @@ export class ObjectCommands {
     return [
       on('databaseTools.openDefinition', (t) => this.openDefinition(t, false)),
       on('databaseTools.scriptAsAlter', (t) => this.openDefinition(t, true)),
-      on('databaseTools.selectTop100', (t) => this.selectTop(t)),
       on('databaseTools.generateCrud', (t) => this.generateCrud(t)),
-      on('databaseTools.executeObject', (t) => this.execute(t)),
+      on('databaseTools.scriptExecute', (t) => this.scriptExecute(t)),
       on('databaseTools.copyObjectName', (t) => this.copy(t, false)),
       on('databaseTools.copyObjectFullName', (t) => this.copy(t, true)),
       on('databaseTools.addObjectFavourite', (t) =>
@@ -103,27 +116,30 @@ export class ObjectCommands {
   private async openDefinition(target: ObjectTarget, asAlter: boolean): Promise<void> {
     const source = await this.catalog.definition(target.profileId, target.ref);
     const text = asAlter ? toAlter(source) : source;
-    await this.show(target, text, asAlter ? 'alter' : 'definition');
+    await this.show(target, text, asAlter ? `Alter ${target.ref.name}` : target.ref.name);
   }
 
-  private async selectTop(target: ObjectTarget): Promise<void> {
-    const driver = this.driverOf(target.profileId);
-    await this.show(target, selectTop(driver, target.ref, TOP), 'select');
-  }
-
+  /**
+   * The four statements, against the columns the table actually has. The
+   * generator refuses a table it cannot read, because a scaffold with no
+   * columns in it is a scaffold that gets deleted rather than edited.
+   */
   private async generateCrud(target: ObjectTarget): Promise<void> {
-    const driver = this.driverOf(target.profileId);
-    const columns = await this.catalog.columns(target.profileId, target.ref);
+    const columns = await this.catalog.members(target.profileId, target.ref);
     if (columns.length === 0) {
       throw new Error(`${target.ref.schema}.${target.ref.name} has no columns to script.`);
     }
-    await this.show(target, crudScript(driver, target.ref, columns), 'crud');
+    await this.show(target, crudScript(this.driverOf(target.profileId), target.ref, columns), `${target.ref.name} CRUD`);
   }
 
-  private async execute(target: ObjectTarget): Promise<void> {
-    const driver = this.driverOf(target.profileId);
+  /** An `EXEC` or `CALL` with one line per parameter, to edit before running. */
+  private async scriptExecute(target: ObjectTarget): Promise<void> {
     const parameters = await this.catalog.members(target.profileId, target.ref);
-    await this.show(target, executeScript(driver, target.ref, parameters), 'execute');
+    await this.show(
+      target,
+      executeScript(this.driverOf(target.profileId), target.ref, parameters),
+      `Execute ${target.ref.name}`
+    );
   }
 
   /**
@@ -140,21 +156,9 @@ export class ObjectCommands {
     await vscode.env.clipboard.writeText(text);
   }
 
-  /**
-   * Opens the statement in an untitled SQL document.
-   *
-   * Untitled and not a read-only virtual document, which was the other
-   * candidate. A definition is most useful as a starting point — you read it,
-   * you change three lines, you run it — and a read-only buffer turns that into
-   * a copy, a paste and a new file. Nothing here is saved anywhere unless the
-   * user saves it.
-   */
-  private async show(target: ObjectTarget, content: string, what: string): Promise<void> {
-    const document = await vscode.workspace.openTextDocument({ language: 'sql', content });
-    await vscode.window.showTextDocument(document, { preview: true });
-    this.output.info(
-      `${what}: ${KINDS[target.ref.kind].singular} ${target.ref.schema}.${target.ref.name}`
-    );
+  private async show(target: ObjectTarget, content: string, name: string): Promise<void> {
+    await this.files.openScratch(target.profileId, name, content);
+    this.output.info(`${name}: ${KINDS[target.ref.kind].singular} ${target.ref.schema}.${target.ref.name}`);
   }
 
   private driverOf(profileId: string): DriverKind {
@@ -176,7 +180,7 @@ export class ObjectCommands {
  * `CREATE OR REPLACE`, which is exactly what `pg_get_functiondef` already
  * returns, so its output is passed through untouched.
  */
-export function toAlter(source: string): string {
+function toAlter(source: string): string {
   if (/^\s*CREATE\s+OR\s+REPLACE\b/i.test(source)) {
     return source;
   }

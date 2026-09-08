@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import { ConnectionManager } from '../connections/connectionManager';
 import { ConnectionStore } from '../store/connectionStore';
-import { EnvironmentId } from '../types';
+import { EnvironmentId, environmentMeta } from '../types';
 
 /**
  * Shows what is open, and how dangerous it is.
@@ -13,6 +13,7 @@ import { EnvironmentId } from '../types';
 export class ConnectionStatusBar implements vscode.Disposable {
   private readonly item: vscode.StatusBarItem;
   private readonly disposables: vscode.Disposable[] = [];
+  private hadActive: boolean | undefined;
 
   constructor(
     private readonly store: ConnectionStore,
@@ -46,7 +47,13 @@ export class ConnectionStatusBar implements vscode.Disposable {
     const enabled = vscode.workspace.getConfiguration('databaseTools').get<boolean>('statusBar', true);
     const ids = this.manager.activeIds();
 
-    void vscode.commands.executeCommand('setContext', 'databaseTools.hasActiveConnection', ids.length > 0);
+    // The only writer of this key. The sidebar used to set it too, from a
+    // view that may never have been resolved, so the key could disagree with
+    // itself depending on which panel the user had opened.
+    if (this.hadActive !== ids.length > 0) {
+      this.hadActive = ids.length > 0;
+      void vscode.commands.executeCommand('setContext', 'databaseTools.hasActiveConnection', this.hadActive);
+    }
 
     if (!enabled || ids.length === 0) {
       this.item.hide();
@@ -63,7 +70,7 @@ export class ConnectionStatusBar implements vscode.Disposable {
     // is never hidden behind a development one.
     const rank: Record<EnvironmentId, number> = { dev: 0, qa: 1, uat: 2, prod: 3 };
     const worst = profiles.reduce((a, b) => (rank[b.environment] > rank[a.environment] ? b : a));
-    const short = { dev: 'DEV', qa: 'QA', uat: 'UAT', prod: 'PROD' }[worst.environment];
+    const short = environmentMeta(worst.environment).short;
 
     const label =
       profiles.length === 1 ? `${worst.name} · ${short}` : `${profiles.length} connections · ${short}`;

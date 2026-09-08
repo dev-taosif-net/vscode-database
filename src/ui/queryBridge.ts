@@ -5,6 +5,7 @@ import { ExecutionService } from '../exec/executionService';
 import { ExecutionRecord, ResultStore } from '../exec/resultStore';
 import { EXTENSIONS, exportSet, renderCopy } from '../export/exporters';
 import { CellValue, QueryHostMessage, QueryWebviewMessage } from '../shared/query';
+import { errorMessage } from '../types';
 import { keyValuesOf, selectPage } from './tableSql';
 
 export type Post = (message: QueryHostMessage) => void;
@@ -271,6 +272,9 @@ export class QueryBridge {
         }
       }
     }
+    // The record finished a moment ago with `hasMore: true` and no sort; the
+    // page has to hear the corrected facts.
+    this.execution.notify(next);
   }
 
   private async goToError(executionId: string): Promise<void> {
@@ -327,7 +331,7 @@ export class QueryBridge {
           );
           post({ type: 'exported', path: target.fsPath, rows: written });
         } catch (error) {
-          const text = error instanceof Error ? error.message : String(error);
+          const text = errorMessage(error);
           this.output.error(`export: ${text}`);
           post({ type: 'notice', level: 'error', text });
         }

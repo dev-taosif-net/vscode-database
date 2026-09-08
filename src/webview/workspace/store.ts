@@ -18,6 +18,8 @@ export interface WorkspaceState {
   plan: PlanPayload | null;
   form: RunnerForm | null;
   values: Record<string, RunnerValue>;
+  /** Bumped when the host asks the runner to execute, so the form can act on it. */
+  executeRequest: number;
   tab: ResultTab;
   setIndex: number;
   filter: string;
@@ -32,6 +34,7 @@ export const store = createStore<WorkspaceState>({
   plan: null,
   form: null,
   values: {},
+  executeRequest: 0,
   tab: 'results',
   setIndex: 0,
   filter: '',
@@ -78,6 +81,10 @@ export function applyHostMessage(message: QueryHostMessage): void {
 
     case 'form':
       store.setState((state) => ({ ...state, form: message.form, values: message.form.values }));
+      return;
+
+    case 'execute':
+      store.setState((state) => ({ ...state, executeRequest: state.executeRequest + 1 }));
       return;
 
     case 'exported':

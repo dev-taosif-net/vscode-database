@@ -8,6 +8,8 @@ import { KeyColumns, ObjectDetails } from '../shared/details';
 import { MssqlDetails } from './mssql';
 import { PostgresDetails } from './postgres';
 import { DetailsQueries, ForeignKeyColumn } from './types';
+import { qualified } from '../catalog/script';
+import { errorMessage } from '../types';
 
 /** The same five minutes the catalog uses, for the same reasons. */
 const TTL_MS = 5 * 60 * 1000;
@@ -119,11 +121,11 @@ export class DetailsService implements vscode.Disposable {
         value.facts = answer.facts;
         value.tags = answer.tags;
       } catch (error) {
-        value.error = describe(error);
+        value.error = errorMessage(error);
       }
 
       try {
-        value.columns = await this.catalog.columns(profileId, ref);
+        value.columns = await this.catalog.members(profileId, ref);
       } catch {
         // A login with rights to the object but not its columns is ordinary on
         // production. The panel drops the section rather than the object.
@@ -142,7 +144,7 @@ export class DetailsService implements vscode.Disposable {
         value.dependsOn = dependencies.dependsOn;
         value.usedBy = dependencies.usedBy;
       } catch (error) {
-        this.output.warn(`dependencies ${ref.schema}.${ref.name}: ${describe(error)}`);
+        this.output.warn(`dependencies ${ref.schema}.${ref.name}: ${errorMessage(error)}`);
       }
 
       this.details.set(key, { value, at: Date.now() });
@@ -202,11 +204,9 @@ export class DetailsService implements vscode.Disposable {
     if (!session || !profile) {
       return undefined;
     }
-    const name =
-      profile.driver === 'mssql'
-        ? `[${ref.schema.replace(/]/g, ']]')}].[${ref.name.replace(/]/g, ']]')}]`
-        : `"${ref.schema.replace(/"/g, '""')}"."${ref.name.replace(/"/g, '""')}"`;
-    const rows = await session.query<{ n: string | number }>(`SELECT COUNT(*) AS n FROM ${name}`);
+    const rows = await session.query<{ n: string | number }>(
+      `SELECT COUNT(*) AS n FROM ${qualified(profile.driver, ref)}`
+    );
     const value = Number(rows[0]?.n);
     return Number.isFinite(value) ? value : undefined;
   }
@@ -238,7 +238,7 @@ export class DetailsService implements vscode.Disposable {
       } catch (error) {
         // A login without rights to the constraint catalog loses the join
         // predicate and keeps every other completion.
-        this.output.warn(`foreign keys: ${describe(error)}`);
+        this.output.warn(`foreign keys: ${errorMessage(error)}`);
         this.foreignKeys.set(key, { value: [], at: Date.now() });
         return [];
       }
@@ -290,8 +290,4 @@ export class DetailsService implements vscode.Disposable {
       }
     }
   }
-}
-
-function describe(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
 }

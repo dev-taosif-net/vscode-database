@@ -4,7 +4,8 @@ import { DetailsService } from '../details/detailsService';
 import { HistoryStore } from '../query/historyStore';
 import { SavedQueryStore } from '../query/savedQueries';
 import { FavouriteRef } from '../shared/catalog';
-import { PanelHostMessage, PanelWebviewMessage } from '../shared/details';
+import { DetailsAction, PanelHostMessage, PanelWebviewMessage } from '../shared/details';
+import { errorMessage } from '../types';
 import { webviewHtml } from './webviewHtml';
 
 /**
@@ -85,8 +86,9 @@ export class DetailsView extends PanelView implements vscode.Disposable {
 
   constructor(
     context: vscode.ExtensionContext,
+    private readonly store: ConnectionStore,
     private readonly details: DetailsService,
-    private readonly onAction: (profileId: string, ref: FavouriteRef, action: string) => void
+    private readonly onAction: (profileId: string, ref: FavouriteRef, action: DetailsAction) => void
   ) {
     super(context, 'details', 'Database object');
   }
@@ -115,15 +117,19 @@ export class DetailsView extends PanelView implements vscode.Disposable {
         this.post({ type: 'details', details });
       }
     } catch (error) {
+      // The head still names the connection it failed on, in its own
+      // environment: a production object drawn with a DEV badge because the
+      // read failed would be the wrong kind of wrong.
+      const profile = this.store.get(profileId);
       this.post({
         type: 'details',
         details: {
           profileId,
-          connectionName: '',
-          environment: 'dev',
-          driver: 'mssql',
+          connectionName: profile?.name || profile?.host || '',
+          environment: profile?.environment ?? 'dev',
+          driver: profile?.driver ?? 'mssql',
           ref,
-          error: error instanceof Error ? error.message : String(error)
+          error: errorMessage(error)
         }
       });
     }

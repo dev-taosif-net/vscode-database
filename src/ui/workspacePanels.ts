@@ -6,23 +6,13 @@ import { ExecutionService } from '../exec/executionService';
 import { ResultStore } from '../exec/resultStore';
 import { FavouriteRef, KINDS } from '../shared/catalog';
 import { QueryHostMessage, QueryWebviewMessage, RunnerValue } from '../shared/query';
-import { DATA_SCHEME, RUNNER_SCHEME, addressOf, refOf } from '../query/bindingStore';
+import { DATA_SCHEME, RUNNER_SCHEME, objectAddress, objectRefOf } from '../query/bindingStore';
+import { errorMessage } from '../types';
 import { ActiveTab } from './activeTab';
 import { QueryBridge } from './queryBridge';
 import { buildCall, buildForm } from './runnerForm';
 import { selectPage } from './tableSql';
 import { webviewHtml } from './webviewHtml';
-
-/**
- * Live webviews kept at once.
- *
- * Beyond this the least recently visible one is disposed — not closed. Its tab
- * stays exactly where it was, and revealing it rebuilds the page from the
- * host's own state in under a frame, because the page holds nothing. That is
- * the same property that lets `retainContextWhenHidden` stay off everywhere in
- * phase 3: there is nothing in a hidden webview worth retaining.
- */
-const BUDGET = 16;
 
 const RUNNER_VALUES_KEY = 'databaseTools.runnerValues.v1';
 
@@ -32,7 +22,6 @@ interface Managed {
   kind: 'data' | 'runner';
   profileId: string;
   ref: FavouriteRef;
-  lastVisible: number;
 }
 
 /**
@@ -43,6 +32,13 @@ interface Managed {
  * on the same table twice reveals the first tab rather than stacking a second.
  * A query editor is deliberately not like this — its name is generated, so two
  * are two different documents by construction.
+ *
+ * Memory is the workbench's job here, not this class's. `retainContextWhenHidden`
+ * is off, so a hidden tab's iframe is already torn down by VS Code and rebuilt
+ * from the host's state when it is revealed. There used to be a "budget" here
+ * that disposed the least recently seen panel past sixteen — and disposing a
+ * `WebviewPanel` closes the tab, so what it actually did was close the user's
+ * seventeenth data tab without a word.
  */
 export class WorkspacePanels implements vscode.Disposable {
   static readonly dataViewType = 'databaseTools.data';
@@ -85,7 +81,7 @@ export class WorkspacePanels implements vscode.Disposable {
   /* --------------------------------------------------------------- opening */
 
   async openData(profileId: string, ref: FavouriteRef): Promise<void> {
-    const uri = addressOf(DATA_SCHEME, profileId, `${ref.schema}.${ref.name}`);
+    const uri = objectAddress(DATA_SCHEME, profileId, ref);
     const existing = this.panels.get(uri.toString());
     if (existing) {
       existing.panel.reveal(existing.panel.viewColumn);
@@ -102,7 +98,7 @@ export class WorkspacePanels implements vscode.Disposable {
   }
 
   async openRunner(profileId: string, ref: FavouriteRef): Promise<void> {
-    const uri = addressOf(RUNNER_SCHEME, profileId, `${ref.schema}.${ref.name}`);
+    const uri = objectAddress(RUNNER_SCHEME, profileId, ref);
     const existing = this.panels.get(uri.toString());
     if (existing) {
       existing.panel.reveal(existing.panel.viewColumn);
@@ -131,14 +127,13 @@ export class WorkspacePanels implements vscode.Disposable {
       return;
     }
     const uri = vscode.Uri.parse(address);
-    const ref = refOf(uri);
+    const ref = objectRefOf(uri, kind === 'runner' ? 'procedure' : 'table');
     const profileId = uri.authority;
     if (!ref || !this.store.get(profileId)) {
       panel.dispose();
       return;
     }
-    const full: FavouriteRef = { kind: kind === 'runner' ? 'procedure' : 'table', ...ref };
-    this.adopt(panel, uri, kind, profileId, full);
+    this.adopt(panel, uri, kind, profileId, ref);
   }
 
   private panelOptions(): vscode.WebviewPanelOptions & vscode.WebviewOptions {
@@ -167,7 +162,7 @@ export class WorkspacePanels implements vscode.Disposable {
       address: tab
     });
 
-    const managed: Managed = { panel, uri, kind, profileId, ref, lastVisible: Date.now() };
+    const managed: Managed = { panel, uri, kind, profileId, ref };
     this.panels.set(tab, managed);
     this.active.set(tab);
 
@@ -177,12 +172,12 @@ export class WorkspacePanels implements vscode.Disposable {
 
     panel.onDidChangeViewState(() => {
       if (panel.active) {
-        managed.lastVisible = Date.now();
         this.active.set(tab);
-        this.evict();
       }
     });
 
+    // A tab that closes releases its lease, cancels what it was running and
+    // drops its rows. Nothing else has to remember to.
     panel.onDidDispose(() => {
       this.panels.delete(tab);
       void this.execution.closeTab(tab);
@@ -190,20 +185,23 @@ export class WorkspacePanels implements vscode.Disposable {
         this.active.set(undefined);
       }
     });
-
-    this.evict();
   }
 
-  /** The webview budget. A tab beyond it is disposed; its editor tab stays. */
-  private evict(): void {
-    const live = [...this.panels.values()].filter((managed) => !managed.panel.active);
-    if (this.panels.size <= BUDGET) {
-      return;
+  /**
+   * Runs the runner tab the user is looking at, for the toolbar's Run key.
+   *
+   * The values live in the page, so the page is asked to execute rather than
+   * the host reading them back. False when no runner is the active editor, so
+   * the command can fall through to its ordinary meaning.
+   */
+  executeActiveRunner(): boolean {
+    for (const managed of this.panels.values()) {
+      if (managed.kind === 'runner' && managed.panel.active) {
+        void managed.panel.webview.postMessage({ type: 'execute' } satisfies QueryHostMessage);
+        return true;
+      }
     }
-    live
-      .sort((a, b) => a.lastVisible - b.lastVisible)
-      .slice(0, this.panels.size - BUDGET)
-      .forEach((managed) => managed.panel.dispose());
+    return false;
   }
 
   /* -------------------------------------------------------------- messages */
@@ -275,6 +273,7 @@ export class WorkspacePanels implements vscode.Disposable {
 
     if (record?.table && record.sets[0]) {
       record.table.hasMore = record.sets[0].count >= pageSize;
+      this.execution.notify(record);
     }
   }
 
@@ -286,7 +285,7 @@ export class WorkspacePanels implements vscode.Disposable {
       const saved = this.savedValues(managed.profileId, managed.ref);
       post({ type: 'form', form: buildForm(managed.ref, members, saved) });
     } catch (error) {
-      post({ type: 'notice', level: 'error', text: describe(error) });
+      post({ type: 'notice', level: 'error', text: errorMessage(error) });
     }
   }
 
@@ -317,7 +316,7 @@ export class WorkspacePanels implements vscode.Disposable {
         this.project(managed);
       }
     } catch (error) {
-      post({ type: 'notice', level: 'error', text: describe(error) });
+      post({ type: 'notice', level: 'error', text: errorMessage(error) });
     }
   }
 
@@ -375,8 +374,4 @@ export class WorkspacePanels implements vscode.Disposable {
     await this.context.workspaceState.update(RUNNER_VALUES_KEY, all);
     this.output.info(`runner: ${KINDS[ref.kind].singular} ${ref.schema}.${ref.name}`);
   }
-}
-
-function describe(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
 }

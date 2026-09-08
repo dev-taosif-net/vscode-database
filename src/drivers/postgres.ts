@@ -5,7 +5,17 @@ import type { Client, ClientConfig, FieldDef, Query, QueryResult } from 'pg';
 import { ConnectionProfile, defaultPort } from '../types';
 import { CellValue, ColumnMeta } from '../shared/query';
 import { encodeCell, kindOfSqlType } from '../exec/encode';
-import { ConnectSecrets, Driver, DriverError, DriverSession, OpenResult, RowSink, StreamOutcome } from './types';
+import {
+  ConnectSecrets,
+  Driver,
+  DriverError,
+  DriverSession,
+  OpenResult,
+  RowSink,
+  StreamOutcome,
+  abortError,
+  coerceProperty
+} from './types';
 
 /** Rows handed to the sink at a time. See the same constant in `mssql.ts`. */
 const CHUNK = 500;
@@ -463,7 +473,9 @@ function buildConfig(
     host: profile.host,
     port: profile.port ?? defaultPort('postgres'),
     database: profile.database || undefined,
-    user: profile.pgAuth === 'none' ? undefined : profile.user || undefined,
+    // A `trust` or `peer` login still names a role when one is given; only an
+    // empty box falls back to the operating system user.
+    user: profile.user || undefined,
     password: profile.pgAuth === 'password' ? secrets.password : undefined,
     ssl,
     connectionTimeoutMillis: profile.connectTimeoutSeconds * 1000,
@@ -479,7 +491,7 @@ function buildConfig(
   }
 
   for (const property of profile.properties) {
-    config[property.name] = coerce(property.value);
+    config[property.name] = coerceProperty(property.value);
   }
 
   return config as ClientConfig;
@@ -603,19 +615,3 @@ function shortVersion(banner: string): string {
   return match ? `PostgreSQL ${match[1]}` : banner.split(' ').slice(0, 2).join(' ') || 'PostgreSQL';
 }
 
-function coerce(value: string): unknown {
-  if (value === 'true') {
-    return true;
-  }
-  if (value === 'false') {
-    return false;
-  }
-  const n = Number(value);
-  return value !== '' && Number.isFinite(n) ? n : value;
-}
-
-function abortError(): Error {
-  const error = new Error('The connection attempt was cancelled.');
-  error.name = 'AbortError';
-  return error;
-}

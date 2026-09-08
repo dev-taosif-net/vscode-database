@@ -5,7 +5,7 @@ import { IconMark, ObjectIcon } from '../primitives/ObjectIcon';
 import { post } from './api';
 import { segments } from './host';
 import { H } from './model';
-import { cursorStore, loadMore, toggleExpanded, useIsCursor } from './state';
+import { cursorStore, loadMore, retry, toggleExpanded, useIsCursor } from './state';
 
 /**
  * Clicking a row makes it the cursor.
@@ -290,7 +290,9 @@ export const NoteRow = memo(function NoteRow(
 ) {
   const { gkey, top, level, ariaLevel, posinset, setsize, tone, text, profileId, node, offset } = props;
   const cursor = useIsCursor(gkey);
-  const pressable = tone === 'more';
+  // Two of the four notes are controls: Load more, and an error, which is a
+  // retry. Both say so in their accessible name rather than only in a hover.
+  const pressable = tone === 'more' || tone === 'error';
 
   return (
     <div
@@ -299,16 +301,18 @@ export const NoteRow = memo(function NoteRow(
       aria-level={ariaLevel}
       aria-posinset={posinset}
       aria-setsize={setsize}
-      aria-label={text}
+      aria-label={tone === 'error' ? `${text}. Press to try again.` : text}
       aria-busy={tone === 'loading' || undefined}
       data-id={gkey}
       tabIndex={cursor ? 0 : -1}
-      title={tone === 'error' ? text : undefined}
+      title={tone === 'error' ? `${text} — click to try again` : undefined}
       style={{ top, height: H.node, ['--lvl' as string]: level }}
       onClick={() => {
         take(gkey);
-        if (pressable) {
+        if (tone === 'more') {
           loadMore(profileId, node, offset);
+        } else if (tone === 'error') {
+          retry(profileId, node);
         }
       }}
     >
@@ -332,6 +336,7 @@ export const NoteRow = memo(function NoteRow(
         )}
       </span>
       <span className="node-name">{text}</span>
+      {pressable && tone === 'error' ? <span className="node-tail node-retry">Retry</span> : null}
     </div>
   );
 });

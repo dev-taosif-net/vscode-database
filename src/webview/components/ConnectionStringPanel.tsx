@@ -1,4 +1,4 @@
-import { applyParsed, effective, isNew, isValid, useSelect, useUpdate } from '../state/editor';
+import { applyParsed, canConnect, effective, isNew, useSelect, useUpdate } from '../state/editor';
 import { parseConnectionString } from '../lib/connectionString';
 import { ConnectionProfile, defaultPort } from '../../types';
 import { Codicon } from '../primitives/Codicon';
@@ -24,7 +24,7 @@ export function ConnectionStringPanel() {
   const report = useSelect((state) => state.parseReport);
   const fresh = useSelect(isNew);
   const resolved = useSelect((state) => effective(state).draft);
-  const ready = useSelect((state) => isValid(effective(state)));
+  const ready = useSelect((state) => canConnect(effective(state)));
 
   const parsed = parseConnectionString(text);
 
@@ -187,8 +187,8 @@ function Reading({ engine, hasSecret, kept, resolved, savedAs, ready }: ReadingP
         <p className="note warn" role="alert">
           <Codicon name="warning" className="glyph" />
           <span>
-            The string names no server, so there is nothing here to connect to. Parse it and fill the
-            server in on the fields.
+            The string does not say everything a session needs. Parse it and fill in the rest on the
+            fields; the summary below names what is missing.
           </span>
         </p>
       )}

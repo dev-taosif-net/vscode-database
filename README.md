@@ -86,9 +86,10 @@ A connected connection expands in place, in the same single-column sidebar. See
 - Colourful marks with a distinct silhouette each, so the set survives a
   high-contrast theme, a forced palette and colour vision deficiency.
 - Right-click an object for View Data, Select Top 100, Select Top 1000, Run…,
-  Generate CRUD, Script As CREATE / ALTER / DROP, View Dependencies, Compare
-  With, Show Details, Copy Name and Copy Full Name. Since phase 3 these end in
-  rows rather than in a buffer.
+  Open Definition, Generate CRUD, Script As CREATE / ALTER / EXECUTE / DROP,
+  View Dependencies, Compare With, Show Details, Copy Name and Copy Full Name.
+  Every one of them opens in a query tab bound to the connection the object
+  came from, so Run is on its title bar from the first keystroke.
 - Five hundred objects at a time, cached for five minutes, nothing read until
   it is opened, and the whole subtree dropped the moment a session closes.
 
@@ -114,6 +115,11 @@ A connected connection expands in place, in the same single-column sidebar. See
 - The server address is checked as it is typed. The name is resolved and a
   socket is opened and closed without a word on it, so a typo is caught in a
   moment rather than thirty seconds into a driver timeout.
+- Required fields are marked, and what is required follows the driver: a SQL
+  login needs a user name and a password, Entra needs neither, a PostgreSQL
+  certificate login needs both halves of the key pair. A missing field says so
+  under the box once you have been in it, the summary strip says "Missing"
+  beside the fact, and Connect waits until there is nothing left to say.
 - Production asks before it connects, naming the server, the database and
   whether the session can write.
 - Environments carry a colour everywhere they appear: the editor, the header,
@@ -166,17 +172,19 @@ screen and colour vision deficiency.
 
 | Command | Keybinding |
 | --- | --- |
-| Database: Connections: Open | `Ctrl+Alt+D` |
+| Database: Connections: Open Editor | `Ctrl+Alt+D` |
 | Database: Connections: New | |
 | Database: New Query | |
 | Database: Run | `F5`, `Ctrl+Enter` |
 | Database: Run Current Statement | `Ctrl+Shift+Enter` |
 | Database: Cancel | `Ctrl+Alt+.` |
 | Database: Explain Plan | `Ctrl+L` |
-| Database: Format SQL | `Shift+Alt+F` |
+| Database: Explain Plan with Actual Statistics | |
+| Database: Format SQL | `Shift+Alt+F`, `Ctrl+Shift+F` in a bound SQL tab |
 | Database: Connect to a Database | |
 | Database: Disconnect | |
 | Database: Disconnect All | |
+| Database: Refresh Connections | |
 | Database: Refresh Objects | |
 
 The object explorer's own actions are on the right-click menu of the row they
@@ -223,10 +231,13 @@ the first connection, so activation loads neither one.
   both what the catalog knows and what it cannot.
 - **Object created and modified dates on PostgreSQL.** The server does not
   record them anywhere. They show a dash and a tooltip saying why.
-- **SSH tunnelling.** The details are saved on the profile; connections still
-  go direct.
+- **SSH tunnelling.** Connections go direct. A profile does not carry tunnel
+  settings it cannot honour.
+- **Multiple active result sets** on SQL Server, which the pure-JavaScript
+  driver does not implement.
 - **Fully integrated Windows single sign-on**, which needs a native driver.
-  NTLM with an explicit domain, user and password works today.
+  NTLM with a user name and password works today; the domain is optional and
+  defaults to the server's own.
 
 The read-only flag now acts on both engines. PostgreSQL holds the session
 read-only through `default_transaction_read_only`; SQL Server has no session

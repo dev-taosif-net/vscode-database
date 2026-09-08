@@ -3,29 +3,17 @@ import { FavouriteRef } from '../shared/catalog';
 import { DependencyRef, Fact, IndexInfo, KeyColumns, Tag } from '../shared/details';
 import { DetailsQueries, ForeignKeyColumn } from './types';
 import { bytes } from './mssql';
+import { serverVersion } from '../catalog/pgVersion';
+import { qualified } from '../catalog/script';
 
 /**
  * PostgreSQL's answers, out of `pg_catalog`.
  *
  * Two version floors matter here and are handled the way the catalog reader
- * handles its own: `attidentity` arrived in 10 and `relispartition` in 10, and
+ * handles its own: `attidentity` and `relispartition` both arrived in 10, and
  * referring to a column that does not exist is a statement that fails to
- * parse rather than a field that comes back null. The version is read once per
- * session and cached.
+ * parse rather than a field that comes back null.
  */
-const VERSIONS = new WeakMap<DriverSession, number>();
-
-async function serverVersion(session: DriverSession): Promise<number> {
-  const cached = VERSIONS.get(session);
-  if (cached !== undefined) {
-    return cached;
-  }
-  const rows = await session.query<{ v: string }>("SELECT current_setting('server_version_num') AS v");
-  const value = Number(rows[0]?.v ?? 0) || 90600;
-  VERSIONS.set(session, value);
-  return value;
-}
-
 export class PostgresDetails implements DetailsQueries {
   async facts(session: DriverSession, ref: FavouriteRef): Promise<{ facts: Fact[]; tags: Tag[] }> {
     const version = await serverVersion(session);
@@ -180,7 +168,7 @@ export class PostgresDetails implements DetailsQueries {
     session: DriverSession,
     ref: FavouriteRef
   ): Promise<{ dependsOn: DependencyRef[]; usedBy: DependencyRef[] }> {
-    const qualified = `${quoteIdent(ref.schema)}.${quoteIdent(ref.name)}`;
+    const target = qualified('postgres', ref);
 
     // Views and materialized views, exactly, through the rewrite rules that
     // define them. This half is a fact.
@@ -193,7 +181,7 @@ export class PostgresDetails implements DetailsQueries {
        WHERE d.refobjid = $1::regclass
          AND d.classid = 'pg_rewrite'::regclass
          AND c.oid <> $1::regclass`,
-      [qualified]
+      [target]
     );
 
     const usedByKeys = await session.query<{ sch: string; nm: string; con: string }>(
@@ -202,14 +190,14 @@ export class PostgresDetails implements DetailsQueries {
        JOIN pg_class c ON c.oid = k.conrelid
        JOIN pg_namespace n ON n.oid = c.relnamespace
        WHERE k.confrelid = $1::regclass AND k.contype = 'f'`,
-      [qualified]
+      [target]
     );
 
     const triggers = await session.query<{ nm: string }>(
       `SELECT t.tgname AS nm
        FROM pg_trigger t
        WHERE t.tgrelid = $1::regclass AND NOT t.tgisinternal`,
-      [qualified]
+      [target]
     );
 
     /*
@@ -244,7 +232,7 @@ export class PostgresDetails implements DetailsQueries {
        JOIN pg_class c ON c.oid = k.confrelid
        JOIN pg_namespace n ON n.oid = c.relnamespace
        WHERE k.conrelid = $1::regclass AND k.contype = 'f'`,
-      [qualified]
+      [target]
     );
 
     const dependsOnViews = await session.query<{ sch: string; nm: string; kind: string }>(
@@ -254,7 +242,7 @@ export class PostgresDetails implements DetailsQueries {
        JOIN pg_class c ON c.oid = d.refobjid
        JOIN pg_namespace n ON n.oid = c.relnamespace
        WHERE r.ev_class = $1::regclass AND c.oid <> $1::regclass`,
-      [qualified]
+      [target]
     );
 
     return {
@@ -367,8 +355,4 @@ function relkind(kind: string): DependencyRef['kind'] {
     return 'sequence';
   }
   return 'table';
-}
-
-function quoteIdent(name: string): string {
-  return `"${name.replace(/"/g, '""')}"`;
 }

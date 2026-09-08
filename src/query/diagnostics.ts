@@ -11,6 +11,11 @@ import { ResultStore } from '../exec/resultStore';
  * quiet on the statement that actually fails. So the only thing that ever
  * appears here is what the server itself rejected, mapped back to the line of
  * the batch that produced it.
+ *
+ * It listens to every change rather than to `onDidFinish`, because the quiet
+ * runs — Refresh, Run again for more — never finish loudly, and a squiggle
+ * that ignored them would outlive a statement that has since succeeded, or
+ * miss one that has since failed.
  */
 export class SqlDiagnostics implements vscode.Disposable {
   private readonly collection = vscode.languages.createDiagnosticCollection('databaseTools');
@@ -19,14 +24,14 @@ export class SqlDiagnostics implements vscode.Disposable {
   constructor(execution: ExecutionService, results: ResultStore) {
     this.disposables.push(
       this.collection,
-      execution.onDidFinish((record) => this.apply(record.tab, record.error)),
-      // A tab that starts running clears its last failure straight away, so a
-      // squiggle never outlives the statement it belonged to.
       execution.onDidChange((change) => {
-        const record = results.get(change.executionId);
-        if (record?.status === 'running') {
-          this.collection.delete(vscode.Uri.parse(change.tab));
+        const record = results.peek(change.executionId);
+        if (!record) {
+          return;
         }
+        // A tab that starts running clears its last failure straight away, so a
+        // squiggle never outlives the statement it belonged to.
+        this.apply(record.tab, record.status === 'running' ? undefined : record.error);
       }),
       vscode.workspace.onDidCloseTextDocument((document) => this.collection.delete(document.uri))
     );

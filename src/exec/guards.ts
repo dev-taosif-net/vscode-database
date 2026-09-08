@@ -56,7 +56,7 @@ const WRITING = new Set([
   'DBCC'
 ]);
 
-export interface Verdict {
+interface Verdict {
   /** The statements that are not reads, in the order they appear. */
   writes: { keyword: string; offset: number }[];
 }

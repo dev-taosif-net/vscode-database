@@ -1,5 +1,7 @@
-import { DriverKind } from '../../types';
+import { DriverKind, engineName } from '../../types';
 import { PostgresLogo, SqlServerLogo } from './logos';
+
+export { engineName };
 
 interface Props {
   driver: DriverKind;
@@ -24,8 +26,4 @@ export function EngineMark({ driver, size = 16, plate }: Props) {
       {glyph}
     </span>
   );
-}
-
-export function engineName(driver: DriverKind): string {
-  return driver === 'mssql' ? 'Microsoft SQL Server' : 'PostgreSQL';
 }

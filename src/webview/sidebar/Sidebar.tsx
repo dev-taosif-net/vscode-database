@@ -24,6 +24,7 @@ import {
   index,
   listStore,
   loadMore,
+  retry,
   sessionStore,
   setExpanded,
   toggleExpanded
@@ -265,6 +266,8 @@ export function Sidebar(): JSX.Element {
     if (item.kind === 'note') {
       if (item.tone === 'more') {
         loadMore(item.profileId, item.node, item.offset);
+      } else if (item.tone === 'error') {
+        retry(item.profileId, item.node);
       }
       return;
     }

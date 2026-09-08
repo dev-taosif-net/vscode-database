@@ -1,4 +1,5 @@
 import * as vscode from 'vscode';
+import { FavouriteRef, OBJECT_KINDS, ObjectKind } from '../shared/catalog';
 
 const KEY = 'databaseTools.bindings.v1';
 
@@ -100,12 +101,32 @@ export function addressOf(scheme: string, profileId: string, path: string): vsco
   return vscode.Uri.from({ scheme, authority: profileId, path: path.startsWith('/') ? path : `/${path}` });
 }
 
-/** The object a `dbdata:`, `dbrun:` or `dbobj:` address names. */
-export function refOf(uri: vscode.Uri): { schema: string; name: string } | undefined {
-  const label = decodeURIComponent(uri.path.replace(/^\//, '')).replace(/\.[a-z]+$/i, '');
+/**
+ * The address of one object: `dbdata://<profile>/<kind>/<schema>.<name>`.
+ *
+ * The kind rides in the path because a restored tab has nothing else to learn
+ * it from, and it matters: a PostgreSQL function is `SELECT * FROM` where a
+ * procedure is `CALL`, and a runner that came back after a reload as the wrong
+ * one would build the wrong statement.
+ */
+export function objectAddress(scheme: string, profileId: string, ref: FavouriteRef, extension = ''): vscode.Uri {
+  return addressOf(scheme, profileId, `${ref.kind}/${ref.schema}.${ref.name}${extension}`);
+}
+
+/**
+ * The object an address names, or undefined for an address this version did
+ * not write. Reads the pre-kind form too — `/<schema>.<name>` — with the kind
+ * the scheme implied, so a tab serialized by an earlier build still restores.
+ */
+export function objectRefOf(uri: vscode.Uri, fallback: ObjectKind): FavouriteRef | undefined {
+  const parts = decodeURIComponent(uri.path.replace(/^\//, ''))
+    .replace(/\.sql$/i, '')
+    .split('/');
+  const label = parts.length > 1 ? parts[1] : parts[0];
+  const kind = parts.length > 1 && (OBJECT_KINDS as readonly string[]).includes(parts[0]) ? (parts[0] as ObjectKind) : fallback;
   const dot = label.indexOf('.');
   if (dot <= 0) {
     return undefined;
   }
-  return { schema: label.slice(0, dot), name: label.slice(dot + 1) };
+  return { kind, schema: label.slice(0, dot), name: label.slice(dot + 1) };
 }

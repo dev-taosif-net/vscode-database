@@ -256,27 +256,33 @@ Select Top 100 and Generate CRUD while giving a procedure Execute and Script As
 ALTER.
 
 ```
-connection                     table                procedure / function
-  Connect | Disconnect           Open Definition      Open Definition
-  Refresh Objects                Select Top 100       Execute
-  ─────────────                  Generate CRUD        Script As ALTER
-  Add to Favourites              ─────────────        ─────────────
-  Enable Schema Focused Mode     Copy Name            Copy Name
-  ─────────────                  Copy Full Name       Copy Full Name
-  Edit Connection                ─────────────        ─────────────
-  Duplicate Connection           Add to Favourites    Add to Favourites
-  Copy Server Address
-  ─────────────
-  Delete Connection
+connection                     table                       procedure / function
+  Connect | Disconnect           View Data                   Run…
+  Refresh Objects                Select Top 100              Open Definition
+  New Query                      Select Top 1000             Show Details
+  ─────────────                  Count Rows Exactly          ─────────────
+  Add to Favourites              Open Definition             Script As CREATE
+  Enable Schema Focused Mode     Show Details                Script As ALTER
+  ─────────────                  ─────────────               Script As EXECUTE
+  Edit Connection                Generate CRUD               Script As DROP
+  Duplicate Connection           Script As CREATE            View Dependencies
+  ─────────────                  Script As DROP              Compare With…
+  Copy Server Address            View Dependencies           ─────────────
+  ─────────────                  Compare With…               Copy Name
+  Delete Connection              ─────────────               Copy Full Name
+                                 Copy Name                   ─────────────
+                                 Copy Full Name              Add to Favourites
+                                 ─────────────
+                                 Add to Favourites
 ```
 
-Every object action ends in a SQL document rather than a result grid, because
-phase 2 has no execution engine — there is nowhere to put rows yet. These
-commands are shaped around that rather than hiding it: each opens an untitled,
-editable document holding a statement that is complete and correct for the
-object it came from. Untitled rather than read-only, because a definition is
-most useful as a starting point. When the grid lands, Execute becomes a verb
-rather than a scaffold and none of the SQL has to change.
+The first group is what a person does with an object; the second is every
+action that ends in SQL text; then copying, then pinning. Every action that
+produces a statement opens it in a scratch query tab *bound to the connection
+the object came from*, so Run is on the title bar and the connection is in
+the status bar from the first keystroke. Select Top and View Data run
+straight away. `Script As EXECUTE` is the scaffold — an `EXEC` or `CALL` with
+one line per parameter, to edit before running — and `Run…` is the form.
 
 Generate CRUD is the one that has to be exactly right, and two details carry
 it. Identity, `serial`, computed and generated columns are left out of the

@@ -3,9 +3,10 @@ import { AttemptResult, ConnectionManager } from '../connections/connectionManag
 import { ConnectionStore, blankProfile, coerceLimits } from '../store/connectionStore';
 import { probeServer } from '../connections/probe';
 import { DraftPayload, EditorState, HostMessage, WebviewMessage } from '../shared/protocol';
-import { ConnectionProfile, DriverKind, FailureActionId, defaultPort } from '../types';
+import { ConnectionProfile, DriverKind, FailureActionId, defaultPort, errorMessage } from '../types';
+import { webviewHtml } from './webviewHtml';
 
-const VIEW_TYPE = 'databaseTools.connections';
+const VIEW_TYPE = 'databaseTools.connectionEditor';
 
 const CERT_DOCS = {
   mssql: 'https://learn.microsoft.com/sql/database-engine/configure-windows/certificate-requirements',
@@ -21,7 +22,8 @@ const CERT_DOCS = {
  * leaves nothing behind.
  */
 export class ConnectionsPanel {
-  private static current: ConnectionsPanel | undefined;
+  /** The one open editor, if any. */
+  static current: ConnectionsPanel | undefined;
 
   private static readonly selectionEmitter = new vscode.EventEmitter<string>();
   /**
@@ -102,13 +104,18 @@ export class ConnectionsPanel {
 
   private constructor(
     private readonly panel: vscode.WebviewPanel,
-    private readonly context: vscode.ExtensionContext,
+    context: vscode.ExtensionContext,
     private readonly store: ConnectionStore,
     private readonly manager: ConnectionManager,
     selectId?: string
   ) {
     this.selectedId = selectId ?? store.all()[0]?.id;
-    this.panel.webview.html = this.html();
+    this.panel.webview.html = webviewHtml(this.panel.webview, context.extensionUri, {
+      bundle: 'editor.js',
+      stylesheet: 'editor.css',
+      title: 'Connection',
+      view: 'editor'
+    });
 
     // The page takes a few hundred milliseconds to boot before it says `ready`,
     // and the answer it is then waiting on is a keychain read per connection.
@@ -125,7 +132,7 @@ export class ConnectionsPanel {
         // spinner of an attempt that is still running.
         void this.onMessage(message).catch((error) => {
           void vscode.window.showErrorMessage(
-            `The connection editor could not finish that: ${describe(error)}`
+            `The connection editor could not finish that: ${errorMessage(error)}`
           );
           void this.postState();
         });
@@ -272,9 +279,7 @@ export class ConnectionsPanel {
         await this.send({ type: 'patch', profileId: id, patch: { account } });
       }
     } catch (error) {
-      void vscode.window.showErrorMessage(
-        `Signing in failed: ${error instanceof Error ? error.message : String(error)}`
-      );
+      void vscode.window.showErrorMessage(`Signing in failed: ${errorMessage(error)}`);
     }
   }
 
@@ -322,10 +327,13 @@ export class ConnectionsPanel {
     await this.postState(true);
   }
 
-  /** True when the draft can be thrown away, either because it is untouched
-   * or because the user said so. */
-  private async mayLeaveDraft(): Promise<boolean> {
-    if (!this.pending || !this.dirty) {
+  /**
+   * True when the draft can be thrown away, either because it is untouched or
+   * because the user said so. `force` asks even for an untouched draft, which
+   * is what the header's Discard button means.
+   */
+  private async mayLeaveDraft(force = false): Promise<boolean> {
+    if (!this.pending || (!this.dirty && !force)) {
       return true;
     }
     const choice = await vscode.window.showWarningMessage(
@@ -442,9 +450,7 @@ export class ConnectionsPanel {
       const databases = await this.manager.listDatabases(effective, message.secret);
       await this.send({ type: 'databases', profileId: effective.id, databases });
     } catch (error) {
-      void vscode.window.showErrorMessage(
-        `The database list could not be read: ${error instanceof Error ? error.message : String(error)}`
-      );
+      void vscode.window.showErrorMessage(`The database list could not be read: ${errorMessage(error)}`);
     } finally {
       this.busy.delete(effective.id);
       await this.postState();
@@ -543,9 +549,21 @@ export class ConnectionsPanel {
     }
   }
 
+  /**
+   * The header's `⋯`. On a draft it is Discard; on a stored connection it is
+   * the two profile actions, run through the same commands the sidebar's
+   * right-click menu runs, so the confirmation wording and the clean-up after
+   * a delete cannot drift between the two doors.
+   */
   private async showMenu(id: string | undefined): Promise<void> {
     if (this.isPending(id)) {
-      await this.discardDraft();
+      if (await this.mayLeaveDraft(true)) {
+        this.results.delete(this.pending?.id ?? '');
+        this.pending = undefined;
+        this.dirty = false;
+        this.selectedId = this.store.all()[0]?.id;
+        await this.postState(true);
+      }
       return;
     }
     const profile = id ? this.store.get(id) : undefined;
@@ -554,66 +572,22 @@ export class ConnectionsPanel {
     }
     const pick = await vscode.window.showQuickPick(
       [
-        { label: '$(files) Duplicate', action: 'duplicate' },
-        { label: '$(trash) Delete', action: 'delete' }
+        { label: '$(files) Duplicate', command: 'databaseTools.duplicateConnection' },
+        { label: '$(trash) Delete', command: 'databaseTools.deleteConnection' }
       ],
       { title: profile.name, placeHolder: 'Choose an action' }
     );
-    if (!pick) {
-      return;
+    if (pick) {
+      await vscode.commands.executeCommand(pick.command, profile.id);
     }
-    if (pick.action === 'duplicate') {
-      const copy = await this.store.duplicate(profile.id);
-      if (copy) {
-        this.selectedId = copy.id;
-        await this.postState(true);
-      }
-      return;
-    }
-
-    const confirmed = await vscode.window.showWarningMessage(
-      `Delete ${profile.name}?`,
-      { modal: true, detail: 'The stored credential is removed from the keychain at the same time.' },
-      'Delete'
-    );
-    if (confirmed !== 'Delete') {
-      return;
-    }
-    await this.manager.disconnect(profile.id);
-    await this.store.remove(profile.id);
-    this.results.delete(profile.id);
-    if (this.selectedId === profile.id) {
-      this.selectedId = this.store.all()[0]?.id;
-    }
-    await this.postState(true);
   }
 
-  private async discardDraft(): Promise<void> {
-    const choice = await vscode.window.showWarningMessage(
-      'Discard this new connection?',
-      { modal: true, detail: 'It has never been saved, so nothing is removed from the list.' },
-      'Discard'
-    );
-    if (choice !== 'Discard') {
-      return;
-    }
-    this.results.delete(this.pending?.id ?? '');
-    this.pending = undefined;
-    this.dirty = false;
-    this.selectedId = this.store.all()[0]?.id;
-    await this.postState(true);
+  /** A profile that was deleted, by any door, takes its remembered result with it. */
+  forget(profileId: string): void {
+    this.results.delete(profileId);
   }
 
   /* --------------------------------------------------------------- state */
-
-  reveal(selectId?: string): void {
-    this.panel.reveal();
-    if (selectId) {
-      void this.select(selectId);
-      return;
-    }
-    void this.postState(true);
-  }
 
   private async postState(reload = false): Promise<void> {
     const profiles = this.store.all();
@@ -667,51 +641,4 @@ export class ConnectionsPanel {
     };
     await this.send({ type: 'state', ...state });
   }
-
-  private html(): string {
-    const webview = this.panel.webview;
-    const nonce = makeNonce();
-    const asset = (...parts: string[]) =>
-      webview.asWebviewUri(vscode.Uri.joinPath(this.context.extensionUri, 'dist', 'webview', ...parts));
-
-    // Everything the page needs ships with the extension. The policy allows no
-    // network at all: no remote script, no remote style, no remote font, and
-    // no connections of any kind from inside the page.
-    const csp = [
-      "default-src 'none'",
-      `img-src ${webview.cspSource} data:`,
-      `style-src ${webview.cspSource}`,
-      `font-src ${webview.cspSource}`,
-      `script-src 'nonce-${nonce}'`
-    ].join('; ');
-
-    return `<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="UTF-8">
-<meta http-equiv="Content-Security-Policy" content="${csp}">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<link href="${asset('codicon.css')}" rel="stylesheet">
-<link href="${asset('editor.css')}" rel="stylesheet">
-<title>Connection</title>
-</head>
-<body>
-<div id="root"></div>
-<script nonce="${nonce}" src="${asset('editor.js')}"></script>
-</body>
-</html>`;
-  }
-}
-
-function describe(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
-}
-
-function makeNonce(): string {
-  const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
-  let text = '';
-  for (let i = 0; i < 32; i++) {
-    text += alphabet.charAt(Math.floor(Math.random() * alphabet.length));
-  }
-  return text;
 }

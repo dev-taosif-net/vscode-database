@@ -2,6 +2,7 @@ import { DriverSession } from '../drivers/types';
 import { FavouriteRef } from '../shared/catalog';
 import { DependencyRef, Fact, IndexInfo, KeyColumns, Tag } from '../shared/details';
 import { DetailsQueries, ForeignKeyColumn } from './types';
+import { qualified as quoteQualified } from '../catalog/script';
 
 /**
  * SQL Server's answers, out of `sys.*`.
@@ -288,8 +289,9 @@ export class MssqlDetails implements DetailsQueries {
 
 /* ------------------------------------------------------------------ helpers */
 
+/** `OBJECT_ID` takes the bracketed two-part name. */
 function qualified(ref: FavouriteRef): string {
-  return `[${ref.schema.replace(/]/g, ']]')}].[${ref.name.replace(/]/g, ']]')}]`;
+  return quoteQualified('mssql', ref);
 }
 
 function toDependency(row: { sch: string; nm: string; kind: string; why: string }): DependencyRef {

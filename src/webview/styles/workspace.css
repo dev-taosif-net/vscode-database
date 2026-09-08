@@ -186,7 +186,6 @@ body {
 }
 
 .menu-list {
-  display: none;
   position: absolute;
   right: 0;
   top: 24px;
@@ -199,9 +198,8 @@ body {
   box-shadow: 0 4px 14px rgba(0, 0, 0, 0.4);
 }
 
-.menu:hover .menu-list,
-.menu:focus-within .menu-list {
-  display: block;
+.menu.is-open > .icon-btn {
+  background: var(--vscode-toolbar-hoverBackground, var(--hover));
 }
 
 .menu-list button {
@@ -218,8 +216,11 @@ body {
   cursor: pointer;
 }
 
-.menu-list button:hover {
+.menu-list button:hover,
+.menu-list button:focus-visible {
   background: var(--vscode-menu-selectionBackground, var(--hover));
+  color: var(--vscode-menu-selectionForeground, inherit);
+  outline: none;
 }
 
 .btn {
@@ -252,6 +253,11 @@ body {
 .btn:disabled {
   opacity: 0.5;
   cursor: default;
+}
+
+/* Still pressable, so the press can say what is missing; drawn as not-yet. */
+.btn[aria-disabled='true'] {
+  opacity: 0.7;
 }
 
 .key {
@@ -718,6 +724,20 @@ body {
   gap: 8px;
   margin-bottom: 5px;
   font-size: 12.5px;
+}
+
+.field-label label {
+  cursor: default;
+}
+
+.field.is-invalid .input {
+  border-color: var(--vscode-inputValidation-errorBorder, var(--vscode-errorForeground));
+}
+
+.field-problem {
+  margin: 4px 0 0;
+  font-size: 11px;
+  color: var(--vscode-errorForeground);
 }
 
 .req {

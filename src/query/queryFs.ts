@@ -2,7 +2,8 @@ import * as vscode from 'vscode';
 import { CatalogService } from '../catalog/catalogService';
 import { ConnectionStore } from '../store/connectionStore';
 import { FavouriteRef } from '../shared/catalog';
-import { OBJECT_SCHEME, QUERY_SCHEME, addressOf } from './bindingStore';
+import { errorMessage } from '../types';
+import { OBJECT_SCHEME, QUERY_SCHEME, addressOf, objectAddress, objectRefOf } from './bindingStore';
 
 /**
  * The file system behind `dbquery:` documents.
@@ -57,6 +58,22 @@ export class QueryFileSystem implements vscode.FileSystemProvider {
       label = `${base} ${++n}`;
     }
     return this.newQuery(profileId, label, content);
+  }
+
+  /**
+   * Opens a scratch query bound to a connection, in front of the user.
+   *
+   * Every object action ends here: a definition, a CRUD scaffold, a `SELECT
+   * TOP`, a dependency listing. Bound rather than untitled, because a bound
+   * tab has Run on its title bar and the connection in its status bar, and an
+   * untitled document has neither and is the first thing a person has to
+   * repair before the statement can be run.
+   */
+  async openScratch(profileId: string, name: string, content: string): Promise<vscode.TextDocument> {
+    const uri = this.uniqueQuery(profileId, name, content);
+    const document = await vscode.workspace.openTextDocument(uri);
+    await vscode.window.showTextDocument(document, { preview: false });
+    return document;
   }
 
   /* ------------------------------------------------- FileSystemProvider */
@@ -146,7 +163,7 @@ export class DefinitionProvider implements vscode.TextDocumentContentProvider {
   }
 
   static address(profileId: string, ref: FavouriteRef): vscode.Uri {
-    return addressOf(OBJECT_SCHEME, profileId, `${ref.kind}/${ref.schema}.${ref.name}.sql`);
+    return objectAddress(OBJECT_SCHEME, profileId, ref, '.sql');
   }
 
   refresh(uri: vscode.Uri): void {
@@ -155,18 +172,14 @@ export class DefinitionProvider implements vscode.TextDocumentContentProvider {
 
   async provideTextDocumentContent(uri: vscode.Uri): Promise<string> {
     const profileId = uri.authority;
-    const parts = decodeURIComponent(uri.path.replace(/^\//, '')).replace(/\.sql$/i, '').split('/');
-    const kind = parts[0] as FavouriteRef['kind'];
-    const label = parts[1] ?? '';
-    const dot = label.indexOf('.');
-    if (!this.store.get(profileId) || dot <= 0) {
+    const ref = objectRefOf(uri, 'table');
+    if (!this.store.get(profileId) || !ref) {
       return '-- That connection no longer exists.';
     }
-    const ref: FavouriteRef = { kind, schema: label.slice(0, dot), name: label.slice(dot + 1) };
     try {
       return await this.catalog.definition(profileId, ref);
     } catch (error) {
-      return `-- ${error instanceof Error ? error.message : String(error)}`;
+      return `-- ${errorMessage(error)}`;
     }
   }
 }

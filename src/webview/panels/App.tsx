@@ -2,6 +2,7 @@ import { useCallback, useState } from 'react';
 import { createStore, useStoreSelector } from '../state/store';
 import {
   DependencyRef,
+  DetailsAction,
   HistoryRow,
   ObjectDetails,
   PanelHostMessage,
@@ -202,18 +203,23 @@ function Action({
   label,
   kind
 }: {
-  id: string;
+  id: DetailsAction;
   icon: string;
   label: string;
   kind: string;
 }): JSX.Element | null {
   const relational = kind === 'table' || kind === 'view';
   const routine = kind === 'procedure' || kind === 'function';
-  if ((id === 'viewData' && !relational) || (id === 'run' && !routine) || (id === 'generateCrud' && kind !== 'table')) {
+  if (
+    (id === 'viewData' && !relational) ||
+    (id === 'run' && !routine) ||
+    (id === 'generateCrud' && kind !== 'table') ||
+    (id === 'scriptAlter' && !routine && kind !== 'view')
+  ) {
     return null;
   }
   return (
-    <button type="button" className="action" onClick={() => post({ type: 'action', action: id as never })}>
+    <button type="button" className="action" onClick={() => post({ type: 'action', action: id })}>
       <Codicon name={icon} />
       {label}
     </button>
@@ -308,7 +314,8 @@ function History(): JSX.Element {
         <button
           type="button"
           className="icon-btn"
-          title="Clear history"
+          title={filter ? 'Clear this connection\u2019s history' : 'Clear all history'}
+          aria-label={filter ? 'Clear this connection\u2019s history' : 'Clear all history'}
           onClick={() => post({ type: 'clearHistory', profileId: filter })}
         >
           <Codicon name="trash" />
@@ -333,7 +340,9 @@ function History(): JSX.Element {
                 <Codicon
                   name={entry.status === 'error' ? 'error' : entry.status === 'cancelled' ? 'circle-slash' : 'check'}
                 />
-                <span className="num">{new Date(entry.at).toLocaleTimeString()}</span>
+                <span className="num" title={new Date(entry.at).toLocaleString()}>
+                  {when(entry.at)}
+                </span>
                 {entry.status === 'error' ? (
                   <span className="entry-error">{entry.error}</span>
                 ) : (
@@ -397,4 +406,20 @@ function History(): JSX.Element {
 
 function formatMs(ms: number): string {
   return ms < 1000 ? `${Math.round(ms)} ms` : `${(ms / 1000).toFixed(1)} s`;
+}
+
+/**
+ * The time alone for today, the date as well for anything older. A history
+ * that showed `09:14` on an entry from last Tuesday read as this morning.
+ */
+function when(at: number): string {
+  const then = new Date(at);
+  const now = new Date();
+  const time = then.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
+  if (then.toDateString() === now.toDateString()) {
+    return time;
+  }
+  const sameYear = then.getFullYear() === now.getFullYear();
+  const date = then.toLocaleDateString(undefined, sameYear ? { month: 'short', day: 'numeric' } : undefined);
+  return `${date} ${time}`;
 }

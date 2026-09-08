@@ -1,6 +1,7 @@
 import { DbMember, FavouriteRef } from '../shared/catalog';
 import { RunnerControl, RunnerForm, RunnerParameter, RunnerValue } from '../shared/query';
 import { DriverKind } from '../types';
+import { qualified, quote } from '../catalog/script';
 
 /**
  * The execution form, generated from the parameter list the catalog already
@@ -91,7 +92,7 @@ export function buildCall(
   values: Record<string, RunnerValue>
 ): Call {
   const params: unknown[] = [];
-  const target = `${quote(driver, ref.schema)}.${quote(driver, ref.name)}`;
+  const target = qualified(driver, ref);
 
   const bind = (parameter: RunnerParameter): string => {
     const value = values[parameter.name];
@@ -153,8 +154,4 @@ export function buildCall(
 
 function withAt(name: string): string {
   return name.startsWith('@') ? name : `@${name}`;
-}
-
-function quote(driver: DriverKind, name: string): string {
-  return driver === 'mssql' ? `[${name.replace(/]/g, ']]')}]` : `"${name.replace(/"/g, '""')}"`;
 }

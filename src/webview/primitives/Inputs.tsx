@@ -1,6 +1,6 @@
 import { memo, useCallback } from 'react';
 import { ConnectionProfile } from '../../types';
-import { setField, useField, useUpdate } from '../state/editor';
+import { setField, touch, useField, useUpdate } from '../state/editor';
 import { Codicon } from './Codicon';
 import { useFieldAria } from './Field';
 
@@ -19,7 +19,8 @@ type BooleanKey = {
 /**
  * Every control below reads exactly one field out of the store, so typing in
  * one of them re-renders that control and the readings that quote it, and
- * nothing else on the page.
+ * nothing else on the page. Leaving a box marks it touched, which is what
+ * lets a problem with it be shown from then on.
  */
 
 interface TextProps {
@@ -51,6 +52,7 @@ export const TextInput = memo(function TextInput({
     },
     [field, update]
   );
+  const onBlur = useCallback(() => update((state) => touch(state, field)), [field, update]);
 
   return (
     <input
@@ -67,6 +69,7 @@ export const TextInput = memo(function TextInput({
       spellCheck={false}
       autoFocus={autoFocus}
       onChange={onChange}
+      onBlur={onBlur}
     />
   );
 });
@@ -95,15 +98,22 @@ export const NumberInput = memo(function NumberInput({
     (event: React.ChangeEvent<HTMLInputElement>) => {
       // An empty box stays empty; clearing one to retype it is the ordinary
       // way to change a number. What an empty box *means* is settled where the
-      // profile is read, not here.
+      // profile is read, not here. Anything that is not digits is refused
+      // rather than taken as NaN: a stray letter used to wipe the whole box.
       const raw = event.target.value.trim();
-      const next = raw === '' ? null : Number(raw);
-      update((state) =>
-        setField(state, field, (Number.isFinite(next) ? next : null) as ConnectionProfile[NumberKey])
-      );
+      if (raw === '') {
+        update((state) => setField(state, field, null as ConnectionProfile[NumberKey]));
+        return;
+      }
+      if (!/^\d+$/.test(raw)) {
+        return;
+      }
+      const next = Number(raw);
+      update((state) => setField(state, field, next as ConnectionProfile[NumberKey]));
     },
     [field, update]
   );
+  const onBlur = useCallback(() => update((state) => touch(state, field)), [field, update]);
 
   return (
     <input
@@ -119,6 +129,7 @@ export const NumberInput = memo(function NumberInput({
       aria-describedby={aria.describedBy}
       autoComplete="off"
       onChange={onChange}
+      onBlur={onBlur}
     />
   );
 });

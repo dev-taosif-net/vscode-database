@@ -1,19 +1,23 @@
-import { DriverKind, ENVIRONMENTS, EnvironmentId, environmentMeta } from '../../types';
-import { isNew, setField, useField, useSelect, useUpdate } from '../state/editor';
+import { DriverKind, ENVIRONMENTS, EnvironmentId, engineName, environmentMeta } from '../../types';
+import { isNew, setField, useField, useProblem, useSelect, useUpdate } from '../state/editor';
 import { Field } from '../primitives/Field';
 import { SelectInput, TextInput } from '../primitives/Inputs';
-import { EngineMark, engineName } from '../primitives/EngineMark';
+import { EngineMark } from '../primitives/EngineMark';
 import { IconSelect } from '../primitives/IconSelect';
 
 /**
  * The left column: what this connection is, and nothing about how to reach it.
  * Everything here is metadata, so it stays put while the right column changes.
+ *
+ * Only the name carries a required mark. The other two are selects that
+ * always hold a value, and an asterisk on a box that cannot be empty teaches
+ * the eye to skip the asterisks that matter.
  */
 export function IdentityPanel() {
-  const name = useField('name') ?? '';
   const environment = (useField('environment') ?? 'dev') as EnvironmentId;
   const driver = useField('driver') ?? 'mssql';
   const fresh = useSelect(isNew);
+  const nameProblem = useProblem('name');
   const update = useUpdate();
   const meta = environmentMeta(environment);
 
@@ -28,17 +32,17 @@ export function IdentityPanel() {
       </div>
 
       <div className="identity-body">
-        <Field label="Connection name" htmlFor="f-name" required>
+        <Field label="Connection name" htmlFor="f-name" required error={nameProblem}>
           <TextInput
             id="f-name"
             field="name"
             placeholder="Billing, production"
-            invalid={!name.trim()}
+            invalid={Boolean(nameProblem)}
             autoFocus={fresh}
           />
         </Field>
 
-        <Field label="Environment" htmlFor="f-env" required>
+        <Field label="Environment" htmlFor="f-env" hint={meta.guard}>
           <div className="row">
             <SelectInput
               id="f-env"
@@ -52,7 +56,7 @@ export function IdentityPanel() {
           </div>
         </Field>
 
-        <Field label="Server type" htmlFor="f-driver" required>
+        <Field label="Server type" htmlFor="f-driver">
           <IconSelect
             id="f-driver"
             value={driver}

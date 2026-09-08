@@ -108,6 +108,31 @@ export interface Driver {
   open(profile: ConnectionProfile, secrets: ConnectSecrets, signal?: AbortSignal): Promise<OpenResult>;
 }
 
+/** The shape `describeFailure` reads as a cancellation rather than a fault. */
+export function abortError(): Error {
+  const error = new Error('The connection attempt was cancelled.');
+  error.name = 'AbortError';
+  return error;
+}
+
+/**
+ * A driver property as typed in the editor, given the type the driver wants.
+ *
+ * The properties table is text, and `true`, `false` and `30000` have to reach
+ * the driver as a boolean and a number rather than as three strings it would
+ * refuse.
+ */
+export function coerceProperty(value: string): unknown {
+  if (value === 'true') {
+    return true;
+  }
+  if (value === 'false') {
+    return false;
+  }
+  const n = Number(value);
+  return value !== '' && Number.isFinite(n) ? n : value;
+}
+
 /**
  * Thrown by a driver when the attempt failed for a reason worth explaining.
  * `code` is the driver's own code where there is one, so the mapper in

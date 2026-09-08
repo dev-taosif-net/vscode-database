@@ -37,7 +37,7 @@ interface NoMatchProps {
 }
 
 /** The cursor id for the card, following the convention the headers use. */
-export const NOMATCH_ID = 'nomatch';
+const NOMATCH_ID = 'nomatch';
 
 /**
  * An empty scroller would read as "there is nothing here". There is; it is

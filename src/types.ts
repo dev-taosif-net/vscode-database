@@ -32,8 +32,12 @@ export type SslMode =
   | 'verify-ca'
   | 'verify-full';
 
-/** Where the credential for a profile is kept, if anywhere. */
-export type CredentialStore = 'secret' | 'prompt' | 'none';
+/**
+ * Where the credential for a profile is kept. `prompt` asks on every attempt
+ * and stores nothing; there is no third value because "do not keep it" and
+ * "ask every time" were two names for the same behaviour.
+ */
+export type CredentialStore = 'secret' | 'prompt';
 
 export interface ConnectionProfile {
   id: string;
@@ -76,13 +80,6 @@ export interface ConnectionProfile {
   /** Ask for the credential again when a stored one is rejected. */
   repromptOnReject: boolean;
 
-  /** SSH tunnelling is designed but not implemented in phase 1. */
-  sshEnabled: boolean;
-  sshHost: string;
-  sshPort: number | null;
-  sshUser: string;
-  sshKeyPath: string;
-
   connectTimeoutSeconds: number;
   queryTimeoutSeconds: number;
   applicationName: string;
@@ -90,8 +87,6 @@ export interface ConnectionProfile {
 
   /** Open new sessions read-only. Defaults to true for `prod`. */
   readOnly: boolean;
-  /** SQL Server only. */
-  multipleActiveResultSets: boolean;
   /** SQL Server only. */
   multiSubnetFailover: boolean;
   /** PostgreSQL only. */
@@ -191,7 +186,21 @@ export function environmentMeta(id: EnvironmentId): EnvironmentMeta {
 }
 
 export function environmentLabel(id: EnvironmentId): string {
-  return ENVIRONMENTS.find((e) => e.id === id)?.label ?? 'Development';
+  return environmentMeta(id).label;
+}
+
+export function engineName(driver: DriverKind): string {
+  return driver === 'mssql' ? 'Microsoft SQL Server' : 'PostgreSQL';
+}
+
+/** The message a thrown value carries, whatever it was. */
+export function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
+/** The first line of a message, for a row or a strip with room for one. */
+export function firstLine(text: string, fallback = 'The server did not answer.'): string {
+  return text.split(/\r?\n/)[0].trim() || fallback;
 }
 
 export function defaultPort(driver: DriverKind): number {
@@ -210,7 +219,15 @@ export function needsSecret(profile: ConnectionProfile): boolean {
   return profile.pgAuth === 'password';
 }
 
-/** True when the profile carries a user name the driver will send. */
+/**
+ * True when the driver cannot log in without a user name.
+ *
+ * Entra signs in through the account provider, and a PostgreSQL `trust` or
+ * `peer` login falls back to the operating system user, so neither requires
+ * one. A PostgreSQL profile without a credential may still *carry* a role
+ * name, which is why the editor shows the box as optional there rather than
+ * hiding it.
+ */
 export function needsUser(profile: ConnectionProfile): boolean {
   if (profile.driver === 'mssql') {
     return profile.mssqlAuth !== 'entra-mfa';

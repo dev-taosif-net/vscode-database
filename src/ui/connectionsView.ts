@@ -12,7 +12,8 @@ import {
   SortOrder
 } from '../shared/sidebar';
 import { FavouriteRef, ObjectPageRequest } from '../shared/catalog';
-import { ConnectionProfile, ENVIRONMENTS, EnvironmentId } from '../types';
+import { ConnectionProfile, ENVIRONMENTS, EnvironmentId, errorMessage, firstLine } from '../types';
+import { webviewHtml } from './webviewHtml';
 
 const GROUPED_KEY = 'databaseTools.view.grouped';
 const COLLAPSED_KEY = 'databaseTools.view.collapsed';
@@ -102,7 +103,12 @@ export class ConnectionsView implements vscode.WebviewViewProvider, vscode.Dispo
       enableScripts: true,
       localResourceRoots: [vscode.Uri.joinPath(this.context.extensionUri, 'dist', 'webview')]
     };
-    view.webview.html = this.html(view.webview);
+    view.webview.html = webviewHtml(view.webview, this.context.extensionUri, {
+      bundle: 'sidebar.js',
+      stylesheet: 'sidebar.css',
+      title: 'Database Connections',
+      view: 'sidebar'
+    });
 
     // A view is resolved again when it is dragged to another container, so the
     // previous subscriptions are dropped rather than stacked.
@@ -219,7 +225,7 @@ export class ConnectionsView implements vscode.WebviewViewProvider, vscode.Dispo
       const summary = await this.catalog.summary(profileId);
       await this.send({ type: 'catalog', profileId, summary });
     } catch (error) {
-      await this.send({ type: 'catalogError', profileId, message: reason(error) });
+      await this.send({ type: 'catalogError', profileId, message: firstLine(errorMessage(error)) });
     }
   }
 
@@ -232,7 +238,7 @@ export class ConnectionsView implements vscode.WebviewViewProvider, vscode.Dispo
         type: 'nodeError',
         profileId: request.profileId,
         node: request.node,
-        message: reason(error)
+        message: firstLine(errorMessage(error))
       });
     }
   }
@@ -246,7 +252,7 @@ export class ConnectionsView implements vscode.WebviewViewProvider, vscode.Dispo
       const members = await this.catalog.members(profileId, ref);
       await this.send({ type: 'members', profileId, node, members });
     } catch (error) {
-      await this.send({ type: 'nodeError', profileId, node, message: reason(error) });
+      await this.send({ type: 'nodeError', profileId, node, message: firstLine(errorMessage(error)) });
     }
   }
 
@@ -323,12 +329,17 @@ export class ConnectionsView implements vscode.WebviewViewProvider, vscode.Dispo
   }
 
   /**
-   * Redraws, and forgets every remembered failure. It forgets them; it does not
-   * retry anything, so a row that has gone quiet is a row nobody has tried
-   * since — not a row that has just succeeded.
+   * The title bar's Refresh: redraws, forgets every remembered failure, and
+   * forgets every cached catalog so each open folder is read again.
+   *
+   * It forgets and does not retry, so a row that has gone quiet is a row
+   * nobody has tried since — not a row that has just succeeded. The catalog
+   * half is what a person pressing Refresh on an explorer means: the tree asks
+   * again for whatever is on screen and nothing else is fetched.
    */
   async refresh(): Promise<void> {
     this.manager.clearFailures();
+    this.catalog.invalidate();
     await this.postState();
   }
 
@@ -461,8 +472,6 @@ export class ConnectionsView implements vscode.WebviewViewProvider, vscode.Dispo
         ? { value: open, tooltip: open === 1 ? '1 open connection' : `${open} open connections` }
         : undefined;
     this.view.description = this.filtered ? `${this.matched} of ${total}` : describe(total, open);
-
-    void vscode.commands.executeCommand('setContext', 'databaseTools.hasActiveConnection', open > 0);
   }
 
   /**
@@ -513,40 +522,6 @@ export class ConnectionsView implements vscode.WebviewViewProvider, vscode.Dispo
     }
     return failure ? 'failed' : 'saved';
   }
-
-  /* ---------------------------------------------------------------- html */
-
-  private html(webview: vscode.Webview): string {
-    const nonce = makeNonce();
-    const asset = (...parts: string[]) =>
-      webview.asWebviewUri(vscode.Uri.joinPath(this.context.extensionUri, 'dist', 'webview', ...parts));
-
-    // The same policy the editor runs under: no network at all. Everything the
-    // panel needs ships with the extension.
-    const csp = [
-      "default-src 'none'",
-      `img-src ${webview.cspSource} data:`,
-      `style-src ${webview.cspSource}`,
-      `font-src ${webview.cspSource}`,
-      `script-src 'nonce-${nonce}'`
-    ].join('; ');
-
-    return `<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="UTF-8">
-<meta http-equiv="Content-Security-Policy" content="${csp}">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<link href="${asset('codicon.css')}" rel="stylesheet">
-<link href="${asset('sidebar.css')}" rel="stylesheet">
-<title>Database Connections</title>
-</head>
-<body>
-<div id="root"></div>
-<script nonce="${nonce}" src="${asset('sidebar.js')}"></script>
-</body>
-</html>`;
-  }
 }
 
 /**
@@ -578,25 +553,6 @@ function describe(total: number, open: number): string {
   return open > 0 ? `${total} · ${open} open` : String(total);
 }
 
-/**
- * A failure as a row can say it: one sentence, no stack, no driver preamble.
- * The output channel already has the whole thing; a tree row has forty
- * characters.
- */
-function reason(error: unknown): string {
-  const message = error instanceof Error ? error.message : String(error);
-  return message.split(/\r?\n/)[0].trim() || 'The server did not answer.';
-}
-
 function coerceSort(value: string | undefined): SortOrder {
   return value === 'name' || value === 'recent' ? value : 'environment';
-}
-
-function makeNonce(): string {
-  const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
-  let text = '';
-  for (let i = 0; i < 32; i++) {
-    text += alphabet.charAt(Math.floor(Math.random() * alphabet.length));
-  }
-  return text;
 }

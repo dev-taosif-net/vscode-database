@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import { BindingStore } from '../bindingStore';
+import { BindingStore, OBJECT_SCHEME, objectAddress } from '../bindingStore';
 import { ConnectionStore } from '../../store/connectionStore';
 import { DbMember, KINDS, ObjectKind } from '../../shared/catalog';
 import { fuzzy } from '../../shared/fuzzy';
@@ -123,7 +123,7 @@ export class SqlLanguageProviders implements vscode.Disposable {
       this.schemas(items, index, context);
       this.objects(items, index, context, profile.driver);
     } else {
-      await this.columnsInScope(items, profileId, index, context);
+      await this.columnsInScope(items, profileId, context, profile.driver);
       this.aliases(items, context);
       this.objects(items, index, context, profile.driver);
     }
@@ -204,8 +204,8 @@ export class SqlLanguageProviders implements vscode.Disposable {
   private async columnsInScope(
     items: vscode.CompletionItem[],
     profileId: string,
-    index: Indexed,
-    context: SqlContext
+    context: SqlContext,
+    driver: DriverKind
   ): Promise<void> {
     // Only the relations actually named in this statement. Offering every
     // column in the database would be a list nobody can read, ranked by a
@@ -216,13 +216,12 @@ export class SqlLanguageProviders implements vscode.Disposable {
       for (const column of columns) {
         const item = columnItem(column, BAND.column, context.prefix);
         if (prefix) {
-          item.insertText = `${prefix}${quoteIfNeeded(column.name, index)}`;
+          item.insertText = `${prefix}${quote(driver, column.name)}`;
           item.detail = `${column.type} · ${relation.as}`;
         }
         items.push(item);
       }
     }
-    void index;
   }
 
   private aliases(items: vscode.CompletionItem[], context: SqlContext): void {
@@ -393,11 +392,7 @@ export class SqlLanguageProviders implements vscode.Disposable {
     }
     // The scripted definition, read-only, at `dbobj:` — resolved lazily by its
     // content provider, so this costs nothing until somebody presses F12.
-    const uri = vscode.Uri.from({
-      scheme: 'dbobj',
-      authority: profileId,
-      path: `/${object.kind}/${object.schema}.${object.name}.sql`
-    });
+    const uri = objectAddress(OBJECT_SCHEME, profileId, object);
     return new vscode.Location(uri, new vscode.Position(0, 0));
   }
 }
@@ -481,11 +476,6 @@ function quote(driver: DriverKind, name: string): string {
     return name;
   }
   return driver === 'mssql' ? `[${name.replace(/]/g, ']]')}]` : `"${name.replace(/"/g, '""')}"`;
-}
-
-function quoteIfNeeded(name: string, index: Indexed): string {
-  void index;
-  return /^[A-Za-z_][A-Za-z0-9_]*$/.test(name) && !RESERVED.has(name.toUpperCase()) ? name : `"${name}"`;
 }
 
 /**

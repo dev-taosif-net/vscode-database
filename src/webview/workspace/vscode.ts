@@ -16,29 +16,19 @@ export function post(message: QueryWebviewMessage): void {
 }
 
 /**
- * The three things that live in the page and only three: scroll offset, column
- * widths and the current selection.
- *
- * All three are per tab and all three survive the webview being disposed under
- * the budget and rebuilt, which is what makes disposal invisible. Everything
- * else — which set is showing, the sort, the filter, the row window — is host
- * state, because every one of those changes what the host has to fetch.
+ * The one thing the page persists: its own address, read back by the
+ * serializer after a window reload. Everything else — which set is showing,
+ * the sort, the filter, the row window — is host state, because every one of
+ * those changes what the host has to fetch, and a page that holds nothing is
+ * a page that is free to rebuild.
  */
-export interface PersistedGrid {
-  widths?: Record<string, number[]>;
-  scrollTop?: Record<string, number>;
-  tab?: 'results' | 'messages' | 'plan';
-  /** The tab's own address, read back by the serializer after a reload. */
+interface PersistedGrid {
   uri?: string;
 }
 
-export function readPersisted(): PersistedGrid {
+function readPersisted(): PersistedGrid {
   const state = api.getState();
   return state && typeof state === 'object' ? (state as PersistedGrid) : {};
-}
-
-export function writePersisted(next: PersistedGrid): void {
-  api.setState({ ...readPersisted(), ...next });
 }
 
 /** The surface this bundle was mounted as, from the page rather than a message. */

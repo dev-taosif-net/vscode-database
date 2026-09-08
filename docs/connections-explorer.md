@@ -985,7 +985,7 @@ src/webview/
                                   scrollTop and expansion, the two things the
                                   panel persists for itself
     state.ts                      listStore, sessionStore, cursorStore,
-                                  catalogStore, expandedStore, hitsStore, the
+                                  catalogStore, expandedStore, countsStore, the
                                   four stable-selector hooks and the loader
     model.ts                      H, FlatItem, heightOf, measure, indexAt,
                                   parentOf, matchRow, compare, flatten, Want

@@ -235,11 +235,6 @@ export class ConnectionStore {
     return this.objectPins[id] ?? [];
   }
 
-  isObjectFavourite(id: string, ref: FavouriteRef): boolean {
-    const key = favouriteKey(ref);
-    return (this.objectPins[id] ?? []).some((held) => favouriteKey(held) === key);
-  }
-
   /**
    * Pins or unpins one object.
    *
@@ -393,17 +388,11 @@ export function blankProfile(seed: Partial<ConnectionProfile> = {}): ConnectionP
     // cannot open a live session on its own.
     credentialStore: seed.credentialStore ?? (environment === 'prod' ? 'prompt' : 'secret'),
     repromptOnReject: seed.repromptOnReject ?? true,
-    sshEnabled: seed.sshEnabled ?? false,
-    sshHost: seed.sshHost ?? '',
-    sshPort: seed.sshPort ?? 22,
-    sshUser: seed.sshUser ?? '',
-    sshKeyPath: seed.sshKeyPath ?? '',
     connectTimeoutSeconds: seed.connectTimeoutSeconds ?? config.get<number>('connectTimeout', 15),
     queryTimeoutSeconds: seed.queryTimeoutSeconds ?? 30,
     applicationName: seed.applicationName ?? 'VS Code Database Tools',
     rowsPerFetch: seed.rowsPerFetch ?? config.get<number>('rowsPerFetch', 1000),
     readOnly: seed.readOnly ?? environment === 'prod',
-    multipleActiveResultSets: seed.multipleActiveResultSets ?? false,
     multiSubnetFailover: seed.multiSubnetFailover ?? false,
     searchPath: seed.searchPath ?? 'public',
     properties: seed.properties ?? [],
@@ -412,11 +401,6 @@ export function blankProfile(seed: Partial<ConnectionProfile> = {}): ConnectionP
   });
 }
 
-/**
- * Brings a profile up to the current shape. Older stored profiles, and patches
- * arriving from the webview, both pass through here, so every consumer can
- * assume the fields exist and the numbers are numbers.
- */
 /**
  * The three numeric limits, brought into range and no more.
  *
@@ -435,6 +419,12 @@ export function coerceLimits(input: ConnectionProfile): ConnectionProfile {
   };
 }
 
+/**
+ * Brings a profile up to the current shape. Older stored profiles, and patches
+ * arriving from the webview, both pass through here, so every consumer can
+ * assume the fields exist and the numbers are numbers. A field this version no
+ * longer has survives the spread untouched, so a downgrade loses nothing.
+ */
 export function normalise(input: ConnectionProfile): ConnectionProfile {
   const driver: DriverKind = input.driver === 'postgres' ? 'postgres' : 'mssql';
   const port = coercePort(input.port);
@@ -442,6 +432,8 @@ export function normalise(input: ConnectionProfile): ConnectionProfile {
     ...input,
     driver,
     environment: coerceEnvironment(input.environment),
+    // Profiles written before `none` was folded into `prompt` still carry it.
+    credentialStore: input.credentialStore === 'secret' ? 'secret' : 'prompt',
     name: (input.name ?? '').toString(),
     host: (input.host ?? '').toString().trim(),
     port,
@@ -454,8 +446,7 @@ export function normalise(input: ConnectionProfile): ConnectionProfile {
       : [],
     connectTimeoutSeconds: clamp(input.connectTimeoutSeconds, 1, 600, 15),
     queryTimeoutSeconds: clamp(input.queryTimeoutSeconds, 0, 86400, 30, 0),
-    rowsPerFetch: clamp(input.rowsPerFetch, 50, 100000, 1000),
-    sshPort: input.sshEnabled ? coercePort(input.sshPort) ?? 22 : input.sshPort ?? 22
+    rowsPerFetch: clamp(input.rowsPerFetch, 50, 100000, 1000)
   };
 }
 

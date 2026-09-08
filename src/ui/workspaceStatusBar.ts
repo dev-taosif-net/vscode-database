@@ -30,6 +30,8 @@ export class WorkspaceStatusBar implements vscode.Disposable {
   private readonly connection: vscode.StatusBarItem;
   private readonly result: vscode.StatusBarItem;
   private readonly disposables: vscode.Disposable[] = [];
+  /** The last values written, so a progress tick does not rewrite two keys. */
+  private keys = { sqlTab: undefined as boolean | undefined, running: undefined as boolean | undefined };
 
   constructor(
     private readonly store: ConnectionStore,
@@ -60,6 +62,14 @@ export class WorkspaceStatusBar implements vscode.Disposable {
     }
   }
 
+  private setKey(key: 'sqlTab' | 'running', value: boolean): void {
+    if (this.keys[key] === value) {
+      return;
+    }
+    this.keys[key] = value;
+    void vscode.commands.executeCommand('setContext', `databaseTools.${key}`, value);
+  }
+
   render(): void {
     const tab = this.active.value;
     const record = tab ? this.results.latestFor(tab) : undefined;
@@ -72,12 +82,8 @@ export class WorkspaceStatusBar implements vscode.Disposable {
      * window — including in an unbound `.sql` file, where Find in Files must
      * keep meaning Find in Files. `running` is what swaps Run for Cancel.
      */
-    void vscode.commands.executeCommand('setContext', 'databaseTools.sqlTab', Boolean(tab));
-    void vscode.commands.executeCommand(
-      'setContext',
-      'databaseTools.running',
-      record?.status === 'running'
-    );
+    this.setKey('sqlTab', Boolean(tab));
+    this.setKey('running', record?.status === 'running');
 
     if (!tab) {
       this.connection.hide();

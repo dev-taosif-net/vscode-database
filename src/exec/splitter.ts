@@ -118,8 +118,15 @@ function skipQuoted(text: string, i: number): Scan | null {
   return null;
 }
 
+/**
+ * A `GO` line: the word alone, an optional repeat count, an optional trailing
+ * comment. Anchored to a line start by the callers, which is the only place a
+ * batch separator is one.
+ */
+const GO_LINE = /^[ \t]*(?:GO|go|Go|gO)(?:[ \t]+\d+)?[ \t]*(?:--[^\n]*)?(\r?\n|$)/;
+
 /** Zero-based line of an offset. */
-export function lineOf(text: string, offset: number): number {
+function lineOf(text: string, offset: number): number {
   let line = 0;
   for (let i = 0; i < offset && i < text.length; i++) {
     if (text[i] === '\n') {
@@ -164,8 +171,7 @@ export function splitBatches(text: string, driver: DriverKind): Batch[] {
     }
 
     if (atLineStart) {
-      const rest = text.slice(i);
-      const go = /^[ \t]*(?:GO|go|Go|gO)(?:[ \t]+\d+)?[ \t]*(?:--[^\n]*)?(\r?\n|$)/.exec(rest);
+      const go = GO_LINE.exec(text.slice(i));
       if (go) {
         push(i);
         i += go[0].length;
@@ -204,7 +210,7 @@ export function statementAt(text: string, offset: number, driver: DriverKind): B
     if (text[i] === ';') {
       bounds.push(i + 1);
     } else if (driver === 'mssql' && atLineStart) {
-      const go = /^[ \t]*(?:GO|go|Go|gO)(?:[ \t]+\d+)?[ \t]*(?:--[^\n]*)?(\r?\n|$)/.exec(text.slice(i));
+      const go = GO_LINE.exec(text.slice(i));
       if (go) {
         bounds.push(i);
         bounds.push(i + go[0].length);

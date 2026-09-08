@@ -122,17 +122,6 @@ export class CatalogService implements vscode.Disposable {
     return PAGE;
   }
 
-  /**
-   * True when this profile has a session the catalog can read through.
-   *
-   * The tree asks before it draws a twistie, because a connection that is
-   * merely saved has no catalog and offering to expand it would be an
-   * invitation to a spinner that never resolves.
-   */
-  isReadable(profileId: string): boolean {
-    return this.manager.isConnected(profileId);
-  }
-
   async summary(profileId: string): Promise<CatalogSummary> {
     const cached = this.summaries.get(profileId);
     if (cached && Date.now() - cached.at < TTL_MS) {
@@ -242,11 +231,6 @@ export class CatalogService implements vscode.Disposable {
   async definition(profileId: string, ref: FavouriteRef): Promise<string> {
     const { session, engine } = this.resolve(profileId);
     return engine.definition(session, ref);
-  }
-
-  /** The columns of a table or view, for Select and Generate CRUD. */
-  async columns(profileId: string, ref: FavouriteRef): Promise<DbMember[]> {
-    return this.members(profileId, ref);
   }
 
   /**

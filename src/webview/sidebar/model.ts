@@ -72,7 +72,7 @@ const HAS_MEMBERS: ReadonlySet<ObjectKind> = new Set<ObjectKind>([
 
 /* ----------------------------------------------------------- the catalogue */
 
-export interface CatalogNode {
+interface CatalogNode {
   objects: DbObject[];
   total: number;
   error?: string;
@@ -101,7 +101,7 @@ export const EMPTY_CATALOG: ConnectionCatalog = {
 
 /* ------------------------------------------------------------------ items */
 
-export type NoteTone = 'loading' | 'empty' | 'error' | 'more';
+type NoteTone = 'loading' | 'empty' | 'error' | 'more';
 
 /**
  * Every kind of thing the list can draw, positioned.
@@ -257,12 +257,20 @@ export interface Geometry {
   owner: Int32Array;
   /** Every header index, ascending. */
   headers: number[];
+  /**
+   * Cursor id to flat index. The cursor moves on every arrow key and `reveal`
+   * arrives on every selection, and a linear scan of a folder holding fifty
+   * thousand objects on each of those is the difference between a keypress and
+   * a pause.
+   */
+  index: Map<string, number>;
 }
 
 export function measure(items: FlatItem[]): Geometry {
   const offsets = new Int32Array(items.length + 1);
   const owner = new Int32Array(items.length);
   const headers: number[] = [];
+  const index = new Map<string, number>();
   let current = -1;
   for (let i = 0; i < items.length; i++) {
     offsets[i + 1] = offsets[i] + heightOf(items[i]);
@@ -271,8 +279,9 @@ export function measure(items: FlatItem[]): Geometry {
       headers.push(i);
     }
     owner[i] = current;
+    index.set(keyOf(items[i]), i);
   }
-  return { items, offsets, owner, headers };
+  return { items, offsets, owner, headers, index };
 }
 
 /** The index of the item containing `y`, clamped to the last item. */
@@ -331,7 +340,7 @@ export function depthOf(item: FlatItem): number {
 
 /* --------------------------------------------------------------- matching */
 
-export type MatchField = 'name' | 'host' | 'database';
+type MatchField = 'name' | 'host' | 'database';
 
 /** Null means the row is filtered out. An empty array means there is no query. */
 export function matchRow(row: ConnectionRow, needle: string): MatchField[] | null {
@@ -377,7 +386,7 @@ export type Want =
   | { what: 'node'; profileId: string; node: string; kind: ObjectKind; schema?: string; offset: number }
   | { what: 'members'; profileId: string; node: string; ref: FavouriteRef };
 
-export interface FlattenInput {
+interface FlattenInput {
   rows: ConnectionRow[];
   grouped: boolean;
   sort: SortOrder;
@@ -390,7 +399,7 @@ export interface FlattenInput {
   expanded: ReadonlySet<string>;
 }
 
-export interface Flattened {
+interface Flattened {
   items: FlatItem[];
   matches: Map<string, MatchField[]>;
   matched: number;

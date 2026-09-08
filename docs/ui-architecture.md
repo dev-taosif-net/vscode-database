@@ -127,9 +127,29 @@ summary line and the probe strip, and nothing else.
 
 `AppState` holds the host's last message, the draft being edited, the baseline
 the draft is compared against, the typed password kept apart from the profile,
-and the editor's own preferences. Transitions are plain functions
-(`applyHostMessage`, `setField`, `setMethod`, `toggleGroup`) with no React in
-them, which is what makes them testable on their own.
+which boxes the user has been in, and the editor's own preferences. Transitions
+are plain functions (`applyHostMessage`, `setField`, `touch`, `setMethod`,
+`toggleGroup`) with no React in them, which is what makes them testable on
+their own.
+
+## Validation
+
+`problems(state)` is the one place the required fields are written down, and
+the rules are the drivers' rather than guesses: a SQL Server login and an NTLM
+login both hand tedious a user name and a password; Entra hands it a token and
+needs neither; node-postgres logs a `trust` or `peer` role in with no
+credential; a certificate login has to read both halves of the key pair. A
+password is only required while the profile keeps its credential in the
+keychain and the keychain has none yet — a profile that asks every time will
+ask. The NTLM domain is optional because the driver takes an empty one.
+
+A problem is shown under its box once the user has left the box, or at once on
+a stored connection that was opened incomplete; a brand new draft opens quiet.
+The summary strip says "Missing" beside the fact it belongs to at all times,
+and announces the whole list politely for a screen reader. Save needs a name
+and an address; Test and Connect need everything, and a disabled button says
+what is still needed in its tooltip. A shortcut on an unfinished draft shows
+every problem rather than doing nothing.
 
 Which method is showing and which advanced groups are open persist through
 `vscode.setState`, so they survive a reload of the tab.
@@ -156,7 +176,9 @@ fetch.
 - Live readings, the probe strip and the result strip, are polite live regions;
   a failure is an alert.
 - Every control has a name, either a `label` or an `aria-label`. Required
-  fields are marked in the label, not by colour.
+  fields carry a red asterisk in the label *and* `aria-required` on the
+  control, so the fact survives both a monochrome screen and a screen reader.
+  A problem is a `role="alert"` under the box and `aria-invalid` on it.
 - Decorative icons are `aria-hidden`; an icon carrying meaning has a label.
 - `prefers-reduced-motion` removes every transition.
 

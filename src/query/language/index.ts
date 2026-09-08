@@ -163,7 +163,7 @@ export class MetadataIndex implements vscode.Disposable {
       return [];
     }
     try {
-      const columns = await this.catalog.columns(profileId, {
+      const columns = await this.catalog.members(profileId, {
         kind: object.kind,
         schema: object.schema,
         name: object.name

@@ -1,6 +1,7 @@
 import { CellValue, ColumnMeta, isTagged } from '../shared/query';
 import { FavouriteRef } from '../shared/catalog';
 import { DriverKind } from '../types';
+import { qualified, quote } from '../catalog/script';
 
 export interface PageArgs {
   ref: FavouriteRef;
@@ -44,7 +45,7 @@ export function selectPage(driver: DriverKind, args: PageArgs): PageSql {
   const params: unknown[] = [];
   const placeholder = () => (driver === 'mssql' ? `@p${params.length - 1}` : `$${params.length}`);
 
-  const target = `${quote(driver, args.ref.schema)}.${quote(driver, args.ref.name)}`;
+  const target = qualified(driver, args.ref);
   const where: string[] = [];
 
   if (args.filter?.trim()) {
@@ -160,8 +161,4 @@ function toParam(value: CellValue | undefined): unknown {
     return null;
   }
   return isTagged(value) ? value.v : value;
-}
-
-function quote(driver: DriverKind, name: string): string {
-  return driver === 'mssql' ? `[${name.replace(/]/g, ']]')}]` : `"${name.replace(/"/g, '""')}"`;
 }

@@ -1,18 +1,8 @@
 import { useEffect } from 'react';
 import { HostMessage } from '../shared/protocol';
-import {
-  AppState,
-  applyHostMessage,
-  effective,
-  isDirty,
-  isValid,
-  setMethod,
-  useSelect,
-  useStore,
-  useUpdate
-} from './state/editor';
+import { AppState, applyHostMessage, effective, isDirty, setMethod, useSelect, useStore, useUpdate } from './state/editor';
 import { post } from './state/vscode';
-import { commitPastedString, payloadOf, ActionBar } from './components/ActionBar';
+import { ActionBar, send } from './components/ActionBar';
 import { AdvancedGroups } from './components/AdvancedGroups';
 import { AuthSection } from './components/AuthSection';
 import { ConnectionStringPanel } from './components/ConnectionStringPanel';
@@ -159,34 +149,18 @@ function useShortcuts(): void {
         post({ type: 'cancel', id: current.draft.id });
         return;
       }
-      const shortcut =
-        (mod && event.key === 'Enter') ||
-        (mod && event.key.toLowerCase() === 's') ||
-        (event.altKey && event.key.toLowerCase() === 't');
-      if (!shortcut || !isValid(effective(current))) {
-        return;
-      }
-
-      // The shortcuts reach the same three actions as the footer, so a pasted
-      // string has to be laid over the draft here too.
-      const state = commitPastedString(store);
-      const payload = payloadOf(state);
-      if (!payload) {
-        return;
-      }
+      // The shortcuts reach the same three actions as the footer, through the
+      // same door, so a pasted string is laid over the draft here too and an
+      // unfinished draft shows its gaps rather than ignoring the key.
       if (mod && event.key === 'Enter') {
         event.preventDefault();
-        if (state.draft?.environment === 'prod') {
-          store.setState((next) => ({ ...next, confirming: true }));
-        } else {
-          post({ type: 'connect', ...payload });
-        }
+        send(store, 'connect');
       } else if (mod && event.key.toLowerCase() === 's') {
         event.preventDefault();
-        post({ type: 'save', ...payload });
-      } else {
+        send(store, 'save');
+      } else if (event.altKey && event.key.toLowerCase() === 't') {
         event.preventDefault();
-        post({ type: 'test', ...payload });
+        send(store, 'test');
       }
     };
     window.addEventListener('keydown', onKey);

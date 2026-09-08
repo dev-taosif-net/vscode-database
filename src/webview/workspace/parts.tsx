@@ -3,7 +3,7 @@ import { Codicon } from '../primitives/Codicon';
 import { cellText } from '../../shared/query';
 
 /** How long something took, in the unit a person would say it in. */
-export function duration(ms: number): string {
+function duration(ms: number): string {
   if (ms < 1000) {
     return `${Math.round(ms)} ms`;
   }

@@ -3,7 +3,7 @@ import { ConnectionStore } from '../store/connectionStore';
 import { MssqlDriver } from '../drivers/mssql';
 import { PostgresDriver } from '../drivers/postgres';
 import { describeFailure } from '../drivers/errors';
-import { ConnectSecrets, Driver, DriverSession } from '../drivers/types';
+import { ConnectSecrets, Driver, DriverSession, abortError } from '../drivers/types';
 import {
   ConnectionFailure,
   ConnectionInfo,
@@ -72,8 +72,10 @@ export class ConnectionManager implements vscode.Disposable {
   ) {}
 
   dispose(): void {
-    void this.disconnectAll();
+    // The emitter goes first: a listener that hears about sessions closing
+    // during deactivation would be told to redraw a window that is going away.
     this.onDidChangeEmitter.dispose();
+    void this.disconnectAll();
   }
 
   /** Why the last attempt failed, for as long as nothing has succeeded since. */
@@ -191,9 +193,16 @@ export class ConnectionManager implements vscode.Disposable {
       return;
     }
     this.active.delete(profileId);
-    await entry.session.close();
-    this.output.info(`Disconnected ${profileId}`);
-    this.onDidChangeEmitter.fire();
+    try {
+      await entry.session.close();
+    } catch (error) {
+      // The socket is gone either way. What must not be lost is the event: a
+      // close that threw used to leave the row drawn as connected.
+      this.output.warn(`Closing ${profileId}: ${error instanceof Error ? error.message : String(error)}`);
+    } finally {
+      this.output.info(`Disconnected ${profileId}`);
+      this.onDidChangeEmitter.fire();
+    }
   }
 
   async disconnectAll(): Promise<void> {
@@ -240,7 +249,7 @@ export class ConnectionManager implements vscode.Disposable {
     try {
       const driver = this.driverFor(profile);
       const secrets = await this.resolveSecrets(profile, true, secretOverride);
-      const opened = await driver.open(profile, secrets, controller.signal);
+      const opened = await this.openWithReprompt(driver, profile, secrets, controller.signal, secretOverride);
 
       // A cancel that lands while the server is answering still opens a
       // session, and a driver is free to resolve rather than reject on it. The
@@ -297,6 +306,40 @@ export class ConnectionManager implements vscode.Disposable {
         this.inFlight.delete(profile.id);
       }
       this.onDidChangeEmitter.fire();
+    }
+  }
+
+  /**
+   * Opens the session, and asks for the credential again when a *stored* one
+   * is what the server refused.
+   *
+   * The profile's "ask again when a stored credential is rejected" flag lives
+   * here. A password that was typed into the editor for this attempt is left
+   * alone — the editor shows the failure beside the box it was typed into —
+   * and a prompted one was already the user's second word on the matter.
+   */
+  private async openWithReprompt(
+    driver: Driver,
+    profile: ConnectionProfile,
+    secrets: ConnectSecrets,
+    signal: AbortSignal,
+    secretOverride: string | undefined
+  ) {
+    try {
+      return await driver.open(profile, secrets, signal);
+    } catch (error) {
+      const stored =
+        profile.repromptOnReject &&
+        profile.credentialStore === 'secret' &&
+        needsSecret(profile) &&
+        !secretOverride &&
+        secrets.password !== undefined;
+      if (!stored || signal.aborted || describeFailure(profile, error).kind !== 'login') {
+        throw error;
+      }
+      await this.store.writeSecret(profile.id, undefined);
+      const again = await this.resolveSecrets(profile, true);
+      return driver.open(profile, again, signal);
     }
   }
 
@@ -402,11 +445,4 @@ export class ConnectionManager implements vscode.Disposable {
     );
     return choice === 'Connect to production';
   }
-}
-
-/** The shape `describeFailure` reads as a cancellation rather than a fault. */
-function abortError(): Error {
-  const error = new Error('The connection attempt was cancelled.');
-  error.name = 'AbortError';
-  return error;
 }

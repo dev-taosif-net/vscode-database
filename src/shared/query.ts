@@ -215,8 +215,6 @@ export type ExportFormat = 'csv' | 'tsv' | 'json' | 'sql' | 'markdown' | 'xlsx';
 
 /* ------------------------------------------------------------------ wire */
 
-export type WorkspaceView = 'results' | 'data' | 'runner';
-
 export type QueryHostMessage =
   /** The active tab changed, or its execution did. `null` means show nothing. */
   | { type: 'project'; execution: ExecutionInfo | null }
@@ -224,6 +222,8 @@ export type QueryHostMessage =
   | { type: 'rows'; executionId: string; setIndex: number; offset: number; rows: CellValue[][] }
   | { type: 'plan'; executionId: string; plan: PlanPayload }
   | { type: 'form'; form: RunnerForm }
+  /** Runner only: the workbench's Run keybinding fired while this tab was active. */
+  | { type: 'execute' }
   | { type: 'exported'; path: string; rows: number }
   | { type: 'copied'; cells: number }
   | { type: 'notice'; text: string; level: 'info' | 'error' };

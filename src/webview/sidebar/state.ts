@@ -72,21 +72,33 @@ export const cursorStore: Store<CursorState> = createStore<CursorState>({
 export const catalogStore: Store<CatalogMap> = createStore<CatalogMap>({});
 
 /**
- * How many objects the current query matched, across every connection.
+ * What the current query matched: connections, production connections it hid,
+ * and objects across every open connection.
  *
- * It exists for one reason: the search box announces its result count to a
- * screen reader, and before phase 2 that count was connections alone. A user
- * who types `customer`, hears "0 of 84 connections match" and is not told
- * about the forty objects on screen has been told the opposite of the truth.
- *
- * The count is computed by `flatten`, which is the only thing that does the
- * matching, and published here rather than recomputed in the band, because a
- * second implementation of the ranking is a second implementation to disagree.
+ * All three are computed by `flatten`, which is the only thing that does the
+ * matching, and published here rather than recomputed by the search band and
+ * the footer — each of which used to run its own pass over every row on every
+ * keystroke, and a second implementation of the matching is a second one to
+ * disagree. The screen reader is told the object count too: a user who types
+ * `customer`, hears "0 of 84 connections match" and is not told about the
+ * forty objects on screen has been told the opposite of the truth.
  */
-export const hitsStore: Store<number> = createStore<number>(0);
+export interface Counts {
+  matched: number;
+  productionHidden: number;
+  objectHits: number;
+}
 
-export function setObjectHits(n: number): void {
-  hitsStore.setState((held) => (held === n ? held : n));
+export const countsStore: Store<Counts> = createStore<Counts>({ matched: 0, productionHidden: 0, objectHits: 0 });
+
+export function setCounts(next: Counts): void {
+  countsStore.setState((held) =>
+    held.matched === next.matched &&
+    held.productionHidden === next.productionHidden &&
+    held.objectHits === next.objectHits
+      ? held
+      : next
+  );
 }
 
 /**
@@ -247,6 +259,38 @@ export function applySearchAnswer(
   capped: boolean
 ): void {
   patch(profileId, { hits: { query, objects, capped } });
+}
+
+/**
+ * Tries a read that failed once more, from the row that reported it.
+ *
+ * A catalog that failed used to stay failed for the rest of the session: the
+ * error row was drawn, nothing asked again, and the only way out was Refresh
+ * or a reconnect. Forgetting the failed answer is enough — `flatten` sees the
+ * gap on its next pass and asks for it — and it is done from a click rather
+ * than automatically, because a server that refuses once will refuse a
+ * thousand times a second if nothing waits for a person in between.
+ */
+export function retry(profileId: string, node: string): void {
+  if (node === 'sum') {
+    asked.delete(`catalog:${profileId}`);
+    patch(profileId, { state: 'idle', error: undefined });
+    return;
+  }
+  catalogStore.setState((s) => {
+    const held = s[profileId];
+    if (!held || !held.nodes[node]) {
+      return s;
+    }
+    const nodes = { ...held.nodes };
+    delete nodes[node];
+    return { ...s, [profileId]: { ...held, nodes } };
+  });
+  for (const key of [...asked]) {
+    if (key.startsWith(`node:${profileId}:${node}:`)) {
+      asked.delete(key);
+    }
+  }
 }
 
 /**

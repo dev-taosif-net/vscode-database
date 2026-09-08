@@ -28,12 +28,24 @@ export function Grid(props: GridProps): JSX.Element {
   const [anchor, setAnchor] = useState<{ row: number; column: number } | null>(null);
   const [range, setRange] = useState<CellRange | null>(null);
   const dragging = useRef<{ column: number; startX: number; startWidth: number } | null>(null);
+  /**
+   * What the widths were last measured from: which set, and whether rows had
+   * arrived yet. A set is measured twice at most — once from its headers, and
+   * once more when the first rows land — and never again after that, and never
+   * at all once the user has dragged a column. The previous rule re-measured
+   * on every batch of rows, which threw a drag away the moment the next page
+   * scrolled in.
+   */
+  const measured = useRef<{ key: string; withRows: boolean; dragged: boolean }>({
+    key: '',
+    withRows: false,
+    dragged: false
+  });
 
   const count = set.rowCount;
 
-  // Widths are measured once per result set, from the header and whatever rows
-  // have arrived. A user's drag wins for ever after.
   useEffect(() => {
+    const key = `${executionId}:${set.index}`;
     const sample: CellValue[][] = [];
     for (let i = 0; i < 200 && i < count; i++) {
       const row = get(executionId, set.index, i);
@@ -41,9 +53,22 @@ export function Grid(props: GridProps): JSX.Element {
         sample.push(row);
       }
     }
-    setWidths((current) => (current.length === set.columns.length && sample.length === 0 ? current : measureColumns(set.columns, sample)));
+    const state = measured.current;
+    if (state.key !== key) {
+      // A new set: measure from whatever is here, headers alone if need be.
+      measured.current = { key, withRows: sample.length > 0, dragged: false };
+      setWidths(measureColumns(set.columns, sample));
+      return;
+    }
+    if (state.dragged || state.withRows || sample.length === 0) {
+      return;
+    }
+    // The first rows have landed for a set sized from its headers alone.
+    state.withRows = true;
+    setWidths(measureColumns(set.columns, sample));
     // `revision` is here so the first page of rows re-measures the columns
     // that were sized from their headers alone.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [executionId, set.index, set.columns, count, revision]);
 
   const rows = useVirtualRows(count, ROW, size.height || 400, scroll.top);
@@ -91,9 +116,6 @@ export function Grid(props: GridProps): JSX.Element {
       setRange({ top: 0, bottom: Math.max(0, count - 1), left: 0, right: set.columns.length - 1 });
       return;
     }
-    if (!anchor) {
-      return;
-    }
     const moves: Record<string, [number, number]> = {
       ArrowUp: [-1, 0],
       ArrowDown: [1, 0],
@@ -103,13 +125,16 @@ export function Grid(props: GridProps): JSX.Element {
       PageDown: [Math.floor((size.height || 400) / ROW), 0]
     };
     const move = moves[event.key];
-    if (!move) {
+    if (!move || count === 0) {
       return;
     }
     event.preventDefault();
-    const row = Math.max(0, Math.min(count - 1, anchor.row + move[0]));
-    const column = Math.max(0, Math.min(set.columns.length - 1, anchor.column + move[1]));
-    select(row, column, event.shiftKey);
+    // A grid that has been focused but never clicked has no anchor, and an
+    // arrow key on it used to do nothing at all. It lands on the first cell.
+    const from = anchor ?? { row: 0, column: 0 };
+    const row = anchor ? Math.max(0, Math.min(count - 1, from.row + move[0])) : 0;
+    const column = anchor ? Math.max(0, Math.min(set.columns.length - 1, from.column + move[1])) : 0;
+    select(row, column, event.shiftKey && Boolean(anchor));
     const element = viewport.current;
     if (element) {
       const top = row * ROW;
@@ -125,6 +150,7 @@ export function Grid(props: GridProps): JSX.Element {
     event.preventDefault();
     event.stopPropagation();
     dragging.current = { column, startX: event.clientX, startWidth: widths[column] ?? 120 };
+    measured.current.dragged = true;
 
     const onMove = (move: globalThis.MouseEvent) => {
       const drag = dragging.current;
@@ -253,5 +279,3 @@ function Cell({ value }: { value: CellValue }): JSX.Element {
   }
   return <span>{String(value)}</span>;
 }
-
-export const ROW_HEIGHT = ROW;

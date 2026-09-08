@@ -4,6 +4,7 @@ import { CellValue, ColumnMeta, CopyShape, ExportFormat, cellText, isTagged } fr
 import { ResultStore, SetData } from '../exec/resultStore';
 import { XlsxWriter } from './xlsx';
 import { DriverKind } from '../types';
+import { qualified, quote } from '../catalog/script';
 
 /** Rows read from the store per turn of the loop. */
 const PAGE = 5000;
@@ -102,7 +103,7 @@ function header(columns: ColumnMeta[], format: ExportFormat): string {
   if (format === 'csv') {
     // A byte order mark, because Excel opens a UTF-8 CSV as the system code
     // page without one, and every accented name in the file becomes mojibake.
-    return `﻿${columns.map((c) => csvField(c.name)).join(',')}\n`;
+    return `\uFEFF${columns.map((c) => csvField(c.name)).join(',')}\n`;
   }
   if (format === 'tsv') {
     return `${columns.map((c) => c.name).join('\t')}\n`;
@@ -169,8 +170,8 @@ function insertStatement(
   table: { schema: string; name: string } | undefined,
   driver: DriverKind
 ): string {
-  const target = table ? qualify(driver, table.schema, table.name) : '<table>';
-  const names = columns.map((column) => quoteIdent(driver, column.name)).join(', ');
+  const target = table ? qualified(driver, table) : '<table>';
+  const names = columns.map((column) => quote(driver, column.name)).join(', ');
   const values = row.map((cell, index) => literal(cell, columns[index])).join(', ');
   return `INSERT INTO ${target} (${names}) VALUES (${values});`;
 }
@@ -199,14 +200,6 @@ function literal(value: CellValue, column: ColumnMeta | undefined): string {
     return value;
   }
   return `'${value.replace(/'/g, "''")}'`;
-}
-
-function qualify(driver: DriverKind, schema: string, name: string): string {
-  return `${quoteIdent(driver, schema)}.${quoteIdent(driver, name)}`;
-}
-
-function quoteIdent(driver: DriverKind, name: string): string {
-  return driver === 'mssql' ? `[${name.replace(/]/g, ']]')}]` : `"${name.replace(/"/g, '""')}"`;
 }
 
 /**

@@ -2,6 +2,7 @@ import { DriverSession } from '../drivers/types';
 import { CatalogSummary, DbMember, FavouriteRef, ObjectKind } from '../shared/catalog';
 import { CatalogQueries, PageArgs, PageResult, SearchResult } from './types';
 import { escapeLike, foldSummary } from './fold';
+import { serverVersion } from './pgVersion';
 import { plural, qualified, tableScript } from './script';
 
 /**
@@ -35,22 +36,8 @@ const PROKIND_SINCE = 110000;
 const PG_SEQUENCES_SINCE = 100000;
 
 export class PostgresCatalog implements CatalogQueries {
-  /** `server_version_num` per session, asked once and kept for its lifetime. */
-  private readonly versions = new WeakMap<DriverSession, number>();
-
-  private async version(session: DriverSession): Promise<number> {
-    const known = this.versions.get(session);
-    if (known !== undefined) {
-      return known;
-    }
-    const rows = await session.query<{ v: string }>("SELECT current_setting('server_version_num') AS v");
-    const value = Number(rows[0]?.v ?? 0) || 0;
-    this.versions.set(session, value);
-    return value;
-  }
-
   async summary(session: DriverSession): Promise<CatalogSummary> {
-    const modern = (await this.version(session)) >= PROKIND_SINCE;
+    const modern = (await serverVersion(session)) >= PROKIND_SINCE;
 
     /*
      * Four branches over four different catalog tables, unioned into the same
@@ -105,7 +92,7 @@ export class PostgresCatalog implements CatalogQueries {
   }
 
   async page(session: DriverSession, args: PageArgs): Promise<PageResult> {
-    const version = await this.version(session);
+    const version = await serverVersion(session);
     const sql = pageStatement(args, {
       prokind: version >= PROKIND_SINCE,
       sequences: version >= PG_SEQUENCES_SINCE
@@ -146,7 +133,7 @@ export class PostgresCatalog implements CatalogQueries {
      * because referring to one that does not is a statement that fails to
      * parse rather than a field that comes back null.
      */
-    const version = await this.version(session);
+    const version = await serverVersion(session);
     const auto = [
       version >= 100000 ? "a.attidentity <> ''" : null,
       version >= 120000 ? "a.attgenerated <> ''" : null,
@@ -221,7 +208,7 @@ export class PostgresCatalog implements CatalogQueries {
   }
 
   async search(session: DriverSession, needle: string, limit: number): Promise<SearchResult> {
-    const modern = (await this.version(session)) >= PROKIND_SINCE;
+    const modern = (await serverVersion(session)) >= PROKIND_SINCE;
     const like = `%${escapeLike(needle)}%`;
     const prefix = `${escapeLike(needle)}%`;
 
@@ -323,7 +310,7 @@ export class PostgresCatalog implements CatalogQueries {
     }
 
     if (ref.kind === 'sequence') {
-      if ((await this.version(session)) < PG_SEQUENCES_SINCE) {
+      if ((await serverVersion(session)) < PG_SEQUENCES_SINCE) {
         // Before 10 the settings live in the sequence's own relation and are
         // read with a query against it by name, which cannot be parameterised.
         // Saying so beats interpolating an identifier into a statement.
@@ -544,7 +531,7 @@ function detailOf(kind: ObjectKind, row: PageRow): string {
  * grammar that matters here: the server generated this string and it is
  * well-formed, so there is nothing else to defend against.
  */
-export function splitArguments(text: string): DbMember[] {
+function splitArguments(text: string): DbMember[] {
   const parts: string[] = [];
   let depth = 0;
   let quoted = false;

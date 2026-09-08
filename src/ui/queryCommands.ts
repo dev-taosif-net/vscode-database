@@ -4,22 +4,19 @@ import { ConnectionManager } from '../connections/connectionManager';
 import { ConnectionStore } from '../store/connectionStore';
 import { DetailsService } from '../details/detailsService';
 import { ExecutionService } from '../exec/executionService';
-import { ResultStore } from '../exec/resultStore';
-import { crudScript, qualified, selectTop, tableScript } from '../catalog/script';
+import { qualified, selectTop, tableScript } from '../catalog/script';
 import { statementAt } from '../exec/splitter';
-import { BindingStore, DATA_SCHEME, QUERY_SCHEME, RUNNER_SCHEME } from '../query/bindingStore';
+import { BindingStore, isOwnScheme } from '../query/bindingStore';
 import { DefinitionProvider, QueryFileSystem } from '../query/queryFs';
 import { SavedQueryStore } from '../query/savedQueries';
 import { formatSql, optionsFrom } from '../query/format';
 import { FavouriteRef, KINDS } from '../shared/catalog';
-import { ConnectionProfile, DriverKind, environmentLabel } from '../types';
+import { ConnectionProfile, DriverKind, environmentLabel, errorMessage } from '../types';
 import { ActiveTab } from './activeTab';
 import { ObjectTarget, objectTarget } from './objectCommands';
+import { DetailsView } from './panelViews';
 import { ResultsView } from './resultsView';
 import { WorkspacePanels } from './workspacePanels';
-
-/** What Select Top offers, and what View Data does not need. */
-const TOPS = [100, 1000];
 
 /**
  * Every verb phase 3 adds.
@@ -39,13 +36,13 @@ export class QueryCommands implements vscode.Disposable {
     private readonly catalog: CatalogService,
     private readonly details: DetailsService,
     private readonly execution: ExecutionService,
-    private readonly results: ResultStore,
     private readonly files: QueryFileSystem,
     private readonly definitions: DefinitionProvider,
     private readonly bindings: BindingStore,
     private readonly saved: SavedQueryStore,
     private readonly panels: WorkspacePanels,
     private readonly resultsView: ResultsView,
+    private readonly detailsView: DetailsView,
     private readonly active: ActiveTab,
     private readonly output: vscode.LogOutputChannel
   ) {}
@@ -62,7 +59,7 @@ export class QueryCommands implements vscode.Disposable {
         try {
           await run(...args);
         } catch (error) {
-          const message = error instanceof Error ? error.message : String(error);
+          const message = errorMessage(error);
           this.output.error(`${id}: ${message}`);
           void vscode.window.showErrorMessage(message);
         }
@@ -85,7 +82,8 @@ export class QueryCommands implements vscode.Disposable {
       on('databaseTools.runRoutine', (target) =>
         this.withObject(target, (t) => this.panels.openRunner(t.profileId, t.ref))
       ),
-      on('databaseTools.selectTop1000', (target) => this.withObject(target, (t) => this.selectTopRows(t, TOPS[1]))),
+      on('databaseTools.selectTop100', (target) => this.withObject(target, (t) => this.selectTopRows(t, 100))),
+      on('databaseTools.selectTop1000', (target) => this.withObject(target, (t) => this.selectTopRows(t, 1000))),
       on('databaseTools.countRows', (target) => this.withObject(target, (t) => this.countExactly(t))),
       on('databaseTools.scriptCreate', (target) => this.withObject(target, (t) => this.script(t, 'create'))),
       on('databaseTools.scriptDrop', (target) => this.withObject(target, (t) => this.script(t, 'drop'))),
@@ -93,8 +91,8 @@ export class QueryCommands implements vscode.Disposable {
       on('databaseTools.compareWith', (target) => this.withObject(target, (t) => this.compare(t))),
       on('databaseTools.showDetails', (target) =>
         this.withObject(target, async (t) => {
-          await vscode.commands.executeCommand(`${'databaseTools.details'}.focus`);
-          this.onShowDetails?.(t.profileId, t.ref);
+          await vscode.commands.executeCommand(`${DetailsView.viewType}.focus`);
+          this.detailsView.show(t.profileId, t.ref);
         })
       ),
 
@@ -114,9 +112,6 @@ export class QueryCommands implements vscode.Disposable {
     ];
   }
 
-  /** Set by the extension so Show Details can reach the panel. */
-  onShowDetails: ((profileId: string, ref: FavouriteRef) => void) | undefined;
-
   /* -------------------------------------------------------------- running */
 
   /**
@@ -130,6 +125,11 @@ export class QueryCommands implements vscode.Disposable {
   private async run(currentStatementOnly: boolean): Promise<void> {
     const editor = vscode.window.activeTextEditor;
     if (!editor || editor.document.languageId !== 'sql') {
+      // Run on a procedure runner tab executes its form; the key is bound for
+      // that panel in the manifest and lands here.
+      if (this.panels.executeActiveRunner()) {
+        return;
+      }
       void vscode.window.showInformationMessage('Open a SQL file to run a statement.');
       return;
     }
@@ -246,7 +246,7 @@ export class QueryCommands implements vscode.Disposable {
     if (!uri) {
       return;
     }
-    if (uri.scheme === QUERY_SCHEME || uri.scheme === DATA_SCHEME || uri.scheme === RUNNER_SCHEME) {
+    if (isOwnScheme(uri.scheme)) {
       void vscode.window.showInformationMessage(
         'This tab is bound to the connection it was opened from. Open a new query to use a different one.'
       );
@@ -292,18 +292,22 @@ export class QueryCommands implements vscode.Disposable {
     }
     const profile = this.store.get(picked.id);
     if (profile && !this.manager.isConnected(profile.id)) {
+      // The connect command reports its own failure. A profile that is still
+      // closed afterwards is not one to run against, so the caller is told
+      // nothing was chosen rather than being handed a connection it cannot use.
       await vscode.commands.executeCommand('databaseTools.connect', profile.id);
+      if (!this.manager.isConnected(profile.id)) {
+        return undefined;
+      }
     }
     return profile;
   }
 
   private async disconnectTab(): Promise<void> {
     const tab = this.active.value;
-    if (!tab) {
-      return;
+    if (tab) {
+      await this.execution.closeTab(tab);
     }
-    await this.execution.closeTab(tab);
-    this.results.dropTab(tab);
   }
 
   /* ---------------------------------------------------------- new and save */
@@ -402,7 +406,7 @@ export class QueryCommands implements vscode.Disposable {
   }
 
   /**
-   * Select Top, which now executes rather than scaffolding.
+   * Select Top, which executes rather than scaffolding.
    *
    * It opens the statement in a query tab and runs it, so the SQL stays
    * visible and editable — which is the difference between a tool that shows
@@ -414,11 +418,9 @@ export class QueryCommands implements vscode.Disposable {
       return;
     }
     const sql = selectTop(profile.driver, target.ref, limit);
-    const uri = this.files.uniqueQuery(profile.id, `${target.ref.name} top ${limit}`, sql);
-    const document = await vscode.workspace.openTextDocument(uri);
-    await vscode.window.showTextDocument(document, { preview: false });
+    const document = await this.files.openScratch(profile.id, `${target.ref.name} top ${limit}`, sql);
     await this.resultsView.reveal();
-    await this.execution.run({ tab: uri.toString(), profileId: profile.id, sql, source: 'query', limit });
+    await this.execution.run({ tab: document.uri.toString(), profileId: profile.id, sql, source: 'query', limit });
   }
 
   private async countExactly(target: ObjectTarget): Promise<void> {
@@ -454,7 +456,7 @@ export class QueryCommands implements vscode.Disposable {
     }
 
     if (target.ref.kind === 'table') {
-      const columns = await this.catalog.columns(target.profileId, target.ref);
+      const columns = await this.catalog.members(target.profileId, target.ref);
       await this.openScratch(
         profile.id,
         `${target.ref.name} CREATE`,
@@ -530,28 +532,8 @@ export class QueryCommands implements vscode.Disposable {
   }
 
   /** Opens a scratch query bound to a connection. Never saved anywhere. */
-  async openScratch(profileId: string, name: string, content: string): Promise<vscode.Uri> {
-    const uri = this.files.uniqueQuery(profileId, name, content);
-    const document = await vscode.workspace.openTextDocument(uri);
-    await vscode.window.showTextDocument(document, { preview: false });
-    return uri;
-  }
-
-  /** Generate CRUD, moved here so it opens a runnable tab rather than a buffer. */
-  async generateCrud(target: ObjectTarget): Promise<void> {
-    const profile = this.store.get(target.profileId);
-    if (!profile) {
-      return;
-    }
-    const columns = await this.catalog.columns(target.profileId, target.ref);
-    if (columns.length === 0) {
-      throw new Error(`${target.ref.schema}.${target.ref.name} has no columns to script.`);
-    }
-    await this.openScratch(
-      profile.id,
-      `${target.ref.name} CRUD`,
-      crudScript(profile.driver, target.ref, columns)
-    );
+  async openScratch(profileId: string, name: string, content: string): Promise<void> {
+    await this.files.openScratch(profileId, name, content);
   }
 }
 

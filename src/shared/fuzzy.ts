@@ -22,7 +22,7 @@ import { KINDS, OBJECT_KINDS, ObjectKind } from './catalog';
  * the user meant.
  */
 
-export interface Match {
+interface Match {
   /** Higher is better. Only comparable between candidates for one needle. */
   score: number;
   /** Indices in the candidate that the needle matched, for the highlight. */

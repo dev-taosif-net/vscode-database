@@ -26,7 +26,7 @@
     "commands": [
       {
         "command": "databaseTools.openConnections",
-        "title": "Connections: Open",
+        "title": "Connections: Open Editor",
         "category": "Database",
         "icon": "$(database)"
       },
@@ -80,7 +80,7 @@
       },
       {
         "command": "databaseTools.connect",
-        "title": "Connect",
+        "title": "Connect to a Database",
         "category": "Database",
         "icon": "$(plug)"
       },
@@ -169,10 +169,10 @@
         "icon": "$(symbol-method)"
       },
       {
-        "command": "databaseTools.executeObject",
-        "title": "Execute",
+        "command": "databaseTools.scriptExecute",
+        "title": "Script As EXECUTE",
         "category": "Database",
-        "icon": "$(play)"
+        "icon": "$(file-code)"
       },
       {
         "command": "databaseTools.scriptAsAlter",
@@ -238,7 +238,7 @@
         "command": "databaseTools.formatQuery",
         "title": "Format SQL",
         "category": "Database",
-        "icon": "$(list-flat)"
+        "icon": "$(symbol-keyword)"
       },
       {
         "command": "databaseTools.newQuery",
@@ -278,7 +278,7 @@
       },
       {
         "command": "databaseTools.runRoutine",
-        "title": "Run…",
+        "title": "Run\u2026",
         "category": "Database",
         "icon": "$(play)"
       },
@@ -314,7 +314,7 @@
       },
       {
         "command": "databaseTools.compareWith",
-        "title": "Compare With…",
+        "title": "Compare With\u2026",
         "category": "Database",
         "icon": "$(diff)"
       },
@@ -392,13 +392,6 @@
           "type": "boolean",
           "default": true,
           "description": "Start a line with AND or OR rather than trailing the line before it."
-        },
-        "databaseTools.format.maxWidth": {
-          "type": "number",
-          "default": 100,
-          "minimum": 40,
-          "maximum": 400,
-          "description": "The width the formatter aims for. A line it cannot break well is left long rather than broken badly."
         }
       }
     },
@@ -418,6 +411,17 @@
         "key": "ctrl+enter",
         "mac": "cmd+enter",
         "when": "databaseTools.sqlTab && editorTextFocus"
+      },
+      {
+        "command": "databaseTools.run",
+        "key": "f5",
+        "when": "activeWebviewPanelId == 'databaseTools.runner'"
+      },
+      {
+        "command": "databaseTools.run",
+        "key": "ctrl+enter",
+        "mac": "cmd+enter",
+        "when": "activeWebviewPanelId == 'databaseTools.runner'"
       },
       {
         "command": "databaseTools.runStatement",
@@ -511,7 +515,7 @@
           "when": "false"
         },
         {
-          "command": "databaseTools.executeObject",
+          "command": "databaseTools.scriptExecute",
           "when": "false"
         },
         {
@@ -715,8 +719,13 @@
           "group": "5_danger@1"
         },
         {
-          "command": "databaseTools.openDefinition",
-          "when": "webviewSection == 'dbObject'",
+          "command": "databaseTools.newQuery",
+          "when": "webviewSection == 'connection' && dbConnectionLive",
+          "group": "1_session@3"
+        },
+        {
+          "command": "databaseTools.viewData",
+          "when": "webviewSection == 'dbObject' && dbObjectRelational",
           "group": "1_open@1"
         },
         {
@@ -725,9 +734,29 @@
           "group": "1_open@2"
         },
         {
-          "command": "databaseTools.executeObject",
-          "when": "webviewSection == 'dbObject' && dbObjectRoutine",
+          "command": "databaseTools.selectTop1000",
+          "when": "webviewSection == 'dbObject' && dbObjectRelational",
           "group": "1_open@3"
+        },
+        {
+          "command": "databaseTools.countRows",
+          "when": "webviewSection == 'dbObject' && objectKind == 'table'",
+          "group": "1_open@4"
+        },
+        {
+          "command": "databaseTools.runRoutine",
+          "when": "webviewSection == 'dbObject' && dbObjectRoutine",
+          "group": "1_open@5"
+        },
+        {
+          "command": "databaseTools.openDefinition",
+          "when": "webviewSection == 'dbObject'",
+          "group": "1_open@6"
+        },
+        {
+          "command": "databaseTools.showDetails",
+          "when": "webviewSection == 'dbObject'",
+          "group": "1_open@7"
         },
         {
           "command": "databaseTools.generateCrud",
@@ -735,9 +764,34 @@
           "group": "2_script@1"
         },
         {
+          "command": "databaseTools.scriptCreate",
+          "when": "webviewSection == 'dbObject'",
+          "group": "2_script@2"
+        },
+        {
           "command": "databaseTools.scriptAsAlter",
           "when": "webviewSection == 'dbObject' && (dbObjectRoutine || objectKind == 'view')",
-          "group": "2_script@2"
+          "group": "2_script@3"
+        },
+        {
+          "command": "databaseTools.scriptExecute",
+          "when": "webviewSection == 'dbObject' && dbObjectRoutine",
+          "group": "2_script@4"
+        },
+        {
+          "command": "databaseTools.scriptDrop",
+          "when": "webviewSection == 'dbObject'",
+          "group": "2_script@5"
+        },
+        {
+          "command": "databaseTools.viewDependencies",
+          "when": "webviewSection == 'dbObject'",
+          "group": "2_script@6"
+        },
+        {
+          "command": "databaseTools.compareWith",
+          "when": "webviewSection == 'dbObject'",
+          "group": "2_script@7"
         },
         {
           "command": "databaseTools.copyObjectName",
@@ -758,56 +812,6 @@
           "command": "databaseTools.removeObjectFavourite",
           "when": "webviewSection == 'dbObject' && dbObjectPinned",
           "group": "4_pin@1"
-        },
-        {
-          "command": "databaseTools.viewData",
-          "when": "webviewSection == 'dbObject' && dbObjectRelational",
-          "group": "1_open@1"
-        },
-        {
-          "command": "databaseTools.runRoutine",
-          "when": "webviewSection == 'dbObject' && dbObjectRoutine",
-          "group": "1_open@2"
-        },
-        {
-          "command": "databaseTools.selectTop1000",
-          "when": "webviewSection == 'dbObject' && dbObjectRelational",
-          "group": "1_open@4"
-        },
-        {
-          "command": "databaseTools.showDetails",
-          "when": "webviewSection == 'dbObject'",
-          "group": "1_open@5"
-        },
-        {
-          "command": "databaseTools.countRows",
-          "when": "webviewSection == 'dbObject' && objectKind == 'table'",
-          "group": "1_open@6"
-        },
-        {
-          "command": "databaseTools.scriptCreate",
-          "when": "webviewSection == 'dbObject'",
-          "group": "2_script@3"
-        },
-        {
-          "command": "databaseTools.scriptDrop",
-          "when": "webviewSection == 'dbObject'",
-          "group": "2_script@4"
-        },
-        {
-          "command": "databaseTools.viewDependencies",
-          "when": "webviewSection == 'dbObject'",
-          "group": "2_script@5"
-        },
-        {
-          "command": "databaseTools.compareWith",
-          "when": "webviewSection == 'dbObject'",
-          "group": "2_script@6"
-        },
-        {
-          "command": "databaseTools.newQuery",
-          "when": "webviewSection == 'connection' && dbConnectionLive",
-          "group": "1_session@3"
         }
       ],
       "editor/title": [
@@ -935,8 +939,7 @@
     "vscode:prepublish": "npm run build",
     "build": "node esbuild.mjs --production",
     "watch": "node esbuild.mjs --watch",
-    "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.webview.json",
-    "lint": "eslint src --ext ts"
+    "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.webview.json"
   },
   "dependencies": {
     "pg": "^8.13.1",

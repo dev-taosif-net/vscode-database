@@ -71,9 +71,10 @@
   --row-h: 22px;
   --head-h: 22px;
   --nomatch-h: 44px;
-  /* Everything inside a connection. `H.node` and `H.results` in `model.ts`. */
+  /* Everything inside a connection: `H.node` in `model.ts`. A search's
+     per-connection heading is 24 (`H.results`) and is sized inline by the
+     virtualizer like every other row. */
   --node-h: 22px;
-  --results-h: 24px;
   /*
    * One level of the tree. Ten, not the workbench Explorer's eight: this tree
    * goes five deep where a file tree is usually two, and eight pixels is not
@@ -86,20 +87,6 @@
   /* The footer strips are one line of 10.5px text and are not list rows. They
      happen to match `--row-h` again and must not be written in terms of it. */
   --strip-h: 22px;
-  /*
-   * The left rail: ribbon, twistie, state glyph, 0..42, text at 47. The
-   * margins on `.twistie-node` and `.glyph` sum to it; this is the ruler they
-   * are checked against, not an input they are computed from, because a rail
-   * that moved would have to move the text with it.
-   *
-   * It was 62 with text at 70, when the engine mark had a slot between the
-   * state glyph and the name. Losing it is what makes the tree indent forward:
-   * a folder inside a connection starts at 8 + (2−1)×10 + 14 + 4 + 16 + 5 =
-   * 57, and against a parent at 70 the first level of the tree stepped
-   * *backwards* by thirteen pixels. Against 47 it steps forward by ten, which
-   * is `--indent`, which is what the tree says it does everywhere else.
-   */
-  --rail-w: 47px;
   --band-h: 32px;
   /* The scrollbar's width, permanently reserved by `.list`. The sticky
      overlay is a sibling of the scroller rather than a descendant, so it
@@ -107,6 +94,13 @@
      right of every real one — visible as a count that will not line up. */
   --gutter: 8px;
 }
+
+/*
+ * The left rail: ribbon, twistie, state glyph, 0..42, text at 47. The margins
+ * on `.twistie-node` and `.glyph` sum to it; the number is the ruler they are
+ * checked against, not a variable they are computed from, because a rail that
+ * moved would have to move the text with it.
+ */
 
 /*
  * Nothing here reads `--vscode-font-size`, and the sizes below are literals.
@@ -1491,9 +1485,23 @@ mark {
 }
 
 .node-note.tone-empty,
-.node-note.tone-loading,
-.node-note.tone-error {
+.node-note.tone-loading {
   cursor: default;
+}
+
+/*
+ * An error row is a control too: it tries again. The word is drawn in the
+ * tail column, in link colour, so the row reads as "what went wrong · Retry"
+ * rather than as a dead end.
+ */
+.node-note.tone-error .node-retry {
+  color: var(--vscode-textLink-foreground, var(--busy));
+  font-style: normal;
+  max-width: none;
+}
+
+.node-note.tone-error:hover .node-retry {
+  text-decoration: underline;
 }
 
 /* ------------------------------------------------------- results headings */

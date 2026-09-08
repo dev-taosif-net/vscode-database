@@ -6,10 +6,11 @@ import { DriverKind } from '../types';
  *
  * A formatter that rewrites somebody's SQL into a house style they did not
  * choose is a formatter they turn off, and a formatter nobody runs is worth
- * nothing. So this one has five settings, a strong default, and one rule above
+ * nothing. So this one has four settings, a strong default, and one rule above
  * all the others: a statement it cannot tokenise cleanly is returned exactly
  * as it was. Mangling is the only unrecoverable failure here — an unformatted
- * statement costs a keystroke, a mangled one costs the work.
+ * statement costs a keystroke, a mangled one costs the work. A line it cannot
+ * break well is left long rather than broken badly.
  */
 export interface FormatOptions {
   keywordCase: 'upper' | 'lower' | 'preserve';
@@ -18,7 +19,6 @@ export interface FormatOptions {
   commas: 'trailing' | 'leading';
   /** `AND` and `OR` begin their line rather than trailing the one before. */
   leadingBoolean: boolean;
-  maxWidth: number;
 }
 
 export function optionsFrom(document: vscode.TextDocument, formatting: vscode.FormattingOptions): FormatOptions {
@@ -27,8 +27,7 @@ export function optionsFrom(document: vscode.TextDocument, formatting: vscode.Fo
     keywordCase: config.get<'upper' | 'lower' | 'preserve'>('format.keywordCase', 'upper'),
     indent: formatting.insertSpaces ? ' '.repeat(formatting.tabSize) : '\t',
     commas: config.get<'trailing' | 'leading'>('format.commas', 'trailing'),
-    leadingBoolean: config.get<boolean>('format.leadingBoolean', true),
-    maxWidth: config.get<number>('format.maxWidth', 100)
+    leadingBoolean: config.get<boolean>('format.leadingBoolean', true)
   };
 }
 
@@ -240,14 +239,11 @@ function formatStatement(source: string, driver: DriverKind, options: FormatOpti
         if (options.commas === 'trailing') {
           line += ',';
         }
+        // A list item ends its line; a comma inside parentheses keeps its
+        // neighbours on one line.
+        pendingComma = options.commas === 'leading';
         if (depth === 0 && listDepth > 0) {
-          pendingComma = options.commas === 'leading';
           startLine(listDepth);
-        } else {
-          pendingComma = options.commas === 'leading';
-          if (options.commas === 'trailing') {
-            // A comma inside parentheses keeps its neighbours on one line.
-          }
         }
         continue;
       }
@@ -302,8 +298,7 @@ function formatStatement(source: string, driver: DriverKind, options: FormatOpti
   }
   push();
 
-  const body = lines.join('\n').replace(/\n{3,}/g, '\n\n');
-  return wrap(body, options) + '\n';
+  return lines.join('\n').replace(/\n{3,}/g, '\n\n') + '\n';
 }
 
 /** The clauses whose items go one to a line. */
@@ -343,14 +338,6 @@ function cased(text: string, options: FormatOptions): string {
     return text;
   }
   return options.keywordCase === 'upper' ? text.toUpperCase() : text.toLowerCase();
-}
-
-/** Lines longer than the width are left alone rather than broken badly. */
-function wrap(body: string, options: FormatOptions): string {
-  return body
-    .split('\n')
-    .map((line) => (line.length <= options.maxWidth ? line : line))
-    .join('\n');
 }
 
 /**

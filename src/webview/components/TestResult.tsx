@@ -1,3 +1,4 @@
+import { defaultPort } from '../../types';
 import { useField, useSelect, useStore } from '../state/editor';
 import { post } from '../state/vscode';
 import { Codicon } from '../primitives/Codicon';
@@ -23,7 +24,7 @@ export function TestResult() {
   }
 
   if (busy) {
-    const shown = port ?? (driver === 'mssql' ? 1433 : 5432);
+    const shown = port ?? defaultPort(driver ?? 'mssql');
     return (
       <div className="result busy" role="status" aria-live="polite">
         <Codicon name="loading" spin />

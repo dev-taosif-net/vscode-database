@@ -38,7 +38,7 @@ const SECRET_SHAPES = [
   /\bCREDENTIAL\b/i
 ];
 
-export function isSecret(sql: string): boolean {
+function isSecret(sql: string): boolean {
   return SECRET_SHAPES.some((shape) => shape.test(sql));
 }
 
@@ -102,7 +102,9 @@ export class HistoryStore implements vscode.Disposable {
     }
     const redacted = isSecret(execution.sql);
     const entry: HistoryEntry = {
-      id: `${execution.profileId}:${execution.startedAt}`,
+      // The execution id keeps two runs that started in the same millisecond
+      // apart, and a profile id keeps two windows' histories apart.
+      id: `${execution.profileId}:${execution.startedAt}:${execution.id}`,
       profileId: execution.profileId,
       connectionName: execution.connectionName,
       sql: redacted ? '' : execution.sql.trim(),

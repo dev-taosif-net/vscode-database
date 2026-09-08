@@ -1,5 +1,5 @@
-import { useCallback, useEffect } from 'react';
-import { CellRange, CopyShape, ExportFormat, RunnerValue } from '../../shared/query';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { CellRange, CopyShape, ExportFormat, RunnerParameter, RunnerValue } from '../../shared/query';
 import { Codicon } from '../primitives/Codicon';
 import { Grid } from '../grid/Grid';
 import { post, viewName } from './vscode';
@@ -235,26 +235,69 @@ function GridToolbar({
   );
 }
 
+/**
+ * The export formats, behind one button.
+ *
+ * A menu that opened on hover was unreachable from the keyboard and closed
+ * the moment the pointer left it. This one opens on a press, closes on Escape
+ * or on a click anywhere else, and says what it is to a screen reader.
+ */
 function ExportMenu({ executionId, setIndex }: { executionId: string; setIndex: number }): JSX.Element {
+  const [open, setOpen] = useState(false);
+  const root = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) {
+      return undefined;
+    }
+    const onPointer = (event: MouseEvent) => {
+      if (!root.current?.contains(event.target as Node)) {
+        setOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', onPointer);
+    return () => document.removeEventListener('mousedown', onPointer);
+  }, [open]);
+
   return (
-    <div className="menu">
-      <button type="button" className="icon-btn" title="Export">
+    <div
+      className={open ? 'menu is-open' : 'menu'}
+      ref={root}
+      onKeyDown={(event) => {
+        if (event.key === 'Escape' && open) {
+          event.stopPropagation();
+          setOpen(false);
+        }
+      }}
+    >
+      <button
+        type="button"
+        className="icon-btn"
+        title="Export"
+        aria-label="Export"
+        aria-haspopup="menu"
+        aria-expanded={open}
+        onClick={() => setOpen((current) => !current)}
+      >
         <Codicon name="desktop-download" />
       </button>
-      <div className="menu-list" role="menu">
-        {FORMATS.map((format) => (
-          <button
-            key={format.id}
-            type="button"
-            role="menuitem"
-            onClick={() =>
-              post({ type: 'export', executionId, setIndex, format: format.id as ExportFormat })
-            }
-          >
-            {format.label}
-          </button>
-        ))}
-      </div>
+      {open ? (
+        <div className="menu-list" role="menu" aria-label="Export as">
+          {FORMATS.map((format) => (
+            <button
+              key={format.id}
+              type="button"
+              role="menuitem"
+              onClick={() => {
+                setOpen(false);
+                post({ type: 'export', executionId, setIndex, format: format.id as ExportFormat });
+              }}
+            >
+              {format.label}
+            </button>
+          ))}
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -279,7 +322,9 @@ function DataToolbar(): JSX.Element {
         <input
           type="search"
           value={filter}
-          placeholder="Filter — becomes a WHERE"
+          placeholder="Filter on the server, then press Enter"
+          aria-label="Filter rows on the server. Press Enter to apply."
+          title="Matched against every text column as a WHERE clause"
           onChange={(event) => setFilter(event.target.value)}
           onKeyDown={(event) => {
             if (event.key === 'Enter') {
@@ -366,16 +411,65 @@ function DataFooter(): JSX.Element {
 
 /* ------------------------------------------------------------------ runner */
 
+/**
+ * A required argument nobody has supplied. A parameter with no default and
+ * no NULL allowed cannot be sent empty, and the server's answer to an empty
+ * string where it wanted a number is an error naming a parameter by position.
+ */
+function missingArguments(parameters: RunnerParameter[], values: Record<string, RunnerValue>): string[] {
+  return parameters
+    .filter((parameter) => parameter.required)
+    .filter((parameter) => {
+      const value = values[parameter.name];
+      return !value || value.null || value.text.trim() === '';
+    })
+    .map((parameter) => parameter.label);
+}
+
 function Runner(): JSX.Element {
   const form = useWorkspace((state) => state.form);
   const values = useWorkspace((state) => state.values);
   const execution = useWorkspace((state) => state.execution);
+  const executeRequest = useWorkspace((state) => state.executeRequest);
+  const [attempted, setAttempted] = useState(false);
+
+  const running = execution?.status === 'running';
+  const missing = form ? missingArguments(form.parameters, values) : [];
+  const ready = form !== null && missing.length === 0 && !running;
+
+  const execute = useCallback(() => {
+    if (!form) {
+      return;
+    }
+    if (missingArguments(form.parameters, values).length > 0) {
+      setAttempted(true);
+      return;
+    }
+    post({ type: 'run', values });
+  }, [form, values]);
+
+  // The button says F5, so F5 has to work here too. The key is bound in the
+  // manifest for the runner panel and arrives as a message, rather than being
+  // read from a page listener: a webview's keys are forwarded to the workbench
+  // as well, and a listener here would run the form twice — or, without a
+  // binding of ours, hand F5 to Start Debugging.
+  const handled = useRef(executeRequest);
+  useEffect(() => {
+    if (executeRequest === handled.current) {
+      return;
+    }
+    handled.current = executeRequest;
+    if (!running) {
+      execute();
+    }
+  }, [executeRequest, execute, running]);
 
   if (!form) {
     return <div className="runner runner-loading">Reading the parameter list…</div>;
   }
 
   const valueOf = (name: string): RunnerValue => values[name] ?? { null: false, text: '' };
+  const isMissing = (parameter: RunnerParameter) => attempted && missing.includes(parameter.label);
 
   return (
     <div className="runner">
@@ -395,11 +489,17 @@ function Runner(): JSX.Element {
         {form.parameters.map((parameter) => {
           const value = valueOf(parameter.name);
           const disabled = value.null;
+          const invalid = isMissing(parameter);
+          const id = `p-${parameter.name.replace(/\W/g, '')}`;
           return (
-            <div className="field" key={parameter.name}>
+            <div className={invalid ? 'field is-invalid' : 'field'} key={parameter.name}>
               <div className="field-label">
-                <span>{parameter.label}</span>
-                {parameter.required ? <span className="req">REQUIRED</span> : null}
+                <label htmlFor={id}>{parameter.label}</label>
+                {parameter.required ? (
+                  <span className="req" aria-hidden="true">
+                    REQUIRED
+                  </span>
+                ) : null}
                 <span className="strip-spacer" />
                 <span className="mono dim">
                   {parameter.type}
@@ -410,31 +510,39 @@ function Runner(): JSX.Element {
               {parameter.control === 'bool' ? (
                 <label className="check">
                   <input
+                    id={id}
                     type="checkbox"
+                    disabled={disabled}
                     checked={!value.null && (value.text === '1' || value.text.toLowerCase() === 'true')}
                     onChange={(event) => setValue(parameter.name, { null: false, text: event.target.checked ? '1' : '0' })}
                   />
-                  <span>{parameter.label}</span>
+                  <span>{value.null ? 'NULL' : value.text === '1' || value.text.toLowerCase() === 'true' ? 'True' : 'False'}</span>
                 </label>
               ) : parameter.control === 'multiline' ? (
                 <textarea
+                  id={id}
                   className="input"
                   rows={3}
                   disabled={disabled}
+                  aria-required={parameter.required || undefined}
+                  aria-invalid={invalid || undefined}
                   value={value.null ? '' : value.text}
                   onChange={(event) => setValue(parameter.name, { null: false, text: event.target.value })}
                 />
               ) : (
                 <input
+                  id={id}
                   className="input"
                   type={parameter.control === 'number' ? 'number' : 'text'}
                   disabled={disabled}
+                  aria-required={parameter.required || undefined}
+                  aria-invalid={invalid || undefined}
                   value={value.null ? '' : value.text}
                   onChange={(event) => setValue(parameter.name, { null: false, text: event.target.value })}
                 />
               )}
 
-              {parameter.nullable && parameter.control !== 'bool' ? (
+              {parameter.nullable ? (
                 <label className="null-toggle">
                   <input
                     type="checkbox"
@@ -446,6 +554,7 @@ function Runner(): JSX.Element {
                   <span className="mono">NULL</span>
                 </label>
               ) : null}
+              {invalid ? <p className="field-problem">{parameter.label} is required</p> : null}
             </div>
           );
         })}
@@ -453,14 +562,18 @@ function Runner(): JSX.Element {
 
       <div className="runner-actions">
         <span className="dim">
-          Values are bound as parameters, never concatenated. Arguments are remembered for this connection only.
+          {attempted && missing.length > 0
+            ? `Still needed: ${missing.join(', ')}.`
+            : 'Values are bound as parameters, never concatenated. Arguments are remembered for this connection only.'}
         </span>
         <span className="strip-spacer" />
         <button
           type="button"
           className="btn btn-p"
-          disabled={execution?.status === 'running'}
-          onClick={() => post({ type: 'run', values })}
+          disabled={running}
+          aria-disabled={!ready || undefined}
+          title={missing.length > 0 ? `Still needed: ${missing.join(', ')}` : 'F5 or Ctrl+Enter'}
+          onClick={execute}
         >
           <Codicon name="play" />
           Execute

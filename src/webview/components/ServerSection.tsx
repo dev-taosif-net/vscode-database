@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { defaultPort } from '../../types';
-import { portInvalid, useField, useSelect, useStore } from '../state/editor';
+import { portInvalid, useField, useProblem, useSelect, useStore } from '../state/editor';
 import { post } from '../state/vscode';
 import { Codicon } from '../primitives/Codicon';
 import { Field } from '../primitives/Field';
@@ -18,21 +18,29 @@ const PROBE_DELAY_MS = 650;
  */
 export function ServerSection() {
   const driver = useField('driver') ?? 'mssql';
-  const host = useField('host') ?? '';
   const port = useField('port') ?? null;
+  const hostProblem = useProblem('host');
+  const portProblem = useProblem('port');
   const isMssql = driver === 'mssql';
 
   return (
     <div className="stack">
       <div className="row split">
-        <Field label={isMssql ? 'Server' : 'Host'} htmlFor="f-host" required>
-          <TextInput id="f-host" field="host" invalid={!host.trim()} />
-        </Field>
         <Field
-          label="Port"
-          htmlFor="f-port"
-          error={portInvalid(port) ? 'Between 1 and 65535.' : undefined}
+          label={isMssql ? 'Server' : 'Host'}
+          htmlFor="f-host"
+          required
+          error={hostProblem}
+          hint={hostProblem ? undefined : isMssql ? 'Host name, address, or host\\instance' : undefined}
         >
+          <TextInput
+            id="f-host"
+            field="host"
+            invalid={Boolean(hostProblem)}
+            placeholder={isMssql ? 'sql-dev-01.company.local' : 'db.example.com'}
+          />
+        </Field>
+        <Field label="Port" htmlFor="f-port" error={portProblem}>
           <NumberInput
             id="f-port"
             field="port"
@@ -126,7 +134,11 @@ function DatabaseField() {
     <Field
       label="Database"
       htmlFor="f-database"
-      hint={databases ? `${databases.length} read from the server just now.` : undefined}
+      hint={
+        databases
+          ? `${databases.length} read from the server just now.`
+          : "Optional. Leave blank to land in the login's default database."
+      }
     >
       <div className="row">
         {databases && databases.length ? (
@@ -136,7 +148,7 @@ function DatabaseField() {
             options={databases.map((name) => [name, name] as [string, string])}
           />
         ) : (
-          <TextInput id="f-database" field="database" />
+          <TextInput id="f-database" field="database" placeholder="Default database" />
         )}
         <button
           type="button"

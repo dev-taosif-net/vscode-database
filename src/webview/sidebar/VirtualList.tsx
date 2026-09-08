@@ -38,7 +38,7 @@ import {
   listStore,
   request,
   sessionStore,
-  setObjectHits
+  setCounts
 } from './state';
 
 /**
@@ -83,18 +83,6 @@ const selOpenKey = (s: SessionMap): string => {
   }
   return ids.sort().join(' ');
 };
-
-function indexOfKey(items: readonly FlatItem[], key: string | null): number {
-  if (key === null) {
-    return -1;
-  }
-  for (let i = 0; i < items.length; i++) {
-    if (keyOf(items[i]) === key) {
-      return i;
-    }
-  }
-  return -1;
-}
 
 /**
  * What the keyboard model needs from the list.
@@ -164,7 +152,7 @@ export function VirtualList({ handle, initialTop, onTop }: Props): JSX.Element {
       ...measure(flat.items),
       matches: flat.matches,
       wanted: flat.wanted,
-      objectHits: flat.objectHits
+      counts: { matched: flat.matched, productionHidden: flat.productionHidden, objectHits: flat.objectHits }
     };
   }, [rows, grouped, sort, collapsed, query, open, catalog, expanded]);
 
@@ -182,7 +170,7 @@ export function VirtualList({ handle, initialTop, onTop }: Props): JSX.Element {
     }
   }, [geom]);
 
-  useEffect(() => setObjectHits(geom.objectHits), [geom.objectHits]);
+  useEffect(() => setCounts(geom.counts), [geom.counts]);
 
   const n = geom.items.length;
   const total = geom.offsets[n];
@@ -203,7 +191,7 @@ export function VirtualList({ handle, initialTop, onTop }: Props): JSX.Element {
   const [viewportH, setViewportH] = useState(0);
   const [win, setWin] = useState<Frame>({ first: 0, last: 0, sticky: -1 });
 
-  const cursorIndex = useMemo(() => indexOfKey(geom.items, cursorKey), [geom, cursorKey]);
+  const cursorIndex = cursorKey === null ? -1 : (geom.index.get(cursorKey) ?? -1);
 
   /**
    * The overlay's push-off, derived from the current geometry every time it is
@@ -340,7 +328,7 @@ export function VirtualList({ handle, initialTop, onTop }: Props): JSX.Element {
         focusIndex(i);
       },
       reveal: (id) => {
-        const i = indexOfKey(geom.items, id);
+        const i = geom.index.get(id) ?? -1;
         if (i < 0) {
           return;
         }

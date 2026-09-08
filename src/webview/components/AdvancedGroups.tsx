@@ -76,7 +76,7 @@ export function AdvancedGroups() {
       id: 'network',
       icon: 'globe',
       title: 'Network',
-      summary: 'Timeouts and reaching a server behind a bastion',
+      summary: 'Connect timeout and failover',
       body: () => <NetworkGroup mssql={isMssql} />
     },
     {
@@ -91,7 +91,7 @@ export function AdvancedGroups() {
       id: 'session',
       icon: 'watch',
       title: 'Session',
-      summary: 'Query timeout, paging and the name the server sees',
+      summary: isMssql ? 'Query timeout, paging and the name the server sees' : 'Query timeout, paging, search path and the name the server sees',
       body: () => <SessionGroup mssql={isMssql} />
     },
     {
@@ -198,11 +198,9 @@ function PostgresTransport() {
 }
 
 function NetworkGroup({ mssql }: { mssql: boolean }) {
-  const ssh = useSelect((state) => state.draft?.sshEnabled ?? false);
-
   return (
     <div className="stack">
-      <Field label="Connect timeout" htmlFor="f-connect-timeout">
+      <Field label="Connect timeout" htmlFor="f-connect-timeout" hint="How long to wait for the server to answer.">
         <div className="row tight">
           <NumberInput id="f-connect-timeout" field="connectTimeoutSeconds" width={92} />
           <span className="unit">seconds</span>
@@ -215,32 +213,6 @@ function NetworkGroup({ mssql }: { mssql: boolean }) {
           label="Multi-subnet failover"
           hint="For an availability group listener spanning subnets."
         />
-      ) : null}
-      <Checkbox id="f-ssh" field="sshEnabled" label="Reach the server through an SSH tunnel" />
-      {ssh ? (
-        <>
-          <p className="note info">
-            <Codicon name="info" className="glyph" />
-            <span>
-              Tunnel details are saved with the profile, but the tunnel itself is not opened in this
-              release. Connecting still goes direct.
-            </span>
-          </p>
-          <div className="row split">
-            <Field label="Jump host" htmlFor="f-sshhost">
-              <TextInput id="f-sshhost" field="sshHost" placeholder="bastion.example.com" />
-            </Field>
-            <Field label="Port" htmlFor="f-sshport">
-              <NumberInput id="f-sshport" field="sshPort" width={92} ariaLabel="Jump host port" />
-            </Field>
-          </div>
-          <Field label="Jump user" htmlFor="f-sshuser">
-            <TextInput id="f-sshuser" field="sshUser" placeholder="User name" />
-          </Field>
-          <Field label="Private key" htmlFor="f-sshkey">
-            <TextInput id="f-sshkey" field="sshKeyPath" mono placeholder="~/.ssh/id_ed25519" />
-          </Field>
-        </>
       ) : null}
     </div>
   );
@@ -259,8 +231,7 @@ function SecurityGroup() {
           field="credentialStore"
           options={[
             ['secret', 'In the VS Code secret store, the OS keychain'],
-            ['prompt', 'Ask me every time I connect'],
-            ['none', 'Do not keep a credential']
+            ['prompt', 'Ask me every time I connect']
           ]}
         />
       </Field>
@@ -268,6 +239,7 @@ function SecurityGroup() {
         id="f-reprompt"
         field="repromptOnReject"
         label="Ask again when a stored credential is rejected"
+        hint="The rejected password is forgotten and you are asked for a new one on the same attempt."
       />
       <Checkbox
         id="f-readonly"
@@ -301,14 +273,8 @@ function SessionGroup({ mssql }: { mssql: boolean }) {
       >
         <TextInput id="f-appname" field="applicationName" />
       </Field>
-      {mssql ? (
-        <Checkbox
-          id="f-mars"
-          field="multipleActiveResultSets"
-          label="Allow multiple active result sets"
-        />
-      ) : (
-        <Field label="Schema search path" htmlFor="f-searchpath">
+      {mssql ? null : (
+        <Field label="Schema search path" htmlFor="f-searchpath" hint="Sent with the first statement of every session.">
           <TextInput id="f-searchpath" field="searchPath" mono />
         </Field>
       )}

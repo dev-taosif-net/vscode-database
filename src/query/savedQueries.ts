@@ -131,11 +131,6 @@ export class SavedQueryStore implements vscode.Disposable {
     return uri;
   }
 
-  /** The connection a `.sql` file names in its own header, if any. */
-  async bindingFor(uri: vscode.Uri): Promise<string | undefined> {
-    return (await this.describe(uri)).profileId;
-  }
-
   private rewatch(): void {
     this.watcher?.dispose();
     const root = vscode.workspace.workspaceFolders?.[0];

@@ -4,14 +4,14 @@ import { Codicon } from '../primitives/Codicon';
 import { useStoreSelector } from '../state/store';
 import { post } from './api';
 import { fullHost } from './host';
-import { matchRow } from './model';
-import { CursorState, ListState, SessionMap, cursorStore, listStore, sessionStore } from './state';
+import { Counts, CursorState, ListState, SessionMap, countsStore, cursorStore, listStore, sessionStore } from './state';
 
-const selRows = (s: ListState) => s.rows;
+const selCount = (s: ListState) => s.rows.length;
 const selById = (s: ListState) => s.byId;
 const selQuery = (s: ListState) => s.query;
 const selSessions = (s: SessionMap) => s;
 const selCursor = (s: CursorState) => s.cursorId;
+const selCounts = (c: Counts) => c;
 
 /**
  * The same words the tree's accessibility information used, so nothing an
@@ -52,11 +52,12 @@ interface Props {
  * no dwell delay to tune. Hover still gets the full string through `title`.
  */
 export function Footer({ onReveal }: Props): JSX.Element {
-  const rows = useStoreSelector(listStore, selRows);
+  const total = useStoreSelector(listStore, selCount);
   const byId = useStoreSelector(listStore, selById);
   const query = useStoreSelector(listStore, selQuery);
   const sessions = useStoreSelector(sessionStore, selSessions);
   const cursorId = useStoreSelector(cursorStore, selCursor);
+  const matchCounts = useStoreSelector(countsStore, selCounts);
 
   const counts = useMemo(() => {
     let live = 0;
@@ -75,25 +76,12 @@ export function Footer({ onReveal }: Props): JSX.Element {
         busy++;
       }
     }
-    return { live, failed, saved: Math.max(0, rows.length - live - failed - busy) };
-  }, [sessions, byId, rows.length]);
+    return { live, failed, saved: Math.max(0, total - live - failed - busy) };
+  }, [sessions, byId, total]);
 
-  const needle = query.trim().toLowerCase();
-  const filtered = useMemo(() => {
-    if (!needle) {
-      return null;
-    }
-    let matched = 0;
-    let productionHidden = 0;
-    for (const row of rows) {
-      if (matchRow(row, needle)) {
-        matched++;
-      } else if (row.environment === 'prod') {
-        productionHidden++;
-      }
-    }
-    return { matched, productionHidden };
-  }, [rows, needle]);
+  // The counts `flatten` published for this query, or nothing while there is
+  // no query and the strip shows the plain total.
+  const filtered = query.trim() ? matchCounts : null;
 
   // A section header's cursor id is never a profile id, so resting on one
   // misses this lookup and the strip shows the counts rather than a stale row.
@@ -168,7 +156,7 @@ export function Footer({ onReveal }: Props): JSX.Element {
     return () => window.clearTimeout(id);
   }, [sessions]);
 
-  const spoken = `${counts.live} connected, ${counts.saved} saved, ${counts.failed} failed, ${rows.length} total`;
+  const spoken = `${counts.live} connected, ${counts.saved} saved, ${counts.failed} failed, ${total} total`;
 
   return (
     <footer className="footer" aria-label="Connection counts">
@@ -224,10 +212,10 @@ export function Footer({ onReveal }: Props): JSX.Element {
         )}
         <span aria-hidden="true">
           {filtered
-            ? `${filtered.matched} of ${rows.length}${
+            ? `${filtered.matched} of ${total}${
                 filtered.productionHidden > 0 ? ` · ${filtered.productionHidden} production hidden` : ''
               }`
-            : rows.length}
+            : total}
         </span>
       </div>
 

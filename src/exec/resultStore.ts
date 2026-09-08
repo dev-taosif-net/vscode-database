@@ -128,6 +128,11 @@ export class ResultStore implements vscode.Disposable {
     return record;
   }
 
+  /** The record without counting as a read, for listeners reacting to progress. */
+  peek(id: string): ExecutionRecord | undefined {
+    return this.records.get(id);
+  }
+
   /** Every execution belonging to one tab, newest first. */
   forTab(tab: string): ExecutionRecord[] {
     return [...this.records.values()].filter((r) => r.tab === tab).sort((a, b) => b.startedAt - a.startedAt);

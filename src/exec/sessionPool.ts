@@ -132,10 +132,6 @@ export class SessionPool implements vscode.Disposable {
     this.leases.get(owner)?.session.cancelCurrent();
   }
 
-  isBusy(owner: string): boolean {
-    return this.leases.get(owner)?.busy ?? false;
-  }
-
   /** Closes a tab's session. Called when the tab closes, and by the sweeper. */
   async release(owner: string): Promise<void> {
     const lease = this.leases.get(owner);
@@ -148,14 +144,6 @@ export class SessionPool implements vscode.Disposable {
     }
     await lease.session.close().catch(() => undefined);
     this.output.info(`Execution session closed for ${owner}`);
-  }
-
-  /** Every session belonging to one connection. Used by Disconnect. */
-  async releaseProfile(profileId: string): Promise<void> {
-    const owners = [...this.leases.values()]
-      .filter((lease) => lease.profileId === profileId)
-      .map((lease) => lease.owner);
-    await Promise.all(owners.map((owner) => this.release(owner)));
   }
 
   private async closeAll(): Promise<void> {

@@ -1,6 +1,6 @@
 import { createContext, useCallback, useContext } from 'react';
 import { EditorState, HostMessage, ProbeResult } from '../../shared/protocol';
-import { ConnectionProfile, defaultPort } from '../../types';
+import { ConnectionProfile, defaultPort, needsSecret, needsUser } from '../../types';
 import { ParsedConnection, parseConnectionString } from '../lib/connectionString';
 import { PersistedUi, readPersisted, writePersisted } from './vscode';
 import { Store, createStore, useStoreSelector } from './store';
@@ -11,6 +11,28 @@ export type AdvancedGroupId = 'transport' | 'network' | 'security' | 'session' |
 export interface ParseReport {
   ok: boolean;
   text: string;
+}
+
+/** The fields validation can name. Every one is a box on the form. */
+export type ValidatedField =
+  | 'name'
+  | 'host'
+  | 'port'
+  | 'user'
+  | 'password'
+  | 'clientCertPath'
+  | 'clientKeyPath';
+
+export interface Problem {
+  field: ValidatedField;
+  /** One sentence, in the form's own words: "Server is required". */
+  message: string;
+  /**
+   * False when the field only stands between the draft and a live session.
+   * A profile can be saved without a user name and finished later; it cannot
+   * be saved without a name to file it under.
+   */
+  blocksSave: boolean;
 }
 
 export interface AppState {
@@ -38,6 +60,17 @@ export interface AppState {
   nameFromString: boolean;
   /** The production confirmation standing in front of a connect. */
   confirming: boolean;
+  /**
+   * Fields the user has left, so a problem is shown on a box they have been
+   * in rather than on every empty box of a form they just opened.
+   */
+  touched: Readonly<Record<string, true>>;
+  /**
+   * True once every problem should be shown at once: a stored connection was
+   * opened, or a shortcut tried to act on a draft that was not ready. A brand
+   * new draft starts false, so it opens quiet rather than red.
+   */
+  attempted: boolean;
 }
 
 const EMPTY_HOST: EditorState = {
@@ -59,7 +92,7 @@ const DEFAULT_GROUPS: Record<AdvancedGroupId, boolean> = {
   driver: false
 };
 
-export function initialState(): AppState {
+function initialState(): AppState {
   const saved: PersistedUi = readPersisted();
   return {
     host: EMPTY_HOST,
@@ -74,7 +107,9 @@ export function initialState(): AppState {
     parseText: '',
     parseReport: null,
     nameFromString: false,
-    confirming: false
+    confirming: false,
+    touched: {},
+    attempted: false
   };
 }
 
@@ -113,6 +148,12 @@ export function useField<K extends keyof ConnectionProfile>(key: K): ConnectionP
   return useStoreSelector(useStore(), select);
 }
 
+/** The problem to draw under a box, or undefined while it should stay quiet. */
+export function useProblem(field: ValidatedField): string | undefined {
+  const select = useCallback((state: AppState) => shownProblem(state, field), [field]);
+  return useStoreSelector(useStore(), select);
+}
+
 export function useUpdate(): (update: (state: AppState) => AppState) => void {
   const store = useStore();
   return useCallback((update) => store.setState(update), [store]);
@@ -141,6 +182,7 @@ function cloneProfile(profile: ConnectionProfile): ConnectionProfile {
 
 function loadDraft(state: AppState, host: EditorState): AppState {
   const profile = profileById(host, host.selectedId);
+  const fresh = Boolean(profile && host.pending && host.pending.id === profile.id);
   return {
     ...state,
     host,
@@ -153,7 +195,11 @@ function loadDraft(state: AppState, host: EditorState): AppState {
     parseText: '',
     parseReport: null,
     nameFromString: false,
-    confirming: false
+    confirming: false,
+    touched: {},
+    // A stored connection that is missing something says so the moment it is
+    // opened; a new one is allowed to be empty until it has been typed in.
+    attempted: !fresh
   };
 }
 
@@ -212,6 +258,19 @@ export function setField<K extends keyof ConnectionProfile>(
     // stops being allowed to rewrite it.
     nameFromString: key === 'name' ? false : state.nameFromString
   };
+}
+
+/** The user has left a box, so a problem with it may now be shown. */
+export function touch(state: AppState, field: string): AppState {
+  if (state.touched[field]) {
+    return state;
+  }
+  return { ...state, touched: { ...state.touched, [field]: true } };
+}
+
+/** Every problem should be shown: something tried to act on the draft. */
+export function markAttempted(state: AppState): AppState {
+  return state.attempted ? state : { ...state, attempted: true };
 }
 
 /**
@@ -291,7 +350,10 @@ export function applyParsed(state: AppState, parsed: ParsedConnection, mode: App
     // failed attempt is corrected by editing it rather than by pasting again.
     parseText: mode === 'direct' ? state.parseText : '',
     parseReport: { ok: true, text: lines.join(' ') },
-    nameFromString: named ? true : state.nameFromString
+    nameFromString: named ? true : state.nameFromString,
+    // The fields were just filled in, so what is still missing is worth
+    // saying on the boxes themselves.
+    attempted: mode === 'fields' ? true : state.attempted
   };
   return mode === 'direct' ? next : setMethod(next, 'manual');
 }
@@ -352,15 +414,15 @@ function nameFromTarget(state: AppState, draft: ConnectionProfile): string | nul
 }
 
 /*
- * One-entry memo for `effective`.
+ * One-entry memos for `effective` and `problems`.
  *
  * A selector has to hand `useSyncExternalStore` the same object every time it
  * is asked about the same state, or React redraws in a loop, and several
- * components ask this question. The store replaces the whole state object on
+ * components ask these questions. The store replaces the whole state object on
  * every change, so the identity of the input is the whole of the key.
  */
-let lastInput: AppState | null = null;
-let lastOutput: AppState | null = null;
+let lastEffectiveInput: AppState | null = null;
+let lastEffectiveOutput: AppState | null = null;
 
 /**
  * The draft an action would actually run against: the fields, with a
@@ -373,13 +435,13 @@ let lastOutput: AppState | null = null;
  * the pane in front of the user, changes nothing.
  */
 export function effective(state: AppState): AppState {
-  if (lastInput === state && lastOutput) {
-    return lastOutput;
+  if (lastEffectiveInput === state && lastEffectiveOutput) {
+    return lastEffectiveOutput;
   }
   const parsed = state.method === 'string' ? parseConnectionString(state.parseText) : null;
   const output = parsed ? applyParsed(state, parsed, 'direct') : state;
-  lastInput = state;
-  lastOutput = output;
+  lastEffectiveInput = state;
+  lastEffectiveOutput = output;
   return output;
 }
 
@@ -387,6 +449,113 @@ export function toggleGroup(state: AppState, group: AdvancedGroupId): AppState {
   const advanced = { ...state.advanced, [group]: !state.advanced[group] };
   writePersisted({ advanced });
   return { ...state, advanced };
+}
+
+/* ------------------------------------------------------------- validation */
+
+let lastProblemsInput: AppState | null = null;
+let lastProblemsOutput: Problem[] = [];
+
+/**
+ * Everything that stands between the draft and a live session, in the order
+ * the form lays the boxes out.
+ *
+ * The rules are the drivers' own, not guesses. A SQL login and an NTLM login
+ * both hand tedious a user name and a password; an Entra login hands it a
+ * token from the account provider and needs neither. node-postgres logs a
+ * `trust` or `peer` role in with no credential and falls back to the operating
+ * system user for the name, so both are optional there; a certificate login
+ * has to be able to read both halves of the key pair. The NTLM domain is
+ * optional because the driver takes an empty one and the host's DNS domain is
+ * sent in its place.
+ *
+ * A password is only *required* while the profile keeps its credential in the
+ * keychain and the keychain does not have one yet. A profile that asks every
+ * time will ask, which is the point of that setting.
+ */
+export function problems(state: AppState): Problem[] {
+  if (lastProblemsInput === state) {
+    return lastProblemsOutput;
+  }
+  const out: Problem[] = [];
+  const draft = state.draft;
+  if (draft) {
+    const name = draft.name.trim().toLowerCase();
+    if (!name) {
+      out.push({ field: 'name', message: 'Connection name is required', blocksSave: true });
+    } else if (
+      state.host.profiles.some((p) => p.id !== draft.id && p.name.trim().toLowerCase() === name)
+    ) {
+      out.push({ field: 'name', message: 'Another connection already has this name', blocksSave: true });
+    }
+    if (!draft.host.trim()) {
+      out.push({ field: 'host', message: 'Server is required', blocksSave: true });
+    }
+    if (portInvalid(draft.port)) {
+      out.push({ field: 'port', message: 'Port must be between 1 and 65535', blocksSave: true });
+    }
+    if (needsUser(draft) && !draft.user.trim()) {
+      out.push({ field: 'user', message: 'User name is required', blocksSave: false });
+    }
+    if (passwordMissing(state)) {
+      out.push({ field: 'password', message: 'Password is required', blocksSave: false });
+    }
+    if (draft.driver === 'postgres' && draft.pgAuth === 'certificate') {
+      if (!draft.clientCertPath.trim()) {
+        out.push({ field: 'clientCertPath', message: 'Client certificate path is required', blocksSave: false });
+      }
+      if (!draft.clientKeyPath.trim()) {
+        out.push({ field: 'clientKeyPath', message: 'Client key path is required', blocksSave: false });
+      }
+    }
+  }
+  lastProblemsInput = state;
+  lastProblemsOutput = out;
+  return out;
+}
+
+/** True when a session needs a password nobody has supplied yet. */
+export function passwordMissing(state: AppState): boolean {
+  const draft = state.draft;
+  if (!draft || !needsSecret(draft) || draft.credentialStore !== 'secret') {
+    return false;
+  }
+  const typed = state.secret !== undefined && state.secret !== '';
+  return !typed && !state.host.hasSecret[draft.id];
+}
+
+export function problemFor(state: AppState, field: ValidatedField): Problem | undefined {
+  return problems(state).find((problem) => problem.field === field);
+}
+
+/** The problem a box should be drawing right now, once the user has been in it. */
+function shownProblem(state: AppState, field: ValidatedField): string | undefined {
+  if (!state.attempted && !state.touched[field]) {
+    return undefined;
+  }
+  return problemFor(state, field)?.message;
+}
+
+/** The draft can be filed under a name, at an address. */
+export function canSave(state: AppState): boolean {
+  return Boolean(state.draft) && !problems(state).some((problem) => problem.blocksSave);
+}
+
+/** The draft can be handed to a driver. */
+export function canConnect(state: AppState): boolean {
+  return Boolean(state.draft) && problems(state).length === 0;
+}
+
+/** "Server and password are missing", for a button that cannot be pressed. */
+export function missingSummary(state: AppState, forSave = false): string | undefined {
+  const names = problems(state)
+    .filter((problem) => !forSave || problem.blocksSave)
+    .map((problem) => problem.message.replace(/ (is|must be|already has).*$/, '').toLowerCase());
+  if (names.length === 0) {
+    return undefined;
+  }
+  const list = names.length === 1 ? names[0] : `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`;
+  return `${list.charAt(0).toUpperCase()}${list.slice(1)} ${names.length === 1 ? 'is' : 'are'} still needed`;
 }
 
 /* --------------------------------------------------------------- readings */
@@ -409,11 +578,6 @@ export function isDirty(state: AppState): boolean {
     return true;
   }
   return comparable(state.draft) !== comparable(state.baseline);
-}
-
-export function isValid(state: AppState): boolean {
-  const draft = state.draft;
-  return Boolean(draft && draft.name.trim() && draft.host.trim() && !portInvalid(draft.port));
 }
 
 export function portInvalid(port: number | null | undefined): boolean {

@@ -782,8 +782,20 @@ textarea:focus {
   border-color: var(--focus);
 }
 
-input[aria-invalid='true'] {
+input[aria-invalid='true'],
+select[aria-invalid='true'],
+textarea[aria-invalid='true'] {
   border-color: color-mix(in srgb, var(--bad) 65%, var(--bd-input));
+}
+
+/*
+ * The required mark. Red and an asterisk, and never red alone: the label's
+ * control carries `aria-required`, so the same fact reaches a reader that
+ * cannot see the mark. `--bad` is the theme's own error foreground, which every
+ * built-in theme keeps above 4.5:1 on its editor ground.
+ */
+.field .required {
+  font-weight: 600;
 }
 
 input::placeholder,
@@ -1406,6 +1418,22 @@ textarea::placeholder {
 }
 .summary-item.bad .summary-icon {
   color: var(--bad);
+}
+
+/*
+ * The gaps as one sentence, for assistive technology. The facts above already
+ * say "Missing" beside the item it belongs to, so the sentence is not drawn;
+ * it is announced, politely, as the form is filled in.
+ */
+.summary-missing {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
 }
 
 /* --------------------------------------------------------------- result */

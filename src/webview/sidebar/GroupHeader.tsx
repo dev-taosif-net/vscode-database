@@ -10,9 +10,9 @@ import { fold, useIsCursor } from './state';
  * kept because a second convention for the same thing is a second thing to get
  * wrong. A profile id is a uuid, so neither of these can collide with a row.
  */
-export const PINNED_ID = 'pinned';
+const PINNED_ID = 'pinned';
 
-export function headerId(environment: EnvironmentId): string {
+function headerId(environment: EnvironmentId): string {
   return `environment:${environment}`;
 }
 
