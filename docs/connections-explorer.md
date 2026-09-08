@@ -66,17 +66,16 @@ Drawn at 260px, which is the canonical width.
 ┌──────────────────────────────────────────────────────────┐
 │ DATABASE CONNECTIONS      84 · 3 open   ⌕ ＋ ⟳ ⑂ ⊘       │  35px, drawn by the workbench
 ├──────────────────────────────────────────────────────────┤
-│  ⌕ Name, host, database                              ⨯   │  search band, 32px, never scrolls
+│  ⌕ Search connections and objects…                   ⨯   │  search band, 32px, never scrolls
 ├──────────────────────────────────────────────────────────┤
 │  ⌄    PINNED  2                                          │  section header, 22px, sticky
-│▌  ●   PROD billing-write   sql-prod-01            ⛁      │  a pinned row keeps its own ribbon
+│▌  ●   PROD billing-write   sql-prod-01         ⛁  ⚯      │  a pinned row keeps its own ribbon
 │▌ ⌄ 🛡 PROD    9 · 1                                      │  group header, riskiest group first
-│▌  ○🔒 billing              sql-prod-01            ⛁      │
-│▌  ●🔒 billing-reports      sql-prod-01 · reports  ⛁      │
+│▌  ○🔒 billing              sql-prod-01         ⛁  ⚯      │  the session button, on every row
+│▌  ●🔒 billing-reports      sql-prod-01         ⛁  ⚯      │
 │▏ ⌄    QA      18                                         │
-│▏  △   analytics            pg-qa-3        FAIL    🐘     │
-│▏  ○   sandbox         ⟨ ⚯  ✎  …  on the row under the ⟩ ░│  the scroller — the only thing
-│                       ⟨       pointer only        ⟩      │  that scrolls
+│▏  △   analytics            pg-qa-3      FAIL   🐘  ⚯     │
+│▏  ○   sandbox              pg-qa-3             🐘  ⚯    ░│  the scroller — the only thing that scrolls
 ├──────────────────────────────────────────────────────────┤
 │▌ 🛡 billing-reports · read-only                  Close   │  production band, 18px, present
 ├──────────────────────────────────────────────────────────┤  only while a prod session is open
@@ -174,7 +173,8 @@ connected row paints a 100% segment over its own slice through
 faint bar with bright ticks where sessions are open.
 
 **Fourth, and only once you have committed to a row** — the host in mono, then
-the database, then the state badge at the right edge.
+the state badge, then the engine mark and the session button at the right
+edge.
 
 ### The type ramp
 
@@ -194,7 +194,6 @@ because it is the rule most likely to be helpfully "fixed".
 | connection name, connected | 13px | 600 | — | `--fg` |
 | environment short badge | 10.5px | 700 | 0.08em | `--env-*-ink` |
 | host | 10.5px mono | 400 | — | `--fg-dim` |
-| database | 10.5px | 400 | — | `color-mix(in srgb, var(--fg-dim) 78%, transparent)` |
 | auth label, ≥560px | 10.5px | 400 | — | `--fg-dim` |
 | state badge | 9.5px | 600 | 0.04em, uppercase | state ink |
 | section count | 10px | 500 | — | `--fg-dim` |
@@ -309,28 +308,33 @@ props on the `FlatItem`, including the `open` count that makes a header say
 `18 · 2 open`, so a session change re-renders at most the headers whose number
 actually moved rather than every header on screen.
 
-A row draws three controls, on the row under the pointer and on the cursor row
-while the list has focus: the session action, Edit Connection, and the menu.
+A row draws one control, and it draws it on every row at every moment: the
+session action, which says Connect on a saved row, Disconnect on a live one and
+Cancel while an attempt is in flight.
 
-They were removed once, and the reasons were good ones — they were never in the
-tab order, and the stylesheet dropped them one at a time as the panel narrowed,
-while the right-click menu carried all of them at every width. What that
-argument missed is that a menu you have to be told about is not an affordance.
-Connecting and editing are the two things anybody does with this panel all day,
-and both took a gesture with no visible cue anywhere in the view.
+It was three for a while — the session action, Edit Connection, and a button
+that reopened the right-click menu — revealed on the row under the pointer.
+Two of those have gone. Edit Connection and the menu button both duplicated
+entries on the right-click menu, which is one gesture away on every row at
+every width, and a permanent column that repeats a menu does not earn its
+pixels.
 
-So they are back, on stricter terms. They are absolutely positioned over the
-row's right end rather than laid out in it, so no column reflows as the pointer
-crosses eighty rows and the name column holds at the pixel. They are three
-fixed positions whose meaning does not change with state, so the first slot is
-always the session action whether it currently says Connect, Disconnect or
-Cancel. They remain `tabindex="-1"` and `aria-hidden`, because a focusable
-control inside a `treeitem` under a roving tabindex would put three extra stops
-between one row and the next; the menu is still the complete keyboard path, and
-the third button is how you reach it without a right-click. Below 196px only
-that third button survives — at 170px the rail is 47 and three buttons are 60,
-which would leave the name sixty pixels and turn the row into a control strip
-with a caption.
+The one that stayed also stopped hiding. A control revealed on hover cannot be
+aimed at: you have to arrive somewhere before you can see what you came for,
+and connecting is what this panel is for. Because it is always drawn it is also
+laid out rather than overlaid — the absolute positioning, the gradient fade and
+the `--acts-bg` variable the ground rules maintained for it all existed to stop
+a group from disturbing a layout it appeared into, and there is no appearing
+left to do. It is a 20px column beside the engine mark, the same width on every
+row because every state produces exactly one button, and it survives the 196px
+breakpoint that takes the address and the engine mark. It is drawn at
+`--fg-dim` and comes to full ink on the row the pointer or the cursor is on,
+so eighty-four plugs read as available rather than as urgent.
+
+It remains `tabindex="-1"` and `aria-hidden`, because a focusable control inside
+a `treeitem` under a roving tabindex would put an extra stop between one row and
+the next. The right-click menu is the complete keyboard path, and it is a
+superset of this button.
 
 The menu is a workbench menu rather than one drawn in the page, because a
 page-drawn menu cannot escape the panel's bounds and would be clipped by the
@@ -688,19 +692,22 @@ because a sidebar webview's viewport width *is* the view width, every rule would
 work identically as `@media`, and container queries are used only so the same
 authoring pattern survives the component being reused elsewhere.
 
-There were five tiers when the row was one line, and three of them existed only
-to decide which of the three fields could afford to be on it. Stacking answered
-that question outright: the name has the first line, the host and the database
-share the second, and all three are present at 170px. What is left is the state
-badge.
+There were five tiers when the row carried more fields, and most of them existed
+only to decide which field could afford to be on it. The row now carries a name,
+a host, a state badge, an engine mark and one button, and the tiers decide two
+things: whether the host and the engine mark are on the row at all, and whether
+the badge gets a fixed column.
 
 | tier | range | on the row | why there |
 |---|---|---|---|
-| **xs** | < 196px | name, host, database; badge only on failed and production rows | below where a badge and a readable name coexist |
-| **sm** | 196–439px | name, host, database, badge | a state word beats twenty more characters of a host you already know |
+| **xs** | < 196px | name and session button; badge only on failed and production rows | below where a host, a mark and a readable name coexist |
+| **sm** | 196–439px | name, host, badge, engine mark, session button | a state word beats twenty more characters of a host you already know |
 | **lg** | ≥ 440px | the badge takes a fixed 46px column | the words line up down the right edge across every row |
 
-**xs.** The badge collapses to zero width for
+**xs.** The host and the engine mark leave the row entirely — at 170px the rail
+is 47, and a name sharing what is left with a host, a mark and a button is a
+control strip with a caption. The session button stays at every width, because
+it is what the row is for. The badge collapses to zero width for
 connected and testing **but not for failed and not for production**. That
 asymmetry is deliberate: a connected row already carries three other marks — a
 filled disc, a 600-weight name, a bright ribbon tick — so its word is the
@@ -708,19 +715,17 @@ cheapest thing to lose, while failure's amber triangle could be mistaken for
 UAT's amber by someone who has not learned the vocabulary, and production is
 where a missing word costs something. The placeholder shortens to `Filter`.
 
-**sm.** The badge returns for all four states. This is the biggest legibility
-gain per pixel in the system: a state word beats twenty more characters of a
-host you already know.
+**sm.** The host, the engine mark and the badge all return. This is the biggest
+legibility gain per pixel in the system: a state word beats twenty more
+characters of a host you already know.
 
-The host and the database sit after the name, separated by a 1px × 10px
-vertical hairline rather than a middot — at 10.5px a hairline is a lighter mark
-and gives the eye a rule to run down instead of a speck to jump over. The
-database is dropped outright when it matches the connection name, which on a
-real estate is most rows: a name is usually chosen from the database it points
-at, and `PeopleDeskMatador · PeopleDeskMatador` spends a third of the row
-saying one thing twice. That is the one field the component drops rather than
-styles away, and the exception holds because the rule it breaks is about the
-columns the eye runs down, not about trailing prose.
+The database is not on the row in any tier. It used to sit after the host behind
+a hairline separator, and it was already dropped whenever it matched the
+connection name — which on a real estate is most rows, because a name is usually
+chosen from the database it points at. A field that comes and goes down a column
+is the one thing a column must not do, so the field went instead. The footer
+readout carries it in full for the row the cursor is on, the row's `title=` and
+accessible name carry it on every row, and the search box still matches it.
 
 **lg.** The badge takes a fixed 46px column, so the state words line up down the
 right edge across every row. That is the one vertical alignment worth keeping
@@ -738,13 +743,12 @@ vertical scan the whole design is built on.
 
 ```
 .name      flex: 1 1 auto;  min-width: 76px;  overflow: hidden; text-overflow: ellipsis
-.db        flex: 0 1 auto;  min-width: 0;     flex-shrink: 3
 .host      flex: 0 1 auto;  min-width: 0;     flex-shrink: 2
 .host-head flex: 0 1 auto;  min-width: 4ch;   flex-shrink: 1
 .host-tail flex: 0 1 auto;  min-width: 0;     flex-shrink: 6
 ```
 
-The domain suffix evaporates first, then the database, then the host's first
+The domain suffix evaporates first, then the host's first
 label, then the name ellipsises. `splitHost` puts the suffix in its own span
 precisely so `flex-shrink` can take it while the full string stays in the DOM —
 a copy takes the whole host, and the match highlighter can mark a hit inside the
@@ -761,18 +765,19 @@ content — the same trap `docs/ui-architecture.md` documents for the editor's
 
 ### The search-aware override
 
-Both fields are on every row now, so nothing has to be revealed. What is left
-is narrower and still worth having: the field the query matched must not be the
-one that gets ellipsised while the other keeps its room.
+The name and the host are on every row now, so nothing has to be revealed. What
+is left is narrower and still worth having: a host the query matched must not be
+the thing that gets ellipsised while the name keeps its room.
 
 ```css
-.row[data-hit~="database"] .db   { flex-shrink: 0; max-width: 100% }
-.row[data-hit~="host"]     .host { flex-shrink: 0; max-width: 100% }
+.row[data-hit~="host"] .host { flex-shrink: 0; max-width: 100% }
 mark { background: transparent; color: var(--mark); font-weight: 600 }
 ```
 
-A field the query matched is on the row at every width, including 170px, with
-the matched substring marked. When that fires at 170px the name is cut to about
+A query still matches the database, and a row that matches only there stays in
+the list with nothing marked on it — the readout and the tooltip are where that
+match is visible. A host the query matched keeps its room at every width down to
+170px, with the matched substring marked. When that fires at 170px the name is cut to about
 six characters, which is correct: the user is searching, the match is the point,
 and the full name is in the readout, the `title=` and the accessible name. A
 filter that hides the reason a row matched is the worst scanning failure

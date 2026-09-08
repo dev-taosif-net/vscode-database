@@ -502,11 +502,6 @@ body {
   left: 0;
   right: 0;
   z-index: 1;
-  /* The ground the action fade blends into. Overridden by whichever of hover
-     and selection won below; without a default here a cursor row that is
-     neither would compute `var(--acts-bg)` as invalid, drop the gradient
-     entirely, and let the address show through the buttons. */
-  --acts-bg: var(--bg);
   height: var(--row-h);
   display: flex;
   align-items: center;
@@ -634,13 +629,14 @@ body {
 }
 
 /*
- * The engine mark, last on the row.
+ * The engine mark, second from the end of the row.
  *
  * It used to sit at 46..62, between the state glyph and the name, which is the
  * position the eye lands on. A full-colour vendor tile there answers a
  * question nobody scanning a list is asking, and it cost the name twenty-three
- * pixels and the tree its indent. At the trailing edge the marks still form a
- * column you can run down, and they compete with nothing.
+ * pixels and the tree its indent. At the trailing edge, with only the session
+ * button after it, the marks still form a column you can run down, and they
+ * compete with nothing.
  */
 .engine {
   flex: none;
@@ -713,22 +709,6 @@ body {
   font-weight: 600;
 }
 
-/*
- * A 1px hairline rather than a middot. At 10.5px a dot is a speck the eye has
- * to jump over; a rule is something it can run down. Drawn only when the field
- * after it is drawn, which is what keeps a trailing separator off a row whose
- * database is hidden.
- */
-.sep {
-  display: block;
-  flex: none;
-  align-self: center;
-  width: 1px;
-  height: 10px;
-  margin: 0 5px;
-  background: color-mix(in srgb, var(--fg) 14%, transparent);
-}
-
 /* Monospace because 10.0.14.22 and 10.0.14.23 are only separable at a fixed
    pitch, and because it gives the line a texture the eye can skip. */
 .host {
@@ -785,18 +765,6 @@ body {
   min-width: 0;
 }
 
-.db {
-  display: inline;
-  flex: 0 1 auto;
-  flex-shrink: 3;
-  min-width: 0;
-  font-size: 10.5px;
-  color: color-mix(in srgb, var(--fg-dim) 78%, transparent);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
 /* The matched substring, in the tree's own highlight colour. No background:
    eighty-four highlighted cells with grounds of their own would be a second
    selection channel competing with the real one. */
@@ -841,58 +809,36 @@ mark {
   color: var(--busy);
 }
 
-/* ----------------------------------------------------------- row actions */
+/* ------------------------------------------------------------- row action */
 
 /*
- * Three buttons, drawn over the right end of the row the pointer is on.
+ * One button, in the row's own flex line, on every row at every moment.
  *
- * Absolutely positioned rather than laid out, which is the whole trick: the
- * row's flex line never learns they exist, so nothing reflows as the pointer
- * crosses eighty rows and the name column holds at the pixel. What they cover
- * is the address and the engine mark, and covering those is the point — while
- * you are reaching for a control you are not reading a hostname.
- *
- * `--acts-bg` is set by whichever ground rule won on the row, so the fade
- * matches hover, inactive selection and active selection without this block
- * naming any of the three.
+ * It used to be three buttons absolutely positioned over the right end of the
+ * row under the pointer, faded into whichever ground had won so the address
+ * could pass under them. That whole apparatus — the overlay, the gradient and
+ * the `--acts-bg` variable the three ground rules maintained for it — existed
+ * to stop the group from disturbing a layout it appeared into. A button that
+ * is always drawn has nothing to appear into: it is a column like the engine
+ * mark, 20px wide on every row because every state produces exactly one
+ * button, so nothing reflows as the pointer crosses eighty rows and nothing
+ * has to be covered up.
  */
 .acts {
-  position: absolute;
-  right: 5px;
-  top: 0;
-  bottom: 0;
-  display: none;
+  flex: none;
+  display: flex;
   align-items: center;
-  /* The lead-in, so text passing under the group does not end at a hard edge. */
-  padding-left: 24px;
-  background: linear-gradient(to right, transparent, var(--acts-bg) 24px);
-}
-
-.row:hover {
-  --acts-bg: var(--hover);
-}
-
-.row.is-selected {
-  --acts-bg: var(--sel);
-}
-
-.list:focus-within .row.is-selected {
-  --acts-bg: var(--sel-active);
+  margin-left: 4px;
 }
 
 /*
- * Shown on hover, and on the cursor row whenever the list has focus.
- *
- * The second half is what keeps the keyboard honest: arrowing down the list
- * shows the same three controls the mouse gets, so the actions are not a thing
- * that only exists for people holding a pointer. They are still not tab stops
- * — see `RowActions` — and the menu remains the keyboard path to all of them.
+ * Present on all eighty-four rows, so it is drawn at the address's weight
+ * rather than the name's. Eighty-four plugs at full ink would be a second
+ * column competing with the state glyph for the same sentence; dimmed, the
+ * column reads as available rather than as urgent, and comes up to full ink on
+ * the row the pointer or the cursor is on — the only row where it is about to
+ * be used.
  */
-.row:hover .acts,
-.list:focus-within .row.is-cursor .acts {
-  display: flex;
-}
-
 .act {
   flex: none;
   display: flex;
@@ -904,13 +850,32 @@ mark {
   border: 0;
   border-radius: var(--radius-sm);
   background: none;
-  color: inherit;
+  color: var(--fg-dim);
   font-size: 16px;
   cursor: pointer;
 }
 
+.row:hover .act,
+.list:focus-within .row.is-cursor .act {
+  color: inherit;
+}
+
+/* A session in flight owns the row's colour, and its button is the one that
+   stops it. */
+.row.is-busy .act {
+  color: var(--busy);
+}
+
+/* An active selection repaints the whole row's foreground, and a button still
+   holding a dim neutral or a progress blue against that ground would be the
+   one thing in the row that did not follow. Last, so it wins over both. */
+.list:focus-within .row.is-selected .act {
+  color: inherit;
+}
+
 .act:hover {
   background: var(--toolbar-hover);
+  color: inherit;
 }
 
 .act .codicon {
@@ -1581,30 +1546,22 @@ mark {
 }
 
 /*
- * xs, under 196px: the address and the engine mark go, and the action group
- * keeps only its last button.
+ * xs, under 196px: the address and the engine mark go.
  *
- * At 170px the rail is 47 and the actions are 60, which would leave a name
- * sixty pixels wide — the row would be a control strip with a caption. The
- * menu button survives alone because it is the one that opens everything else,
- * including the two that just left.
+ * At 170px the rail is 47, and a name that has to share what is left with a
+ * host, an engine mark and a button is a row that is a control strip with a
+ * caption. The session button is the one thing that stays at every width: it
+ * is 20px, it is what the row is for, and the right-click menu is the only
+ * other way to reach it.
  */
 .detail,
 .engine {
   display: none;
 }
 
-.acts .act:not(:last-child) {
-  display: none;
-}
-
 @container rail (min-width: 196px) {
   .detail,
   .engine {
-    display: flex;
-  }
-
-  .acts .act:not(:last-child) {
     display: flex;
   }
 }
@@ -1633,11 +1590,6 @@ mark {
  * first thing to disappear.
  */
 .row[data-hit~='host'] .host {
-  flex-shrink: 0;
-  max-width: 100%;
-}
-
-.row[data-hit~='database'] .db {
   flex-shrink: 0;
   max-width: 100%;
 }

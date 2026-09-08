@@ -27,13 +27,13 @@ import {
  *
  * The rail lost a slot as well. The engine mark sat between the state glyph
  * and the name — the position the eye lands on — answering a question nobody
- * scanning a list is asking, in a full-colour gradient at 16px. It is now the
- * last thing on the row, where a column of engine marks is still scannable and
- * competes with nothing. That leaves three slots before the name instead of
- * five and puts it at x=47, which is also what repairs the indent: a folder
- * inside this connection starts at 57, one `--indent` to the right, where
- * before it started at 57 against a parent at 70 and the tree stepped
- * backwards at its first level.
+ * scanning a list is asking, in a full-colour gradient at 16px. It is now at
+ * the trailing edge beside the session button, where a column of engine marks
+ * is still scannable and competes with nothing. That leaves three slots before
+ * the name instead of five and puts it at x=47, which is also what repairs the
+ * indent: a folder inside this connection starts at 57, one `--indent` to the
+ * right, where before it started at 57 against a parent at 70 and the tree
+ * stepped backwards at its first level.
  *
  * Every prop here is a primitive and every one of them is stable for the life
  * of the row, which is the whole point: scrolling by one pixel changes nothing
@@ -186,21 +186,27 @@ export const Row = memo(function Row(props: {
 });
 
 /**
- * The three buttons that appear on the row under the pointer.
+ * The one button the row carries, and it is drawn at every moment.
  *
- * Every action on a connection used to be on the right-click menu and nowhere
- * else, which is a discoverable-by-nobody design: the two things people do all
- * day — open a session and edit the profile — took a gesture you have to be
- * told about. These are the same two, plus the menu itself, in three positions
- * that do not move between states, so the first slot is always "the session
- * thing" whatever the session is currently doing.
+ * It used to be three, revealed under the pointer: the session control, Edit
+ * Connection, and a menu button that reopened the right-click menu. The other
+ * two are gone because the right-click menu already carries them, and a
+ * control that duplicates a menu you are one gesture away from is paying for
+ * a column it does not earn.
  *
- * They are `aria-hidden` and never tab stops, and that is deliberate rather
- * than an oversight. The row is a `treeitem` under a roving tabindex, so a
- * focusable control inside it would put three extra stops between one row and
- * the next and break the tree's keyboard model. Nothing here is reachable only
- * by mouse: the context menu is a complete, keyboard-driven superset of it,
- * and the row's `aria-label` already announces state.
+ * What is left is the session control, and it is never hidden. Connect and
+ * disconnect are the two things people do all day, and a control that appears
+ * only once the pointer is already on the row cannot be aimed at: you have to
+ * arrive somewhere before you can see what you came for. Drawn always, it is a
+ * column you can run down and click into directly, and because every state
+ * produces exactly one button the column is the same width on every row.
+ *
+ * It is `aria-hidden` and never a tab stop, and that is deliberate rather than
+ * an oversight. The row is a `treeitem` under a roving tabindex, so a
+ * focusable control inside it would put an extra stop between one row and the
+ * next and break the tree's keyboard model. Nothing here is reachable only by
+ * mouse: the context menu is a complete, keyboard-driven superset of it, and
+ * the row's `aria-label` already announces state.
  */
 function RowActions({ id, state }: { id: string; state: ConnectionState }) {
   const flight = state === 'connecting' || state === 'testing';
@@ -214,13 +220,11 @@ function RowActions({ id, state }: { id: string; state: ConnectionState }) {
       ) : (
         <Action icon="plug" title="Connect" run={() => post({ type: 'connect', id })} />
       )}
-      <Action icon="edit" title="Edit Connection" run={() => post({ type: 'open', id })} />
-      <Action icon="ellipsis" title="More Actions…" run={openMenu} />
     </span>
   );
 }
 
-function Action({ icon, title, run }: { icon: string; title: string; run: (el: HTMLElement) => void }) {
+function Action({ icon, title, run }: { icon: string; title: string; run: () => void }) {
   return (
     <button
       type="button"
@@ -232,28 +236,11 @@ function Action({ icon, title, run }: { icon: string; title: string; run: (el: H
       // neither predictably.
       onClick={(event) => {
         event.stopPropagation();
-        run(event.currentTarget);
+        run();
       }}
     >
       <Codicon name={icon} />
     </button>
-  );
-}
-
-/**
- * Reopens the row's own context menu under the button.
- *
- * There is no message for "show the menu" and there should not be: the menu is
- * built by the workbench from the `when` clauses in the manifest, out of the
- * `data-vscode-context` payload on the row this button sits in. Re-dispatching
- * a `contextmenu` event lets it bubble to that row and the workbench answers it
- * exactly as it answers a right-click, which is the point — one menu,
- * described in one place, with no second copy to drift.
- */
-function openMenu(el: HTMLElement): void {
-  const box = el.getBoundingClientRect();
-  el.dispatchEvent(
-    new MouseEvent('contextmenu', { bubbles: true, clientX: box.left, clientY: box.bottom })
   );
 }
 
@@ -290,7 +277,7 @@ function StateGlyph({ state, readOnly }: { state: ConnectionState; readOnly: boo
 }
 
 /**
- * The name, then the address it names, on one line.
+ * The name, then the server it names, on one line.
  *
  * The name is 13px at full ink and shrinks last; the detail is 10.5px, dim, and
  * shrinks four times as fast, so pressure takes the address a character at a
@@ -299,8 +286,13 @@ function StateGlyph({ state, readOnly }: { state: ConnectionState; readOnly: boo
  * evaporates first, then the port, then the host truncates from whichever end
  * keeps the part that differs.
  *
- * Every field is still in the DOM on every row and the stylesheet still decides
- * what is visible, with one deliberate exception below.
+ * The database has left the row. It was already dropped whenever it matched the
+ * connection name, which on a real estate is most rows — a name is usually
+ * chosen from the database it points at — so on the rows where it did appear it
+ * was a field that came and went down the column, which is the one thing a
+ * column must not do. The footer readout still carries it in full for the row
+ * the cursor is on, the tooltip carries it on every row, and the search box
+ * still matches it, so nothing that could be read here has been lost.
  */
 function NameRun({
   row,
@@ -314,19 +306,6 @@ function NameRun({
   needle: string;
 }) {
   const parts = splitHost(row);
-
-  /*
-   * The one field this component drops rather than styles away.
-   *
-   * A connection called PeopleDeskMatador pointing at a database called
-   * PeopleDeskMatador spends a third of the row saying its own name twice, and
-   * on a realistic estate that is most rows — the name is usually chosen from
-   * the database. The rule against hiding fields in JavaScript is about the
-   * vertical scan, and it holds for the columns the eye runs down: the rail,
-   * the mark, the left edge of the name. This is trailing prose after the
-   * name, and a repetition there is not a column, it is noise.
-   */
-  const database = row.database.toLowerCase() === label.toLowerCase() ? '' : row.database;
 
   return (
     <>
@@ -347,14 +326,6 @@ function NameRun({
           </span>
           <span className="host-port">{parts.port}</span>
         </span>
-        {database ? (
-          <>
-            <span className="sep" aria-hidden="true" />
-            <span className="db">
-              <Marked text={database} needle={needle} />
-            </span>
-          </>
-        ) : null}
       </span>
     </>
   );
