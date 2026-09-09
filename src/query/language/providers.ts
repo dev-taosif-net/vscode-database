@@ -236,6 +236,8 @@ export class SqlLanguageProviders implements vscode.Disposable {
         continue;
       }
       const item = new vscode.CompletionItem(predicate, vscode.CompletionItemKind.Snippet);
+      item.label = { label: predicate, description: 'foreign key' };
+      item.filterText = predicate;
       item.detail = 'foreign key';
       item.documentation = new vscode.MarkdownString(
         `The declared relationship between \`${relations[i].name}\` and \`${right.name}\`.`
@@ -256,14 +258,16 @@ export class SqlLanguageProviders implements vscode.Disposable {
     // Only the relations actually named in this statement. Offering every
     // column in the database would be a list nobody can read, ranked by a
     // matcher that has no way to prefer the right one.
+    const qualify = context.relations.length > 1;
     for (const relation of context.relations.slice(0, 8)) {
       const columns = await this.index.columnsOf(profileId, relation.schema ?? '', relation.name);
-      const prefix = context.relations.length > 1 ? `${relation.as}.` : '';
       for (const column of columns) {
-        const item = columnItem(column, BAND.column, context.prefix);
-        if (prefix) {
-          item.insertText = `${prefix}${quote(driver, column.name)}`;
-          item.detail = `${column.type} · ${relation.as}`;
+        // With more than one relation in scope the row has to say which table
+        // it came from, because two of them will have an `id` and the name on
+        // its own cannot tell you which one you are about to write.
+        const item = columnItem(column, BAND.column, context.prefix, qualify ? relation.as : undefined);
+        if (qualify) {
+          item.insertText = `${relation.as}.${quote(driver, column.name)}`;
         }
         items.push(item);
       }
@@ -275,17 +279,29 @@ export class SqlLanguageProviders implements vscode.Disposable {
       if (relation.as === relation.name) {
         continue;
       }
+      const target = `${relation.schema ? `${relation.schema}.` : ''}${relation.name}`;
       const item = new vscode.CompletionItem(relation.as, vscode.CompletionItemKind.Variable);
-      item.detail = `alias for ${relation.schema ? `${relation.schema}.` : ''}${relation.name}`;
+      item.label = { label: relation.as, description: target };
+      item.detail = `alias for ${target}`;
+      item.filterText = relation.as;
       item.sortText = `${BAND.alias}${rank(relation.as, context.prefix)}`;
       items.push(item);
     }
   }
 
   private schemas(items: vscode.CompletionItem[], index: Indexed, context: SqlContext): void {
+    const counts = new Map<string, number>();
+    for (const object of index.objects) {
+      counts.set(object.schema, (counts.get(object.schema) ?? 0) + 1);
+    }
     for (const schema of index.schemas) {
+      const count = counts.get(schema) ?? 0;
       const item = new vscode.CompletionItem(schema, vscode.CompletionItemKind.Module);
+      // The word `schema` is what the icon already says. How much is in it is
+      // the thing that tells an empty schema from the one being looked for.
+      item.label = { label: schema, description: count === 1 ? '1 object' : `${count} objects` };
       item.detail = 'schema';
+      item.filterText = schema;
       item.sortText = `${BAND.schema}${rank(schema, context.prefix)}`;
       items.push(item);
     }
@@ -543,11 +559,17 @@ function objectItem(
   item.detail = `${KINDS[kind].singular} · ${schema}${detail ? ` · ${detail}` : ''}`;
   const target = qualify ? `${quote(driver, schema)}.${quote(driver, name)}` : quote(driver, name);
   item.insertText = alias ? `${target} ${alias} ` : target;
+  // Everything the row has to say goes in the label. `CompletionItem.detail`
+  // reaches only the pane beside the row the arrow keys happen to be on, so a
+  // list read the way people read one — all of it at once — would carry
+  // nothing but names. The alias is here for a second reason: text the editor
+  // is about to write should be visible before it is accepted.
+  item.label = {
+    label: name,
+    detail: alias ? `  ${alias}` : undefined,
+    description: `${schema}${detail ? ` · ${detail}` : ''}`
+  };
   if (alias) {
-    // The alias shows in the row before it is accepted. Text that appears in
-    // the editor without warning is the thing that makes people switch a
-    // feature like this off, and it costs one label to not be that.
-    item.label = { label: name, detail: `  ${alias}` };
     item.command = RESUGGEST;
   }
   // The filter is the bare name, so typing `cust` still finds a qualified
@@ -556,12 +578,33 @@ function objectItem(
   return item;
 }
 
-function columnItem(column: DbMember, band: string, prefix: string): vscode.CompletionItem {
+/**
+ * A column, saying what it is without being asked.
+ *
+ * The type sits against the name and the rest trails it, in the order a `CREATE
+ * TABLE` would put them: `empId  int  NOT NULL · PK`. Nullability is spelled
+ * the way the DDL spells it rather than as a badge, because `NULL` on a column
+ * means something precise to anyone writing a predicate against it, and
+ * finding out by hovering is finding out too late.
+ *
+ * `origin` is the alias the column will be written under, and it appears only
+ * when more than one relation is in scope — the case where the bare name is
+ * genuinely ambiguous.
+ */
+function columnItem(column: DbMember, band: string, prefix: string, origin?: string): vscode.CompletionItem {
   const item = new vscode.CompletionItem(column.name, vscode.CompletionItemKind.Field);
-  const marks = [column.key ? 'PK' : undefined, column.ref ? 'FK' : undefined, column.auto ? 'auto' : undefined]
+  const notes = [
+    column.nullable === false ? 'NOT NULL' : column.nullable === true ? 'NULL' : undefined,
+    column.key ? 'PK' : undefined,
+    column.ref ? 'FK' : undefined,
+    column.auto ? 'auto' : undefined,
+    origin
+  ]
     .filter(Boolean)
-    .join(' ');
-  item.detail = marks ? `${column.type} · ${marks}` : column.type;
+    .join(' · ');
+  item.label = { label: column.name, detail: `  ${column.type}`, description: notes || undefined };
+  item.detail = notes ? `${column.type} · ${notes}` : column.type;
+  item.filterText = column.name;
   item.sortText = `${band}${rank(column.name, prefix)}`;
   return item;
 }
