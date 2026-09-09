@@ -3,28 +3,19 @@ import { ConnectionStore } from '../store/connectionStore';
 import { ExecutionService } from '../exec/executionService';
 import { ResultStore } from '../exec/resultStore';
 import { BindingStore } from '../query/bindingStore';
-import { EnvironmentId, environmentLabel } from '../types';
+import { environmentLabel } from '../types';
 import { ActiveTab } from './activeTab';
+import { paintChip } from './connectionChip';
 
 /**
- * The environment's own colour, as a theme colour the workbench will honour.
+ * The status bar: which connection this tab runs on, and whether the last thing
+ * it ran is still going.
  *
- * Only production and UAT get a background: a status bar item that is coloured
- * all the time is a status bar item nobody reads, and the whole point of the
- * tint is that it means something the moment it appears.
- */
-const BACKGROUNDS: Partial<Record<EnvironmentId, string>> = {
-  prod: 'statusBarItem.errorBackground',
-  uat: 'statusBarItem.warningBackground'
-};
-
-/**
- * The second status bar entry: which connection this tab runs on, and what the
- * last thing it ran came back with.
- *
- * Phase 1's entry keeps its job — the riskiest open connection, wherever you
- * are in the window. This one is about the tab in front of you, so it appears
- * only when there is one and disappears the moment there is not.
+ * There used to be a second entry on the left naming the riskiest open
+ * connection window-wide. With one connection and one editor open, which is the
+ * ordinary case, the two said the same thing at opposite ends of the strip.
+ * This is the one that survived, because it answers for the file in front of
+ * you; `ActiveConnectionContext` inherited the context key the other one owned.
  */
 export class WorkspaceStatusBar implements vscode.Disposable {
   private readonly connection: vscode.StatusBarItem;
@@ -51,7 +42,12 @@ export class WorkspaceStatusBar implements vscode.Disposable {
       this.active.onDidChange(() => this.render()),
       this.bindings.onDidChange(() => this.render()),
       this.execution.onDidChange(() => this.render()),
-      this.store.onDidChange(() => this.render())
+      this.store.onDidChange(() => this.render()),
+      vscode.workspace.onDidChangeConfiguration((event) => {
+        if (event.affectsConfiguration('databaseTools.statusBar')) {
+          this.render();
+        }
+      })
     );
     this.render();
   }
@@ -85,6 +81,17 @@ export class WorkspaceStatusBar implements vscode.Disposable {
     this.setKey('sqlTab', Boolean(tab));
     this.setKey('running', record?.status === 'running');
 
+    /*
+     * The keys are set first and unconditionally. `databaseTools.statusBar`
+     * turns off two entries in the strip, not the toolbar above it, and a
+     * window with the strip switched off must still get Run on its title bar.
+     */
+    if (!vscode.workspace.getConfiguration('databaseTools').get<boolean>('statusBar', true)) {
+      this.connection.hide();
+      this.result.hide();
+      return;
+    }
+
     if (!tab) {
       this.connection.hide();
       this.result.hide();
@@ -98,21 +105,30 @@ export class WorkspaceStatusBar implements vscode.Disposable {
     if (!profile) {
       this.connection.text = '$(plug) Not connected';
       this.connection.tooltip = 'Choose a connection for this file.';
+      // Both, or an unbound tab keeps the ink of whatever it was bound to last.
       this.connection.backgroundColor = undefined;
+      this.connection.color = undefined;
       this.connection.show();
       this.result.hide();
       return;
     }
 
-    const dot = profile.environment === 'prod' ? '$(circle-large-filled)' : '$(circle-filled)';
-    this.connection.text = `${dot} ${profile.name || profile.host}${profile.database ? ` · ${profile.database}` : ''}`;
+    /*
+     * Connection, server, database, in the environment's own colour.
+     *
+     * The colour is the carrier here, not the label: an entry you have to read
+     * before you know you are on production is an entry you read once and then
+     * stop seeing. The full host, the port and the environment's name are one
+     * hover away, which is where a value you only want when you are already
+     * asking for it belongs.
+     */
+    paintChip(this.connection, profile);
     this.connection.tooltip = new vscode.MarkdownString(
       `**${environmentLabel(profile.environment)}**\n\n${profile.host}${
         profile.port ? `:${profile.port}` : ''
-      }${profile.readOnly ? '\n\nRead-only' : ''}\n\nClick to change the connection for this tab.`
+      }${profile.database ? ` · ${profile.database}` : ''}${profile.readOnly ? '\n\nRead-only' : ''}` +
+        '\n\nClick to change the connection for this tab.'
     );
-    const background = BACKGROUNDS[profile.environment];
-    this.connection.backgroundColor = background ? new vscode.ThemeColor(background) : undefined;
     this.connection.show();
 
     if (!record) {
@@ -120,33 +136,27 @@ export class WorkspaceStatusBar implements vscode.Disposable {
       return;
     }
     if (record.status === 'running') {
-      const seconds = ((Date.now() - record.startedAt) / 1000).toFixed(1);
-      this.result.text = `$(sync~spin) Executing… ${seconds} s`;
+      this.result.text = '$(sync~spin) Executing…';
       this.result.tooltip = 'Click to cancel.';
       this.result.show();
       return;
     }
-    const rows = record.sets.reduce((sum, set) => sum + set.count, 0);
-    const elapsed = (record.finishedAt ?? Date.now()) - record.startedAt;
-    const shape =
-      record.status === 'error'
-        ? '$(error) Failed'
-        : record.status === 'cancelled'
-          ? `$(circle-slash) Cancelled · ${rows.toLocaleString('en-US')} rows`
-          : `${rows.toLocaleString('en-US')} rows · ${formatDuration(elapsed)}`;
-    this.result.text = shape;
+
+    /*
+     * Only the two states you can still act on.
+     *
+     * A finished query used to leave its row count and its elapsed time in the
+     * strip until the next one replaced them, which is the results panel's own
+     * headline restated a screen away from the panel. What is left is the pair
+     * the panel cannot answer from the corner of the eye: something is still
+     * running, or the last thing did not finish.
+     */
+    if (record.status === 'done') {
+      this.result.hide();
+      return;
+    }
+    this.result.text = record.status === 'error' ? '$(error) Failed' : '$(circle-slash) Cancelled';
     this.result.tooltip = record.error?.text ?? 'The last statement run on this tab.';
     this.result.show();
   }
-}
-
-function formatDuration(ms: number): string {
-  if (ms < 1000) {
-    return `${Math.round(ms)} ms`;
-  }
-  if (ms < 60_000) {
-    return `${(ms / 1000).toFixed(1)} s`;
-  }
-  const minutes = Math.floor(ms / 60_000);
-  return `${minutes}m ${Math.round((ms % 60_000) / 1000)}s`;
 }

@@ -325,6 +325,48 @@
         "icon": "$(info)"
       }
     ],
+    "colors": [
+      {
+        "id": "databaseTools.statusBarItem.devForeground",
+        "description": "Colour of the status bar entry for a development connection.",
+        "defaults": {
+          "dark": "#57c76a",
+          "light": "#14682c",
+          "highContrast": "#5fd97a",
+          "highContrastLight": "#0d5c22"
+        }
+      },
+      {
+        "id": "databaseTools.statusBarItem.qaForeground",
+        "description": "Colour of the status bar entry for a QA connection.",
+        "defaults": {
+          "dark": "#6aa9f5",
+          "light": "#0a52ad",
+          "highContrast": "#7cb8ff",
+          "highContrastLight": "#003f9e"
+        }
+      },
+      {
+        "id": "databaseTools.statusBarItem.uatForeground",
+        "description": "Colour of the status bar entry for a UAT connection. Unused while the entry carries the theme’s own warning background.",
+        "defaults": {
+          "dark": "#e5a054",
+          "light": "#92420a",
+          "highContrast": "#f0b26a",
+          "highContrastLight": "#7a3600"
+        }
+      },
+      {
+        "id": "databaseTools.statusBarItem.prodForeground",
+        "description": "Colour of the status bar entry for a production connection. Unused while the entry carries the theme’s own error background.",
+        "defaults": {
+          "dark": "#ff7a66",
+          "light": "#a82d22",
+          "highContrast": "#ff8a75",
+          "highContrastLight": "#96201a"
+        }
+      }
+    ],
     "configuration": {
       "title": "Database Tools",
       "properties": {
@@ -350,7 +392,7 @@
         "databaseTools.statusBar": {
           "type": "boolean",
           "default": true,
-          "description": "Show the active connection in the status bar, tinted by its environment."
+          "description": "Show the current file's connection in the status bar, coloured by its environment."
         },
         "databaseTools.executionSessions": {
           "type": "number",

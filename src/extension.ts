@@ -22,7 +22,7 @@ import { ObjectCommands, contextOf } from './ui/objectCommands';
 import { QueryBridge } from './ui/queryBridge';
 import { QueryCommands } from './ui/queryCommands';
 import { ResultsView } from './ui/resultsView';
-import { ConnectionStatusBar } from './ui/statusBar';
+import { ActiveConnectionContext } from './ui/activeConnectionContext';
 import { WorkspacePanels } from './ui/workspacePanels';
 import { WorkspaceStatusBar } from './ui/workspaceStatusBar';
 import { DetailsAction } from './shared/details';
@@ -69,7 +69,7 @@ export function activate(context: vscode.ExtensionContext): void {
   const store = new ConnectionStore(context);
   const manager = new ConnectionManager(store, output);
   const catalog = new CatalogService(store, manager, output);
-  const statusBar = new ConnectionStatusBar(store, manager);
+  const activeContext = new ActiveConnectionContext(manager);
   // Written by the explorer, read by New Query. One fact, so the command does
   // not have to reach into the view to ask which row the cursor is on.
   const current = new CurrentConnection(store);
@@ -126,7 +126,7 @@ export function activate(context: vscode.ExtensionContext): void {
     store,
     manager,
     catalog,
-    statusBar,
+    activeContext,
     view,
     details,
     pool,
