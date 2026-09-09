@@ -118,8 +118,11 @@ export class SqlLanguageProviders implements vscode.Disposable {
       vscode.languages.registerCompletionItemProvider(
         selector,
         { provideCompletionItems: (d, p) => this.complete(d, p) },
-        '.',
-        ' '
+        // A dot is the only trigger character. Space was one too, which meant
+        // every space in the file opened the list with something preselected,
+        // so Enter — meant for a new line — accepted a table instead. Typing a
+        // letter still opens the list through `editor.quickSuggestions`.
+        '.'
       ),
       vscode.languages.registerHoverProvider(selector, {
         provideHover: (d, p) => this.hover(d, p)
@@ -653,9 +656,6 @@ function objectItem(
     detail: alias ? `  ${alias}` : undefined,
     description: `${schema}${detail ? ` · ${detail}` : ''}`
   };
-  if (alias) {
-    item.command = RESUGGEST;
-  }
   // The filter is the bare name, so typing `cust` still finds a qualified
   // insertion — a filter that included the schema would need `dbo.cust` typed.
   item.filterText = name;
