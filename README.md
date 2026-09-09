@@ -49,7 +49,10 @@ See [docs/query-workspace.md](docs/query-workspace.md).
   concatenated, and output parameters and the return value in their own tabs.
 - IntelliSense over the live catalog: schemas, objects, columns, aliases and
   keywords, ranked by what the caret is inside. After `ON`, the first
-  suggestion is the whole foreign-key predicate.
+  suggestion is the whole foreign-key predicate. Accepting a keyword leaves the
+  space after it, and accepting a table in `FROM` or `JOIN` names it — the
+  capitals in `empManualAttendanceSummary` make it `mas` — so the aliases in
+  scope are then the first thing the list offers.
 - Object details with computed badges — PK, FK, Identity, Clustered, Heap,
   Temporal, Partitioned, Unlogged, Materialized — and Depends On / Used By from
   real dependency tracking. Where PostgreSQL cannot answer, the fallback is a

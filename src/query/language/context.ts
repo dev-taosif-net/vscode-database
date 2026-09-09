@@ -179,7 +179,14 @@ function readRelation(tokens: Token[], from: number): { relation: Relation; next
   let name = strip(tokens[i].text);
   i++;
 
-  if (tokens[i]?.kind === 'punct' && tokens[i].text === '.' && tokens[i + 1]?.kind === 'word') {
+  if (tokens[i]?.kind === 'punct' && tokens[i].text === '.') {
+    if (tokens[i + 1]?.kind !== 'word') {
+      // `FROM saas.` — a schema and nothing after it yet. There is no relation
+      // here to put in scope, and inventing one named `saas` would make the
+      // schema look like an alias to everything downstream, which is what
+      // turns the list at the caret into the columns of a table nobody has.
+      return null;
+    }
     schema = name;
     name = strip(tokens[i + 1].text);
     i += 2;

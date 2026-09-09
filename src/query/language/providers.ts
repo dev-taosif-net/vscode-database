@@ -6,6 +6,7 @@ import { fuzzy } from '../../shared/fuzzy';
 import { DriverKind } from '../../types';
 import { Indexed, MetadataIndex } from './index';
 import { Clause, SqlContext, analyse, strip } from './context';
+import { aliasFor } from './alias';
 
 /**
  * Keywords, per engine.
@@ -28,6 +29,24 @@ const MSSQL_ONLY = ['TOP', 'ISNULL', 'GETDATE', 'NEWID', 'IDENTITY', 'OUTPUT', '
 const POSTGRES_ONLY = ['LIMIT', 'OFFSET', 'ILIKE', 'RETURNING', 'ON CONFLICT', 'NOW()', 'COALESCE', 'ARRAY', 'JSONB_AGG', 'GENERATE_SERIES'];
 
 /**
+ * What a keyword leaves behind it.
+ *
+ * Accepting `SELECT` and then reaching for the space bar is a keystroke the
+ * editor already knows is coming, so the space comes with the word. The two
+ * exceptions are the words that end a phrase rather than open one, and the
+ * words that are functions wearing a keyword's clothes — a space after
+ * `COUNT` produces `COUNT (`, which is legal and which nobody writes.
+ */
+const TERMINAL = new Set(['END', 'ASC', 'DESC', 'IS NULL', 'IS NOT NULL', 'IDENTITY', 'NOLOCK']);
+const CALLS = new Set([
+  'COUNT', 'SUM', 'AVG', 'MIN', 'MAX', 'COALESCE', 'CAST', 'ISNULL', 'JSONB_AGG', 'GENERATE_SERIES'
+]);
+const NILADIC = new Set(['GETDATE', 'NEWID', 'NOW()']);
+
+/** Re-open the list after an accepted item, as typing the space would have. */
+const RESUGGEST: vscode.Command = { command: 'editor.action.triggerSuggest', title: 'Suggest' };
+
+/**
  * Ranking bands.
  *
  * VS Code sorts by `sortText` lexically, so the band goes first and the fuzzy
@@ -37,12 +56,29 @@ const POSTGRES_ONLY = ['LIMIT', 'OFFSET', 'ILIKE', 'RETURNING', 'ON CONFLICT', '
  */
 const BAND = {
   predicate: '0',
-  column: '1',
-  object: '2',
-  schema: '3',
-  alias: '4',
+  alias: '1',
+  column: '2',
+  object: '3',
+  schema: '4',
   keyword: '9'
 };
+
+/** Which of the two typing shortcuts are switched on, read once per list. */
+interface Prefs {
+  space: boolean;
+  alias: boolean;
+}
+
+function prefsFor(document: vscode.TextDocument): Prefs {
+  const config = vscode.workspace.getConfiguration('databaseTools', document);
+  return {
+    space: config.get<boolean>('completion.keywordSpace', true),
+    alias: config.get<boolean>('completion.tableAlias', true)
+  };
+}
+
+/** The kinds that take a bare alias. A table-valued function needs its arguments first. */
+const ALIASABLE = new Set<ObjectKind>(['table', 'view', 'synonym']);
 
 export class SqlLanguageProviders implements vscode.Disposable {
   private readonly disposables: vscode.Disposable[] = [];
@@ -107,9 +143,10 @@ export class SqlLanguageProviders implements vscode.Disposable {
     }
 
     const items: vscode.CompletionItem[] = [];
+    const prefs = prefsFor(document);
 
     if (context.qualifier) {
-      await this.qualified(items, profileId, index, context, profile.driver);
+      await this.qualified(items, profileId, index, context, profile.driver, prefs);
       // A qualified name is unambiguous. Offering keywords after a dot would
       // put `SELECT` in a list where only a column or an object can go.
       return items;
@@ -121,14 +158,14 @@ export class SqlLanguageProviders implements vscode.Disposable {
 
     if (context.wantsObject) {
       this.schemas(items, index, context);
-      this.objects(items, index, context, profile.driver);
+      this.objects(items, index, context, profile.driver, prefs);
     } else {
       await this.columnsInScope(items, profileId, context, profile.driver);
       this.aliases(items, context);
-      this.objects(items, index, context, profile.driver);
+      this.objects(items, index, context, profile.driver, prefs);
     }
 
-    this.keywords(items, context, profile.driver);
+    this.keywords(items, context, profile.driver, prefs);
     return items;
   }
 
@@ -138,7 +175,8 @@ export class SqlLanguageProviders implements vscode.Disposable {
     profileId: string,
     index: Indexed,
     context: SqlContext,
-    driver: DriverKind
+    driver: DriverKind,
+    prefs: Prefs
   ): Promise<void> {
     const qualifier = context.qualifier ?? '';
     const relation = context.relations.find((r) => r.as.toLowerCase() === qualifier.toLowerCase());
@@ -156,7 +194,15 @@ export class SqlLanguageProviders implements vscode.Disposable {
         if (object.schema.toLowerCase() !== qualifier.toLowerCase()) {
           continue;
         }
-        const item = objectItem(object.kind, object.schema, object.name, object.detail, driver, false);
+        const item = objectItem(
+          object.kind,
+          object.schema,
+          object.name,
+          object.detail,
+          driver,
+          false,
+          aliasWanted(object.kind, context, prefs) ? aliasFor(object.name, aliasesInScope(context)) : undefined
+        );
         item.sortText = `${BAND.object}${rank(object.name, context.prefix)}`;
         items.push(item);
       }
@@ -249,9 +295,14 @@ export class SqlLanguageProviders implements vscode.Disposable {
     items: vscode.CompletionItem[],
     index: Indexed,
     context: SqlContext,
-    driver: DriverKind
+    driver: DriverKind,
+    prefs: Prefs
   ): void {
     const wanted = kindsForClause(context.clause);
+    // The relations already named in this statement own their names, so a
+    // fresh alias has to step around them — that is what makes a self-join
+    // come out as `mas` and `mas2` rather than `mas` twice.
+    const taken = aliasesInScope(context);
     for (const object of index.objects) {
       if (wanted && !wanted.has(object.kind)) {
         continue;
@@ -260,20 +311,42 @@ export class SqlLanguageProviders implements vscode.Disposable {
         continue;
       }
       const qualify = index.schemas.size > 1 && object.schema !== defaultSchema(driver);
-      const item = objectItem(object.kind, object.schema, object.name, object.detail, driver, qualify);
+      const item = objectItem(
+        object.kind,
+        object.schema,
+        object.name,
+        object.detail,
+        driver,
+        qualify,
+        aliasWanted(object.kind, context, prefs) ? aliasFor(object.name, taken) : undefined
+      );
       item.sortText = `${BAND.object}${rank(object.name, context.prefix)}`;
       items.push(item);
     }
   }
 
-  private keywords(items: vscode.CompletionItem[], context: SqlContext, driver: DriverKind): void {
-    const words = [...COMMON, ...(driver === 'mssql' ? MSSQL_ONLY : POSTGRES_ONLY)];
+  private keywords(
+    items: vscode.CompletionItem[],
+    context: SqlContext,
+    driver: DriverKind,
+    prefs: Prefs
+  ): void {
+    // A set, because `COALESCE` is both common and Postgres-flavoured and the
+    // list should not say so twice.
+    const words = new Set([...COMMON, ...(driver === 'mssql' ? MSSQL_ONLY : POSTGRES_ONLY)]);
     for (const word of words) {
       if (context.prefix && !fuzzy(word, context.prefix)) {
         continue;
       }
       const item = new vscode.CompletionItem(word, vscode.CompletionItemKind.Keyword);
       item.sortText = `${BAND.keyword}${rank(word, context.prefix)}`;
+      if (prefs.space) {
+        const insert = follow(word);
+        item.insertText = insert;
+        if (insert !== word && !NILADIC.has(word)) {
+          item.command = RESUGGEST;
+        }
+      }
       items.push(item);
     }
   }
@@ -416,6 +489,36 @@ function defaultSchema(driver: DriverKind): string {
   return driver === 'mssql' ? 'dbo' : 'public';
 }
 
+/** The names the statement has already spoken for. */
+function aliasesInScope(context: SqlContext): string[] {
+  return context.relations.map((relation) => relation.as);
+}
+
+/**
+ * Whether this item should arrive with an alias attached.
+ *
+ * Only where an alias is what comes next: naming a relation in `FROM` or a
+ * `JOIN`. `INSERT INTO` takes a target, not a correlation name, and nobody
+ * aliases a table they are about to write a column list for.
+ */
+function aliasWanted(kind: ObjectKind, context: SqlContext, prefs: Prefs): boolean {
+  return prefs.alias && ALIASABLE.has(kind) && (context.clause === 'from' || context.clause === 'join');
+}
+
+/** What goes in after a keyword, so the space bar is one less thing to press. */
+function follow(word: string): string {
+  if (CALLS.has(word)) {
+    return `${word}(`;
+  }
+  if (NILADIC.has(word)) {
+    return word.endsWith('()') ? word : `${word}()`;
+  }
+  if (TERMINAL.has(word)) {
+    return word;
+  }
+  return `${word} `;
+}
+
 const KIND_ICONS: Record<ObjectKind, vscode.CompletionItemKind> = {
   table: vscode.CompletionItemKind.Struct,
   view: vscode.CompletionItemKind.Interface,
@@ -433,11 +536,20 @@ function objectItem(
   name: string,
   detail: string,
   driver: DriverKind,
-  qualify: boolean
+  qualify: boolean,
+  alias?: string
 ): vscode.CompletionItem {
   const item = new vscode.CompletionItem(name, KIND_ICONS[kind]);
   item.detail = `${KINDS[kind].singular} · ${schema}${detail ? ` · ${detail}` : ''}`;
-  item.insertText = qualify ? `${quote(driver, schema)}.${quote(driver, name)}` : quote(driver, name);
+  const target = qualify ? `${quote(driver, schema)}.${quote(driver, name)}` : quote(driver, name);
+  item.insertText = alias ? `${target} ${alias} ` : target;
+  if (alias) {
+    // The alias shows in the row before it is accepted. Text that appears in
+    // the editor without warning is the thing that makes people switch a
+    // feature like this off, and it costs one label to not be that.
+    item.label = { label: name, detail: `  ${alias}` };
+    item.command = RESUGGEST;
+  }
   // The filter is the bare name, so typing `cust` still finds a qualified
   // insertion — a filter that included the schema would need `dbo.cust` typed.
   item.filterText = name;

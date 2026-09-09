@@ -392,6 +392,16 @@
           "type": "boolean",
           "default": true,
           "description": "Start a line with AND or OR rather than trailing the line before it."
+        },
+        "databaseTools.completion.keywordSpace": {
+          "type": "boolean",
+          "default": true,
+          "description": "Follow an accepted keyword with a space and re-open the suggestion list, so SELECT and FROM do not each cost a trip to the space bar. Words that end a phrase, such as END and DESC, are left alone, and the aggregate functions take an opening parenthesis instead."
+        },
+        "databaseTools.completion.tableAlias": {
+          "type": "boolean",
+          "default": true,
+          "description": "Give a table an alias when it is accepted in FROM or JOIN, taken from the capitals in its name: empManualAttendanceSummary becomes mas. A second copy of the same table in one statement is numbered. Aliases already in scope are then offered first in the list."
         }
       }
     },
