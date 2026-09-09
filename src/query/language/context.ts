@@ -25,6 +25,7 @@ export type Clause =
   | 'values'
   | 'insert'
   | 'exec'
+  | 'use'
   | 'none';
 
 export interface Relation {
@@ -43,6 +44,18 @@ export interface SqlContext {
   prefix: string;
   /** True when the caret sits where a schema or an object name belongs. */
   wantsObject: boolean;
+  /**
+   * True when the caret sits where a database name belongs, which is after
+   * `USE` and nowhere else.
+   *
+   * It is a separate flag rather than a reading of `clause`, because `clause`
+   * survives the statement it was set in: `USE Payroll` followed by a newline
+   * and a half-typed `SELECT` is still `use` to the scanner, and offering a
+   * list of databases there would be offering them for the rest of the file.
+   */
+  wantsDatabase: boolean;
+  /** Where `prefix` starts, so a bracketed name can be replaced whole. */
+  prefixStart?: number;
   /** The routine being called, when the caret is inside an EXEC or CALL. */
   routine?: { schema?: string; name: string; argument: number };
 }
@@ -70,7 +83,8 @@ const CLAUSE_WORDS: Record<string, Clause> = {
   UPDATE: 'set',
   EXEC: 'exec',
   EXECUTE: 'exec',
-  CALL: 'exec'
+  CALL: 'exec',
+  USE: 'use'
 };
 
 const RELATION_ANCHORS = new Set(['FROM', 'JOIN', 'UPDATE', 'INTO', 'APPLY', 'TABLE']);
@@ -105,7 +119,13 @@ const NOT_ALIASES = new Set([
 
 export function analyse(text: string, offset: number): SqlContext {
   const tokens = tokenize(text.slice(0, offset));
-  const context: SqlContext = { clause: 'none', relations: [], prefix: '', wantsObject: false };
+  const context: SqlContext = {
+    clause: 'none',
+    relations: [],
+    prefix: '',
+    wantsObject: false,
+    wantsDatabase: false
+  };
 
   // Everything before the caret in this statement. Statement boundaries are
   // unquoted semicolons; anything before the last one belongs to a statement
@@ -152,6 +172,7 @@ export function analyse(text: string, offset: number): SqlContext {
 
   if (last && last.kind === 'word' && last.end === offset) {
     context.prefix = last.text;
+    context.prefixStart = last.start;
     if (penultimate?.kind === 'punct' && penultimate.text === '.') {
       const qualifier = scope[scope.length - 3];
       if (qualifier?.kind === 'word') {
@@ -166,6 +187,20 @@ export function analyse(text: string, offset: number): SqlContext {
   }
 
   context.wantsObject = context.clause === 'from' || context.clause === 'join' || context.clause === 'insert';
+
+  /*
+   * `USE` has to be the word immediately before the caret, ignoring whatever
+   * the user is in the middle of typing.
+   *
+   * `USE Payr` is a database name being typed and `USE Payroll GO` is not, and
+   * the difference is one token. Reading `clause` instead would leave the list
+   * of databases attached to every position after a `USE` until the next
+   * clause word happened to appear.
+   */
+  const typing = context.prefixStart !== undefined;
+  const preceding = typing ? scope[scope.length - 2] : last;
+  context.wantsDatabase = preceding?.kind === 'word' && preceding.upper === 'USE';
+
   return context;
 }
 

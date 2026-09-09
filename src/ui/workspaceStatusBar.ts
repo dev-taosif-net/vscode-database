@@ -3,9 +3,9 @@ import { ConnectionStore } from '../store/connectionStore';
 import { ExecutionService } from '../exec/executionService';
 import { ResultStore } from '../exec/resultStore';
 import { BindingStore } from '../query/bindingStore';
-import { environmentLabel } from '../types';
+import { effectiveDatabase, environmentLabel, switchesDatabase } from '../types';
 import { ActiveTab } from './activeTab';
-import { paintChip } from './connectionChip';
+import { paintChip, paintDatabase } from './connectionChip';
 
 /**
  * The status bar: which connection this tab runs on, and whether the last thing
@@ -19,6 +19,7 @@ import { paintChip } from './connectionChip';
  */
 export class WorkspaceStatusBar implements vscode.Disposable {
   private readonly connection: vscode.StatusBarItem;
+  private readonly database: vscode.StatusBarItem;
   private readonly result: vscode.StatusBarItem;
   private readonly disposables: vscode.Disposable[] = [];
   /** The last values written, so a progress tick does not rewrite two keys. */
@@ -33,11 +34,16 @@ export class WorkspaceStatusBar implements vscode.Disposable {
   ) {
     this.connection = vscode.window.createStatusBarItem('databaseTools.tabConnection', vscode.StatusBarAlignment.Right, 100);
     this.connection.command = 'databaseTools.bindConnection';
+    // Between the connection and the result, because that is the order the
+    // three are read in: which server, which database, what happened.
+    this.database = vscode.window.createStatusBarItem('databaseTools.tabDatabase', vscode.StatusBarAlignment.Right, 99.5);
+    this.database.command = 'databaseTools.selectDatabase';
     this.result = vscode.window.createStatusBarItem('databaseTools.tabResult', vscode.StatusBarAlignment.Right, 99);
     this.result.command = 'databaseTools.cancelQuery';
 
     this.disposables.push(
       this.connection,
+      this.database,
       this.result,
       this.active.onDidChange(() => this.render()),
       this.bindings.onDidChange(() => this.render()),
@@ -88,12 +94,14 @@ export class WorkspaceStatusBar implements vscode.Disposable {
      */
     if (!vscode.workspace.getConfiguration('databaseTools').get<boolean>('statusBar', true)) {
       this.connection.hide();
+      this.database.hide();
       this.result.hide();
       return;
     }
 
     if (!tab) {
       this.connection.hide();
+      this.database.hide();
       this.result.hide();
       return;
     }
@@ -109,6 +117,9 @@ export class WorkspaceStatusBar implements vscode.Disposable {
       this.connection.backgroundColor = undefined;
       this.connection.color = undefined;
       this.connection.show();
+      // A file with no connection has no database either, and an entry left
+      // over from the last file would be naming one on another server.
+      this.database.hide();
       this.result.hide();
       return;
     }
@@ -122,14 +133,41 @@ export class WorkspaceStatusBar implements vscode.Disposable {
      * hover away, which is where a value you only want when you are already
      * asking for it belongs.
      */
+    const moved = this.bindings.database(uri);
+    const database = effectiveDatabase(profile, moved);
+
     paintChip(this.connection, profile);
     this.connection.tooltip = new vscode.MarkdownString(
       `**${environmentLabel(profile.environment)}**\n\n${profile.host}${
         profile.port ? `:${profile.port}` : ''
-      }${profile.database ? ` · ${profile.database}` : ''}${profile.readOnly ? '\n\nRead-only' : ''}` +
+      }${database ? ` · ${database}` : ''}${profile.readOnly ? '\n\nRead-only' : ''}` +
         '\n\nClick to change the connection for this tab.'
     );
     this.connection.show();
+
+    /*
+     * Where this tab is, which the connection alone cannot say.
+     *
+     * The entry names the database the next Run will actually reach, and the
+     * tooltip carries the part that only matters once: whether the tab got
+     * there by itself. A `USE` twenty lines into a script is the easiest way
+     * in this whole extension to end up somewhere you did not mean to be, and
+     * the strip saying `Reporting` where it said `PeopleDeskMatador` a moment
+     * ago is the cheapest possible way to notice.
+     */
+    paintDatabase(this.database, profile, database);
+    const switchable = switchesDatabase(profile.driver);
+    const away = Boolean(moved) && moved!.toLowerCase() !== profile.database.trim().toLowerCase();
+    this.database.tooltip = new vscode.MarkdownString(
+      `**${database || "The login's default database"}**\n\n` +
+        (away
+          ? `This tab has moved here from ${profile.database || "the login's default"}. It stays here until you move it again.\n\n`
+          : '') +
+        (switchable
+          ? 'Click to run `USE` on this tab.'
+          : 'PostgreSQL cannot move a session between databases; open a second connection instead.')
+    );
+    this.database.show();
 
     if (!record) {
       this.result.hide();

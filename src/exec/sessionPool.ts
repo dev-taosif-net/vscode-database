@@ -22,6 +22,17 @@ interface Lease {
   lastUsed: number;
   /** True while a statement is actually running on it. */
   busy: boolean;
+  /** Where the session is, as the server last reported it. */
+  database: string;
+  /** The subscription to the server's own database-change token. */
+  watch: { dispose(): void };
+}
+
+export interface DatabaseChange {
+  /** The tab whose session moved, as a URI string. */
+  owner: string;
+  profileId: string;
+  database: string;
 }
 
 /**
@@ -53,6 +64,18 @@ export class SessionPool implements vscode.Disposable {
   private readonly sweeper: NodeJS.Timeout;
   private readonly disposables: vscode.Disposable[] = [];
 
+  private readonly onDidChangeDatabaseEmitter = new vscode.EventEmitter<DatabaseChange>();
+  /**
+   * Fires when a tab's session lands in a different database.
+   *
+   * This is the event the whole `USE` story hangs off. It fires for a `USE`
+   * the user typed and for one the pool issued itself, because the two are
+   * the same fact to everything downstream: the strip has to say where this
+   * tab is, and IntelliSense has to read the catalog of the database it is
+   * actually in.
+   */
+  readonly onDidChangeDatabase = this.onDidChangeDatabaseEmitter.event;
+
   constructor(
     private readonly manager: ConnectionManager,
     private readonly output: vscode.LogOutputChannel
@@ -70,6 +93,12 @@ export class SessionPool implements vscode.Disposable {
       this.disposables.pop()?.dispose();
     }
     void this.closeAll();
+    this.onDidChangeDatabaseEmitter.dispose();
+  }
+
+  /** Where the tab's session is, or undefined when it holds none. */
+  databaseFor(owner: string): string | undefined {
+    return this.leases.get(owner)?.database;
   }
 
   /** How many execution sessions one connection may hold at once. */
@@ -87,11 +116,19 @@ export class SessionPool implements vscode.Disposable {
    * recently used idle lease is taken over — and if every lease is busy, the
    * caller is told rather than queued, because a Run that silently waits on
    * another tab's four-minute query looks exactly like a Run that did nothing.
+   *
+   * `database` is where the tab believes it is, and it is re-applied rather
+   * than assumed. A tab that ran `USE Reporting` an hour ago has had its
+   * session swept out from under it, and a fresh one opens in the profile's
+   * own database — so the next Run would silently execute against the wrong
+   * one. Issuing the `USE` again is what makes the tab's database a property
+   * of the tab rather than of a socket that may or may not still exist.
    */
-  async acquire(profileId: string, owner: string): Promise<DriverSession> {
+  async acquire(profileId: string, owner: string, database?: string): Promise<DriverSession> {
     const existing = this.leases.get(owner);
     if (existing && existing.profileId === profileId && !existing.session.isClosed()) {
       existing.lastUsed = Date.now();
+      await this.settleDatabase(existing, database);
       return existing.session;
     }
     if (existing) {
@@ -113,9 +150,56 @@ export class SessionPool implements vscode.Disposable {
     }
 
     const session = await this.manager.openAuxiliary(profileId);
-    this.leases.set(owner, { session, profileId, owner, lastUsed: Date.now(), busy: false });
-    this.output.info(`Execution session opened for ${owner}`);
+    const lease: Lease = {
+      session,
+      profileId,
+      owner,
+      lastUsed: Date.now(),
+      busy: false,
+      database: session.currentDatabase(),
+      watch: { dispose: () => undefined }
+    };
+    // Subscribed before the first statement runs, so a `USE` in the very first
+    // batch is heard rather than missed by a listener attached afterwards.
+    lease.watch = session.onDatabaseChange((name) => this.noteDatabase(lease, name));
+    this.leases.set(owner, lease);
+    this.output.info(`Execution session opened for ${owner} in ${lease.database || 'the default database'}`);
+    await this.settleDatabase(lease, database);
     return session;
+  }
+
+  /**
+   * Puts a lease where the tab says it should be, and says nothing when it is
+   * already there.
+   *
+   * A failure is deliberately swallowed into a message rather than thrown. The
+   * caller is a Run, and refusing to run at all because a remembered database
+   * has since been dropped or revoked would be worse than running in the one
+   * the session opened in and saying which that is — which the strip then
+   * shows, because `noteDatabase` reports what actually happened rather than
+   * what was asked for.
+   */
+  private async settleDatabase(lease: Lease, wanted: string | undefined): Promise<void> {
+    const target = (wanted ?? '').trim();
+    if (!target || target.toLowerCase() === lease.database.trim().toLowerCase()) {
+      return;
+    }
+    try {
+      await lease.session.useDatabase(target);
+    } catch (error) {
+      this.output.warn(
+        `${lease.owner}: could not switch to ${target}: ${error instanceof Error ? error.message : String(error)}`
+      );
+    }
+  }
+
+  private noteDatabase(lease: Lease, database: string): void {
+    if (!database || database === lease.database) {
+      return;
+    }
+    lease.database = database;
+    this.output.info(`${lease.owner} is now in ${database}`);
+    this.onDidChangeDatabaseEmitter.fire({ owner: lease.owner, profileId: lease.profileId, database });
   }
 
   /** Marks a lease as running, so the pool will not take it from under a query. */
@@ -139,6 +223,7 @@ export class SessionPool implements vscode.Disposable {
       return;
     }
     this.leases.delete(owner);
+    lease.watch.dispose();
     if (lease.busy) {
       lease.session.cancelCurrent();
     }

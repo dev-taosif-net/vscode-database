@@ -181,6 +181,52 @@ a file with no binding shows `Not connected` and Run offers a picker.
 Changing a binding never re-runs anything and never closes a session. It
 changes which pool the next execution asks.
 
+### Database binding
+
+A second binding sits beside the first: which *database* the tab is in. It is
+separate because it moves for a different reason. The connection changes when
+somebody decides to change it; the database changes whenever a `USE` goes past,
+which on a migration script is several times a minute.
+
+It is stored the same way — `uri.toString()` to database name, in
+`workspaceState` — but for every scheme, including the ones whose connection
+comes from the authority. A `dbquery:` tab can never be rebound to another
+connection and can absolutely run `USE`.
+
+Three things write it and one thing reads it:
+
+- **The server.** SQL Server reports a database change as an ENVCHANGE token on
+  the connection, which tedious surfaces as `databaseChange`. `SessionPool`
+  subscribes per lease and re-publishes it as `onDidChangeDatabase`, and
+  `extension.ts` writes it against the tab. Nothing parses SQL looking for the
+  word `USE`: a scanner would miss the one inside a procedure, miss the one in
+  an `IF` branch, and be wrong about the one whose statement failed.
+- **The picker.** `databaseTools.selectDatabase` runs the same `USE` on the
+  tab's own session, so the two routes cannot disagree.
+- **The pool, on re-acquire.** An execution session is swept after fifteen idle
+  minutes, and the next one opens in the profile's database. `acquire` re-issues
+  the `USE`, which is what makes the database a property of the tab rather than
+  of a socket that may no longer exist.
+
+A move back to the profile's own database clears the binding rather than
+storing it, so "this tab has moved" stays a fact the status bar can state.
+
+Everything downstream reads the one value: the strip, the production write
+confirmation, the execution record, and the metadata index.
+
+For IntelliSense the consequence is a second catalog. `CatalogService`,
+`MetadataIndex` and the foreign-key cache are keyed by connection *and*
+database, and `ConnectionManager.scopedSession` opens one auxiliary session per
+database anybody actually completes in. The control session never follows a
+query tab: it is where the object explorer is drawn from, and a tree that moved
+under the user would be a worse bug than a stale completion list.
+
+`switchesDatabase(driver)` gates the whole feature. PostgreSQL binds a backend
+to one database for its life, `\c` in psql is a client reconnecting, and doing
+that silently here would hand back a session with none of the first one's temp
+tables or open transaction. So the completion is not offered, the picker
+refuses by name, and `useDatabase` rejects.
+
 ### The toolbar
 
 `editor/title`, group `navigation`, gated on
@@ -245,12 +291,18 @@ right-aligned entry appears only while a bound SQL editor or a data tab is
 active:
 
 ```
-● DEV  Dev-Matador · AdventureWorks   100 rows · 41 ms
+███ Dev-Matador · 10.209.99.244 ███   $(database) PeopleDeskMatador   $(error) Failed
 ```
 
-Environment dot in the environment hue, connection, database, then the last
-execution's shape. While a query runs it becomes `$(sync~spin) Executing… 3.4 s`
-and is clickable to cancel. The connection half is clickable to rebind.
+Connection and server in the environment hue, then the database, then the last
+execution — but only in the two states you can still act on, running and
+failed. While a query runs the third entry becomes `$(sync~spin) Executing…`
+and is clickable to cancel.
+
+The database is its own entry rather than a third part of the chip, because it
+is the one of the three that changes without anybody deciding to change it —
+see **Database binding**. Its click target runs the picker, and its tooltip
+says where the tab came from when it has moved.
 
 ### Serialization
 

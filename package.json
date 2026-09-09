@@ -253,6 +253,12 @@
         "icon": "$(plug)"
       },
       {
+        "command": "databaseTools.selectDatabase",
+        "title": "Change Database for This Tab",
+        "category": "Database",
+        "icon": "$(database)"
+      },
+      {
         "command": "databaseTools.saveQuery",
         "title": "Save Query",
         "category": "Database",
@@ -659,6 +665,10 @@
           "when": "databaseTools.sqlTab"
         },
         {
+          "command": "databaseTools.selectDatabase",
+          "when": "databaseTools.sqlTab"
+        },
+        {
           "command": "databaseTools.disconnectTab",
           "when": "databaseTools.sqlTab"
         },
@@ -891,6 +901,11 @@
           "command": "databaseTools.bindConnection",
           "when": "databaseTools.sqlTab && resourceScheme != dbquery",
           "group": "navigation@4"
+        },
+        {
+          "command": "databaseTools.selectDatabase",
+          "when": "databaseTools.sqlTab",
+          "group": "1_run@3"
         },
         {
           "command": "databaseTools.runStatement",

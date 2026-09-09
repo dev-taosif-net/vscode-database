@@ -3,7 +3,7 @@ import { BindingStore, OBJECT_SCHEME, objectAddress } from '../bindingStore';
 import { ConnectionStore } from '../../store/connectionStore';
 import { DbMember, KINDS, ObjectKind } from '../../shared/catalog';
 import { fuzzy } from '../../shared/fuzzy';
-import { DriverKind } from '../../types';
+import { DriverKind, switchesDatabase } from '../../types';
 import { Indexed, MetadataIndex } from './index';
 import { Clause, SqlContext, analyse, strip } from './context';
 import { aliasFor } from './alias';
@@ -25,7 +25,15 @@ const COMMON = [
   'COMMIT', 'ROLLBACK'
 ];
 
-const MSSQL_ONLY = ['TOP', 'ISNULL', 'GETDATE', 'NEWID', 'IDENTITY', 'OUTPUT', 'MERGE', 'APPLY', 'NOLOCK', 'OFFSET', 'FETCH NEXT'];
+const MSSQL_ONLY = [
+  'TOP', 'ISNULL', 'GETDATE', 'NEWID', 'IDENTITY', 'OUTPUT', 'MERGE', 'APPLY', 'NOLOCK', 'OFFSET',
+  'FETCH NEXT',
+  // `USE` earns its place on a list that is otherwise about writing queries,
+  // because it is the only keyword here that changes what every keyword after
+  // it means — and because typing it is how most people discover that this
+  // editor follows them into the other database.
+  'USE'
+];
 const POSTGRES_ONLY = ['LIMIT', 'OFFSET', 'ILIKE', 'RETURNING', 'ON CONFLICT', 'NOW()', 'COALESCE', 'ARRAY', 'JSONB_AGG', 'GENERATE_SERIES'];
 
 /**
@@ -60,6 +68,15 @@ const BAND = {
   column: '2',
   object: '3',
   schema: '4',
+  /**
+   * Databases sit in their own band above objects.
+   *
+   * They are only ever offered where nothing else can go — after `USE` — so
+   * the band never competes with anything. It exists so the current database
+   * can be pinned to the top of that list without borrowing a band that means
+   * something else.
+   */
+  database: '3',
   keyword: '9'
 };
 
@@ -137,7 +154,16 @@ export class SqlLanguageProviders implements vscode.Disposable {
     const text = document.getText();
     const offset = document.offsetAt(position);
     const context = analyse(text, offset);
-    const index = await this.index.build(profileId);
+    // Where this tab is, which is not always where its connection is. Every
+    // read below is scoped by it, so a file that has run `USE Reporting` is
+    // completed out of Reporting and the file beside it is not.
+    const database = this.databaseOf(document);
+
+    if (context.wantsDatabase && switchesDatabase(profile.driver)) {
+      return this.databases(document, context, profileId, database);
+    }
+
+    const index = await this.index.build(profileId, database);
     if (!index) {
       return undefined;
     }
@@ -146,7 +172,7 @@ export class SqlLanguageProviders implements vscode.Disposable {
     const prefs = prefsFor(document);
 
     if (context.qualifier) {
-      await this.qualified(items, profileId, index, context, profile.driver, prefs);
+      await this.qualified(items, profileId, index, context, profile.driver, prefs, database);
       // A qualified name is unambiguous. Offering keywords after a dot would
       // put `SELECT` in a list where only a column or an object can go.
       return items;
@@ -160,13 +186,62 @@ export class SqlLanguageProviders implements vscode.Disposable {
       this.schemas(items, index, context);
       this.objects(items, index, context, profile.driver, prefs);
     } else {
-      await this.columnsInScope(items, profileId, context, profile.driver);
+      await this.columnsInScope(items, profileId, context, profile.driver, database);
       this.aliases(items, context);
       this.objects(items, index, context, profile.driver, prefs);
     }
 
     this.keywords(items, context, profile.driver, prefs);
     return items;
+  }
+
+  /** The database a document is in, or undefined for the connection's own. */
+  private databaseOf(document: vscode.TextDocument): string | undefined {
+    return this.bindings.database(document.uri);
+  }
+
+  /**
+   * The list behind `USE `.
+   *
+   * The one the tab is already in is pinned to the top and says so, because
+   * the most common reason to open this list is to check where you are before
+   * deciding whether to move — and a list of forty database names in which
+   * yours is somewhere alphabetical does not answer that.
+   *
+   * The insertion replaces the whole half-typed name rather than the word the
+   * editor found. `USE [Peo` leaves the bracket outside VS Code's own word
+   * range, so an item inserted into that range would produce `USE [[Peopl...`.
+   */
+  private async databases(
+    document: vscode.TextDocument,
+    context: SqlContext,
+    profileId: string,
+    current: string | undefined
+  ): Promise<vscode.CompletionItem[]> {
+    const names = await this.index.databases(profileId);
+    const range =
+      context.prefixStart !== undefined
+        ? new vscode.Range(document.positionAt(context.prefixStart), document.positionAt(context.prefixStart + context.prefix.length))
+        : undefined;
+    const typed = strip(context.prefix);
+
+    return names
+      .filter((name) => !typed || fuzzy(name, typed))
+      .map((name) => {
+        const here = Boolean(current) && name.toLowerCase() === (current ?? '').toLowerCase();
+        const item = new vscode.CompletionItem(name, vscode.CompletionItemKind.Folder);
+        item.label = { label: name, description: here ? 'current' : 'database' };
+        item.detail = here ? 'the database this tab is already in' : 'database';
+        item.filterText = name;
+        // The pinned entry takes a band of its own so it survives the matcher:
+        // it has to stay first even when what has been typed scores it lower.
+        item.sortText = here ? `${BAND.predicate}0` : `${BAND.database}${rank(name, typed)}`;
+        item.insertText = quote('mssql', name);
+        if (range) {
+          item.range = range;
+        }
+        return item;
+      });
   }
 
   /** After `c.` or after `dbo.`: columns of that alias, or objects in that schema. */
@@ -176,13 +251,14 @@ export class SqlLanguageProviders implements vscode.Disposable {
     index: Indexed,
     context: SqlContext,
     driver: DriverKind,
-    prefs: Prefs
+    prefs: Prefs,
+    database: string | undefined
   ): Promise<void> {
     const qualifier = context.qualifier ?? '';
     const relation = context.relations.find((r) => r.as.toLowerCase() === qualifier.toLowerCase());
 
     if (relation) {
-      const columns = await this.index.columnsOf(profileId, relation.schema ?? '', relation.name);
+      const columns = await this.index.columnsOf(profileId, relation.schema ?? '', relation.name, database);
       for (const column of columns) {
         items.push(columnItem(column, BAND.column, context.prefix));
       }
@@ -211,7 +287,7 @@ export class SqlLanguageProviders implements vscode.Disposable {
 
     // A qualifier that is neither an alias in scope nor a schema is most often
     // a table named without one. Its columns are still what was meant.
-    const columns = await this.index.columnsOf(profileId, '', qualifier);
+    const columns = await this.index.columnsOf(profileId, '', qualifier, database);
     for (const column of columns) {
       items.push(columnItem(column, BAND.column, context.prefix));
     }
@@ -253,14 +329,15 @@ export class SqlLanguageProviders implements vscode.Disposable {
     items: vscode.CompletionItem[],
     profileId: string,
     context: SqlContext,
-    driver: DriverKind
+    driver: DriverKind,
+    database: string | undefined
   ): Promise<void> {
     // Only the relations actually named in this statement. Offering every
     // column in the database would be a list nobody can read, ranked by a
     // matcher that has no way to prefer the right one.
     const qualify = context.relations.length > 1;
     for (const relation of context.relations.slice(0, 8)) {
-      const columns = await this.index.columnsOf(profileId, relation.schema ?? '', relation.name);
+      const columns = await this.index.columnsOf(profileId, relation.schema ?? '', relation.name, database);
       for (const column of columns) {
         // With more than one relation in scope the row has to say which table
         // it came from, because two of them will have an `id` and the name on
@@ -378,8 +455,9 @@ export class SqlLanguageProviders implements vscode.Disposable {
     if (!range) {
       return undefined;
     }
+    const database = this.databaseOf(document);
     const word = strip(document.getText(range));
-    const index = this.index.peek(profileId);
+    const index = this.index.peek(profileId, database);
     if (!index) {
       return undefined;
     }
@@ -394,7 +472,7 @@ export class SqlLanguageProviders implements vscode.Disposable {
 
     const context = analyse(document.getText(), document.offsetAt(position));
     for (const relation of context.relations) {
-      const columns = await this.index.columnsOf(profileId, relation.schema ?? '', relation.name);
+      const columns = await this.index.columnsOf(profileId, relation.schema ?? '', relation.name, database);
       const column = columns.find((candidate) => candidate.name.toLowerCase() === word.toLowerCase());
       if (column) {
         const markdown = new vscode.MarkdownString();
@@ -428,7 +506,8 @@ export class SqlLanguageProviders implements vscode.Disposable {
     if (!context.routine) {
       return undefined;
     }
-    const index = await this.index.build(profileId);
+    const database = this.databaseOf(document);
+    const index = await this.index.build(profileId, database);
     if (!index) {
       return undefined;
     }
@@ -436,7 +515,7 @@ export class SqlLanguageProviders implements vscode.Disposable {
     if (!object || (object.kind !== 'procedure' && object.kind !== 'function')) {
       return undefined;
     }
-    const parameters = (await this.index.columnsOf(profileId, object.schema, object.name)).filter(
+    const parameters = (await this.index.columnsOf(profileId, object.schema, object.name, database)).filter(
       (member) => member.direction !== 'returns'
     );
     if (parameters.length === 0) {
@@ -471,7 +550,8 @@ export class SqlLanguageProviders implements vscode.Disposable {
     if (!range) {
       return undefined;
     }
-    const index = await this.index.build(profileId);
+    const database = this.databaseOf(document);
+    const index = await this.index.build(profileId, database);
     if (!index) {
       return undefined;
     }
@@ -480,8 +560,12 @@ export class SqlLanguageProviders implements vscode.Disposable {
       return undefined;
     }
     // The scripted definition, read-only, at `dbobj:` — resolved lazily by its
-    // content provider, so this costs nothing until somebody presses F12.
-    const uri = objectAddress(OBJECT_SCHEME, profileId, object);
+    // content provider, so this costs nothing until somebody presses F12. The
+    // database goes with it, or F12 in a tab that has moved would script the
+    // object of the same name back in the connection's own database.
+    const uri = database
+      ? objectAddress(OBJECT_SCHEME, profileId, object).with({ query: `db=${encodeURIComponent(database)}` })
+      : objectAddress(OBJECT_SCHEME, profileId, object);
     return new vscode.Location(uri, new vscode.Position(0, 0));
   }
 }

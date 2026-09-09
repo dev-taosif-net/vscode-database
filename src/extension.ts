@@ -81,9 +81,12 @@ export function activate(context: vscode.ExtensionContext): void {
   const details = new DetailsService(store, manager, catalog, output);
   const pool = new SessionPool(manager, output);
   const results = new ResultStore(storageDir);
-  const execution = new ExecutionService(store, manager, pool, results, output);
-  const history = new HistoryStore(historyDir);
+  // Before execution now, because execution reads which database a tab is in
+  // and the answer lives here — a tab that has run `USE` keeps its database
+  // across a swept session and a window reload.
   const bindings = new BindingStore(context);
+  const execution = new ExecutionService(store, manager, pool, results, bindings, output);
+  const history = new HistoryStore(historyDir);
   const files = new QueryFileSystem();
   const definitions = new DefinitionProvider(store, catalog);
   const saved = new SavedQueryStore(context, store);
@@ -153,6 +156,27 @@ export function activate(context: vscode.ExtensionContext): void {
   // are marked quiet and never reach here, so a table browsed for ten minutes
   // leaves one entry rather than a hundred.
   context.subscriptions.push(execution.onDidFinish((record) => history.record(record)));
+
+  /*
+   * A `USE` that the server confirmed, written down against the tab that ran it.
+   *
+   * This is the one line that turns a statement into a setting. The pool hears
+   * the server's own database-change token, this records it, and everything
+   * that reads a tab's database — the strip, IntelliSense, the production
+   * guard, the next Run — is reading the same value a moment later. Nothing
+   * else has to know that `USE` exists.
+   *
+   * A move back to the profile's own database clears the override rather than
+   * storing it, so a tab that has returned home stops claiming it went
+   * anywhere. That distinction is what the status bar's tooltip is drawn from.
+   */
+  context.subscriptions.push(
+    pool.onDidChangeDatabase(({ owner, profileId, database }) => {
+      const home = store.get(profileId)?.database.trim() ?? '';
+      const away = home && home.toLowerCase() === database.trim().toLowerCase() ? undefined : database;
+      void bindings.setDatabase(vscode.Uri.parse(owner), away);
+    })
+  );
 
   // The explorer's cursor drives the details panel, through a notification the
   // explorer does not know anybody is listening to.

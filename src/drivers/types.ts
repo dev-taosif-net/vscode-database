@@ -63,6 +63,38 @@ export interface OpenResult {
 export interface DriverSession {
   readonly profileId: string;
   listDatabases(): Promise<string[]>;
+
+  /**
+   * The database this session is in, as the server last reported it.
+   *
+   * Read from the server at open rather than copied off the profile, because a
+   * profile that names no database lands on the login's default and only the
+   * server knows what that was.
+   */
+  currentDatabase(): string;
+
+  /**
+   * Moves the session to another database.
+   *
+   * Rejects on an engine that cannot — see `switchesDatabase`. It exists as a
+   * driver method rather than as a `USE` the caller writes, because the
+   * statement is the engine's and the quoting rules are too: a database named
+   * `my db` needs brackets, and a caller assembling that by hand is a caller
+   * assembling an injection.
+   */
+  useDatabase(name: string): Promise<void>;
+
+  /**
+   * Called when the server reports the session moved to another database.
+   *
+   * This is a push rather than a poll for a reason worth stating: the only way
+   * to know a `USE` buried in the middle of somebody's script took effect is
+   * to be told, and SQL Server tells us — the change arrives as an ENVCHANGE
+   * token on the same connection, before the batch finishes. Asking
+   * `DB_NAME()` after every execution would be a round trip per Run to learn
+   * something the server already said.
+   */
+  onDatabaseChange(listener: (database: string) => void): { dispose(): void };
   /** Positional parameters, in the engine's own placeholder syntax. */
   query<T = Record<string, unknown>>(sql: string, params?: unknown[]): Promise<T[]>;
 
@@ -106,6 +138,32 @@ export interface StreamOutcome {
 export interface Driver {
   readonly kind: ConnectionProfile['driver'];
   open(profile: ConnectionProfile, secrets: ConnectSecrets, signal?: AbortSignal): Promise<OpenResult>;
+}
+
+/**
+ * The smallest event a driver needs, so neither driver has to import `vscode`.
+ *
+ * Keeping the driver layer free of the workbench is what lets both of them be
+ * reasoned about — and eventually tested — as plain socket code, and one
+ * `EventEmitter` for one event is not worth breaking that for.
+ */
+export class Signal<T> {
+  private readonly listeners = new Set<(value: T) => void>();
+
+  add(listener: (value: T) => void): { dispose(): void } {
+    this.listeners.add(listener);
+    return { dispose: () => void this.listeners.delete(listener) };
+  }
+
+  fire(value: T): void {
+    for (const listener of [...this.listeners]) {
+      listener(value);
+    }
+  }
+
+  clear(): void {
+    this.listeners.clear();
+  }
 }
 
 /** The shape `describeFailure` reads as a cancellation rather than a fault. */

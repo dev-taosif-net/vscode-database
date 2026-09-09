@@ -219,14 +219,17 @@ export class DetailsService implements vscode.Disposable {
    * tables is a few thousand rows of three short strings, which is cheap to
    * hold and far too slow to fetch on a keystroke.
    */
-  async allForeignKeys(profileId: string): Promise<ForeignKeyColumn[]> {
-    const key = `${profileId}${SEP}fk`;
+  async allForeignKeys(profileId: string, database?: string): Promise<ForeignKeyColumn[]> {
+    // Keyed by the database too, because the constraints of `Reporting` are
+    // not the constraints of `PeopleDeskMatador` and a tab that ran `USE`
+    // would otherwise be offered join predicates from the database it left.
+    const key = `${profileId}${SEP}fk${SEP}${(database ?? '').toLowerCase()}`;
     const cached = this.foreignKeys.get(key);
     if (cached && Date.now() - cached.at < TTL_MS) {
       return cached.value;
     }
     return this.coalesce(key, async () => {
-      const session = this.sessionFor(profileId);
+      const session = await this.manager.scopedSession(profileId, database);
       const profile = this.store.get(profileId);
       if (!session || !profile) {
         return [];

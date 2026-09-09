@@ -226,6 +226,15 @@ export interface ObjectPageRequest {
   kind: ObjectKind;
   /** Absent in general mode; the schema to restrict to in schema-focused mode. */
   schema?: string;
+  /**
+   * The database to read, when it is not the connection's own.
+   *
+   * The object explorer never sets it — the tree is drawn from the profile's
+   * database and stays there. IntelliSense sets it for a query tab that has
+   * run `USE`, which is the one caller that has to read a catalog the control
+   * session cannot see.
+   */
+  database?: string;
   offset: number;
   limit: number;
 }

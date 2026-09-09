@@ -9,8 +9,14 @@ import {
   ConnectionInfo,
   ConnectionProfile,
   needsSecret,
-  needsUser
+  needsUser,
+  switchesDatabase
 } from '../types';
+
+/** Database names are compared the way the engines compare them: case-blind. */
+function same(a: string, b: string): boolean {
+  return a.trim().toLowerCase() === b.trim().toLowerCase();
+}
 
 /** The audience Azure SQL and SQL Server on Entra both accept a token for. */
 const SQL_SCOPES = ['https://database.windows.net/.default', 'offline_access'];
@@ -59,6 +65,21 @@ export class ConnectionManager implements vscode.Disposable {
   ]);
 
   private readonly active = new Map<string, ActiveConnection>();
+  /**
+   * Extra catalog sessions, one per database anybody has actually read from,
+   * keyed `<profile>|<database lower-cased>`.
+   *
+   * The control session belongs to the object explorer and stays where the
+   * profile put it. It cannot follow a query tab into another database,
+   * because the tree drawn from it would change under a user who was looking
+   * at it — so a tab that has run `USE` reads its completions through one of
+   * these instead. They are opened on the first completion in that database
+   * and closed with the connection, which is what keeps the cost to the
+   * databases somebody is genuinely working in.
+   */
+  private readonly scoped = new Map<string, DriverSession>();
+  /** Scoped sessions still opening, so four keystrokes are one connection. */
+  private readonly opening = new Map<string, Promise<DriverSession | undefined>>();
   private readonly inFlight = new Map<string, InFlight>();
   /** Profile id to the title of its last failure, cleared by a success. */
   private readonly failures = new Map<string, string>();
@@ -118,6 +139,75 @@ export class ConnectionManager implements vscode.Disposable {
   sessionFor(profileId: string): DriverSession | undefined {
     const entry = this.active.get(profileId);
     return entry && !entry.session.isClosed() ? entry.session : undefined;
+  }
+
+  /** The database the control session is in, as the server last reported it. */
+  databaseOf(profileId: string): string | undefined {
+    return this.sessionFor(profileId)?.currentDatabase();
+  }
+
+  /**
+   * A session in a named database, for reading a catalog the control session
+   * cannot see.
+   *
+   * Falls back to the control session whenever it would do — no database
+   * asked for, or the control session is already there — so the common case
+   * costs nothing and opens nothing. Anything else opens one auxiliary session
+   * per database and keeps it, because the alternative is a connection per
+   * completion request.
+   *
+   * Undefined means there is nothing to read through: the connection is
+   * closed, or the engine cannot move a session between databases at all. A
+   * caller that gets undefined should say the catalog is unavailable rather
+   * than quietly answering out of the wrong database.
+   */
+  async scopedSession(profileId: string, database?: string): Promise<DriverSession | undefined> {
+    const primary = this.sessionFor(profileId);
+    const wanted = (database ?? '').trim();
+    if (!primary || !wanted || same(primary.currentDatabase(), wanted)) {
+      return primary;
+    }
+    const profile = this.store.get(profileId);
+    if (!profile || !switchesDatabase(profile.driver)) {
+      return primary;
+    }
+
+    const key = `${profileId}|${wanted.toLowerCase()}`;
+    const held = this.scoped.get(key);
+    if (held && !held.isClosed()) {
+      return held;
+    }
+    const inFlight = this.opening.get(key);
+    if (inFlight) {
+      return inFlight;
+    }
+
+    const work = this.openScoped(profileId, wanted, key).finally(() => this.opening.delete(key));
+    this.opening.set(key, work);
+    return work;
+  }
+
+  private async openScoped(profileId: string, database: string, key: string): Promise<DriverSession | undefined> {
+    try {
+      const session = await this.openAuxiliary(profileId);
+      try {
+        await session.useDatabase(database);
+      } catch (error) {
+        // A database the login cannot reach is not a failure worth a
+        // notification — the completion list simply has nothing to offer —
+        // but leaving the socket open would leak one per attempt.
+        await session.close().catch(() => undefined);
+        throw error;
+      }
+      this.scoped.set(key, session);
+      this.output.info(`Catalog session opened for ${profileId} in ${database}`);
+      return session;
+    } catch (error) {
+      this.output.warn(
+        `Could not read ${database} on ${profileId}: ${error instanceof Error ? error.message : String(error)}`
+      );
+      return undefined;
+    }
   }
 
   activeIds(): string[] {
@@ -193,6 +283,7 @@ export class ConnectionManager implements vscode.Disposable {
       return;
     }
     this.active.delete(profileId);
+    await this.closeScoped(profileId);
     try {
       await entry.session.close();
     } catch (error) {
@@ -208,6 +299,22 @@ export class ConnectionManager implements vscode.Disposable {
   async disconnectAll(): Promise<void> {
     const ids = [...this.active.keys()];
     await Promise.all(ids.map((id) => this.disconnect(id)));
+  }
+
+  /**
+   * The extra catalog sessions one connection holds, closed with it.
+   *
+   * They are sockets to a server the user has disconnected from. Keeping them
+   * would mean Disconnect left one connection per database browsed behind on
+   * the server, which is the kind of leak nobody notices until a DBA does.
+   */
+  private async closeScoped(profileId: string): Promise<void> {
+    const prefix = `${profileId}|`;
+    const doomed = [...this.scoped.entries()].filter(([key]) => key.startsWith(prefix));
+    for (const [key] of doomed) {
+      this.scoped.delete(key);
+    }
+    await Promise.all(doomed.map(([, session]) => session.close().catch(() => undefined)));
   }
 
   /**

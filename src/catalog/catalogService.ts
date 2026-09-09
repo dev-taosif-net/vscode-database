@@ -122,19 +122,33 @@ export class CatalogService implements vscode.Disposable {
     return PAGE;
   }
 
-  async summary(profileId: string): Promise<CatalogSummary> {
-    const cached = this.summaries.get(profileId);
+  /**
+   * The cache key for one connection in one database.
+   *
+   * Every cache in here is keyed by this rather than by the profile id, and
+   * the empty database — the profile's own, which is where the object explorer
+   * always is — is a scope like any other. That uniformity is what makes
+   * `invalidate` a prefix sweep instead of two different sweeps that have to
+   * agree with each other.
+   */
+  private scope(profileId: string, database?: string): string {
+    return `${profileId}|${(database ?? '').trim().toLowerCase()}`;
+  }
+
+  async summary(profileId: string, database?: string): Promise<CatalogSummary> {
+    const scope = this.scope(profileId, database);
+    const cached = this.summaries.get(scope);
     if (cached && Date.now() - cached.at < TTL_MS) {
       return cached.value;
     }
-    return this.once(`summary:${profileId}`, async () => {
-      const { session, engine } = this.resolve(profileId);
+    return this.once(`summary:${scope}`, async () => {
+      const { session, engine } = await this.resolve(profileId, database);
       const started = Date.now();
       const value = await engine.summary(session);
       this.output.info(
-        `Catalog summary for ${profileId} in ${Date.now() - started} ms: ${value.schemas.length} schemas`
+        `Catalog summary for ${scope} in ${Date.now() - started} ms: ${value.schemas.length} schemas`
       );
-      this.summaries.set(profileId, { value, at: Date.now() });
+      this.summaries.set(scope, { value, at: Date.now() });
       return value;
     });
   }
@@ -150,7 +164,7 @@ export class CatalogService implements vscode.Disposable {
    * meet the end of what is held is a request that has already been answered.
    */
   async page(request: ObjectPageRequest): Promise<ObjectPage> {
-    const key = `${request.profileId}:${request.node}`;
+    const key = `${this.scope(request.profileId, request.database)}:${request.node}`;
     const held = this.nodes.get(key);
 
     if (held && Date.now() - held.at < TTL_MS && held.objects.length >= request.offset + 1) {
@@ -164,7 +178,7 @@ export class CatalogService implements vscode.Disposable {
     }
 
     return this.once(`page:${key}:${request.offset}`, async () => {
-      const { session, engine } = this.resolve(request.profileId);
+      const { session, engine } = await this.resolve(request.profileId, request.database);
       const result = await engine.page(session, {
         kind: request.kind,
         schema: request.schema,
@@ -189,15 +203,15 @@ export class CatalogService implements vscode.Disposable {
     });
   }
 
-  async members(profileId: string, ref: FavouriteRef): Promise<DbMember[]> {
+  async members(profileId: string, ref: FavouriteRef, database?: string): Promise<DbMember[]> {
     const node = memberNode(ref);
-    const key = `${profileId}:${node}`;
+    const key = `${this.scope(profileId, database)}:${node}`;
     const cached = this.memberCache.get(key);
     if (cached && Date.now() - cached.at < TTL_MS) {
       return cached.value;
     }
     return this.once(`members:${key}`, async () => {
-      const { session, engine } = this.resolve(profileId);
+      const { session, engine } = await this.resolve(profileId, database);
       const value = await engine.members(session, ref);
       this.memberCache.set(key, { value, at: Date.now() });
       return value;
@@ -212,7 +226,7 @@ export class CatalogService implements vscode.Disposable {
    * that only ever grows. Coalescing is enough: the sidebar debounces, and two
    * identical searches in flight share one answer.
    */
-  async search(profileId: string, query: string): Promise<SearchAnswer> {
+  async search(profileId: string, query: string, database?: string): Promise<SearchAnswer> {
     const needle = query.trim();
     if (needle.length < 2) {
       // One character matches most of a large database, and the answer would be
@@ -220,16 +234,16 @@ export class CatalogService implements vscode.Disposable {
       // three hundred. The local fuzzy match still runs, on what is loaded.
       return { profileId, query, objects: [], capped: false };
     }
-    return this.once(`search:${profileId}:${needle}`, async () => {
-      const { session, engine } = this.resolve(profileId);
+    return this.once(`search:${this.scope(profileId, database)}:${needle}`, async () => {
+      const { session, engine } = await this.resolve(profileId, database);
       const result = await engine.search(session, needle, SEARCH_LIMIT);
       return { profileId, query, objects: result.objects, capped: result.capped };
     });
   }
 
   /** The object's source, for Open Definition and Script As ALTER. */
-  async definition(profileId: string, ref: FavouriteRef): Promise<string> {
-    const { session, engine } = this.resolve(profileId);
+  async definition(profileId: string, ref: FavouriteRef, database?: string): Promise<string> {
+    const { session, engine } = await this.resolve(profileId, database);
     return engine.definition(session, ref);
   }
 
@@ -249,16 +263,29 @@ export class CatalogService implements vscode.Disposable {
       this.onDidChangeEmitter.fire('');
       return;
     }
-    this.summaries.delete(profileId);
-    this.forgetPrefix(this.nodes, `${profileId}:`);
-    this.forgetPrefix(this.memberCache, `${profileId}:`);
+    // Every database read through this connection, not just the profile's own.
+    this.forgetPrefix(this.summaries, `${profileId}|`);
+    this.forgetPrefix(this.nodes, `${profileId}|`);
+    this.forgetPrefix(this.memberCache, `${profileId}|`);
     this.onDidChangeEmitter.fire(profileId);
   }
 
   /* -------------------------------------------------------------- private */
 
-  private resolve(profileId: string): { session: DriverSession; engine: CatalogQueries } {
-    const session = this.manager.sessionFor(profileId);
+  /**
+   * The session and the engine one read goes through.
+   *
+   * `database` is what makes IntelliSense follow a `USE`. It is empty for the
+   * object explorer, which always reads the profile's own database, and it
+   * carries a name for a query tab that has moved — in which case the manager
+   * hands back a session parked in that database rather than the control
+   * session, whose whole job is to stay where the tree is drawn.
+   */
+  private async resolve(
+    profileId: string,
+    database?: string
+  ): Promise<{ session: DriverSession; engine: CatalogQueries }> {
+    const session = await this.manager.scopedSession(profileId, database);
     if (!session) {
       // Phrased for the row it will be drawn on. The tree cannot expand a
       // connection that is not open, and saying so beats a driver message
@@ -290,7 +317,7 @@ export class CatalogService implements vscode.Disposable {
   }
 
   private dropClosed(): void {
-    for (const profileId of [...this.summaries.keys()]) {
+    for (const profileId of this.cachedProfiles()) {
       if (!this.manager.isConnected(profileId)) {
         this.invalidate(profileId);
       }
@@ -299,11 +326,16 @@ export class CatalogService implements vscode.Disposable {
 
   private dropUnknown(): void {
     const known = new Set(this.store.all().map((p) => p.id));
-    for (const profileId of [...this.summaries.keys()]) {
+    for (const profileId of this.cachedProfiles()) {
       if (!known.has(profileId)) {
         this.invalidate(profileId);
       }
     }
+  }
+
+  /** The connections anything is held for, from the scoped keys. */
+  private cachedProfiles(): string[] {
+    return [...new Set([...this.summaries.keys()].map((key) => key.slice(0, key.indexOf('|'))))];
   }
 
   private forgetPrefix(map: Map<string, unknown>, prefix: string): void {

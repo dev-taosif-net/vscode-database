@@ -26,6 +26,16 @@ interface Indexed {
 }
 
 /**
+ * How long the list of databases on a server is reused.
+ *
+ * Longer than the catalog's own five minutes, because databases are created
+ * far less often than tables are and the list is read to fill a completion
+ * list after `USE` — where a round trip per keystroke is the one thing that
+ * would make the feature unusable.
+ */
+const DATABASES_TTL_MS = 10 * 60 * 1000;
+
+/**
  * What IntelliSense knows about a connection.
  *
  * Built lazily on the first completion in a bound editor rather than on
@@ -34,8 +44,18 @@ interface Indexed {
  * connection that has closed is not stale but meaningless.
  */
 export class MetadataIndex implements vscode.Disposable {
+  /**
+   * Keyed by connection *and* database, as `<profile>|<database>`.
+   *
+   * The database is the whole point of the key. A tab that has run `USE
+   * Reporting` is offered Reporting's tables, and the tab beside it that has
+   * not is still offered the profile's — two indexes over one connection,
+   * which is exactly what `USE` means and what a single per-profile index
+   * could never express.
+   */
   private readonly indexes = new Map<string, Indexed>();
   private readonly building = new Map<string, Promise<Indexed>>();
+  private readonly databaseLists = new Map<string, { value: string[]; at: number }>();
   private readonly disposables: vscode.Disposable[] = [];
 
   constructor(
@@ -56,42 +76,83 @@ export class MetadataIndex implements vscode.Disposable {
     }
     this.indexes.clear();
     this.building.clear();
+    this.databaseLists.clear();
   }
 
   invalidate(profileId?: string): void {
     if (profileId) {
-      this.indexes.delete(profileId);
-      this.building.delete(profileId);
+      // Every database indexed through this connection, not just its own.
+      for (const key of [...this.indexes.keys()]) {
+        if (key.startsWith(`${profileId}|`)) {
+          this.indexes.delete(key);
+          this.building.delete(key);
+        }
+      }
+      this.databaseLists.delete(profileId);
       return;
     }
     this.indexes.clear();
     this.building.clear();
+    this.databaseLists.clear();
+  }
+
+  private key(profileId: string, database?: string): string {
+    return `${profileId}|${(database ?? '').trim().toLowerCase()}`;
   }
 
   /** What is already known, without waiting. Null until the first build lands. */
-  peek(profileId: string): Indexed | undefined {
-    return this.indexes.get(profileId);
+  peek(profileId: string, database?: string): Indexed | undefined {
+    return this.indexes.get(this.key(profileId, database));
   }
 
-  async build(profileId: string): Promise<Indexed | undefined> {
+  /**
+   * The databases on this server that the login can reach.
+   *
+   * Cached per connection and read through the control session, so the list
+   * behind `USE ` costs one round trip per ten minutes rather than one per
+   * keystroke. An unreadable list is cached as empty for the same interval: a
+   * login without `VIEW ANY DATABASE` would otherwise be asked again on every
+   * character typed, and the answer would be no every time.
+   */
+  async databases(profileId: string): Promise<string[]> {
+    const cached = this.databaseLists.get(profileId);
+    if (cached && Date.now() - cached.at < DATABASES_TTL_MS) {
+      return cached.value;
+    }
+    const session = this.manager.sessionFor(profileId);
+    if (!session) {
+      return [];
+    }
+    try {
+      const value = await session.listDatabases();
+      this.databaseLists.set(profileId, { value, at: Date.now() });
+      return value;
+    } catch {
+      this.databaseLists.set(profileId, { value: [], at: Date.now() });
+      return [];
+    }
+  }
+
+  async build(profileId: string, database?: string): Promise<Indexed | undefined> {
     if (!this.manager.isConnected(profileId)) {
       return undefined;
     }
-    const existing = this.indexes.get(profileId);
+    const key = this.key(profileId, database);
+    const existing = this.indexes.get(key);
     if (existing) {
       return existing;
     }
-    const inFlight = this.building.get(profileId);
+    const inFlight = this.building.get(key);
     if (inFlight) {
       return inFlight;
     }
 
-    const work = this.doBuild(profileId).finally(() => this.building.delete(profileId));
-    this.building.set(profileId, work);
+    const work = this.doBuild(profileId, database, key).finally(() => this.building.delete(key));
+    this.building.set(key, work);
     return work;
   }
 
-  private async doBuild(profileId: string): Promise<Indexed> {
+  private async doBuild(profileId: string, database: string | undefined, key: string): Promise<Indexed> {
     const profile = this.store.get(profileId);
     const index: Indexed = {
       schemas: new Set(),
@@ -105,7 +166,7 @@ export class MetadataIndex implements vscode.Disposable {
     }
 
     try {
-      const summary = await this.catalog.summary(profileId);
+      const summary = await this.catalog.summary(profileId, database);
       for (const schema of summary.schemas) {
         index.schemas.add(schema.name);
       }
@@ -120,6 +181,7 @@ export class MetadataIndex implements vscode.Disposable {
           profileId,
           node: `index:${kind}`,
           kind: kind as ObjectKind,
+          database,
           offset: 0,
           limit: PER_KIND
         });
@@ -132,8 +194,8 @@ export class MetadataIndex implements vscode.Disposable {
       }
     }
 
-    index.foreignKeys = await this.details.allForeignKeys(profileId);
-    this.indexes.set(profileId, index);
+    index.foreignKeys = await this.details.allForeignKeys(profileId, database);
+    this.indexes.set(key, index);
     return index;
   }
 
@@ -144,8 +206,8 @@ export class MetadataIndex implements vscode.Disposable {
    * columns nobody has asked about, and the first `c.` in a statement is the
    * only thing that can say which relation matters.
    */
-  async columnsOf(profileId: string, schema: string, name: string): Promise<DbMember[]> {
-    const index = await this.build(profileId);
+  async columnsOf(profileId: string, schema: string, name: string, database?: string): Promise<DbMember[]> {
+    const index = await this.build(profileId, database);
     if (!index) {
       return [];
     }
@@ -163,11 +225,11 @@ export class MetadataIndex implements vscode.Disposable {
       return [];
     }
     try {
-      const columns = await this.catalog.members(profileId, {
-        kind: object.kind,
-        schema: object.schema,
-        name: object.name
-      });
+      const columns = await this.catalog.members(
+        profileId,
+        { kind: object.kind, schema: object.schema, name: object.name },
+        database
+      );
       index.columns.set(key, columns);
       return columns;
     } catch {
@@ -219,9 +281,11 @@ export class MetadataIndex implements vscode.Disposable {
   }
 
   private dropClosed(): void {
-    for (const profileId of [...this.indexes.keys()]) {
+    for (const key of [...this.indexes.keys()]) {
+      const profileId = key.slice(0, key.indexOf('|'));
       if (!this.manager.isConnected(profileId)) {
-        this.indexes.delete(profileId);
+        this.indexes.delete(key);
+        this.databaseLists.delete(profileId);
       }
     }
   }

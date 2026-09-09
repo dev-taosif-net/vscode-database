@@ -55,6 +55,26 @@ export function paintChip(item: vscode.StatusBarItem, profile: ConnectionProfile
   item.color = new vscode.ThemeColor(`databaseTools.statusBarItem.${profile.environment}Foreground`);
 }
 
+/**
+ * The database entry beside the connection.
+ *
+ * It is a second entry rather than a third part of the first, and the reason
+ * is that it moves. The connection a tab runs on changes when somebody decides
+ * to change it; the database changes whenever a `USE` goes past, which on a
+ * migration script is several times a minute — and a value that moves on its
+ * own needs to be somewhere the eye can find it without re-reading the whole
+ * chip. Being its own entry is also what gives it a click target of its own.
+ *
+ * It takes the environment's ink and none of its fill. Two filled rectangles
+ * side by side would read as one wider chip and lose the boundary that makes
+ * the pair legible; the shared hue is enough to say the two belong together.
+ */
+export function paintDatabase(item: vscode.StatusBarItem, profile: ConnectionProfile, database: string): void {
+  item.text = `$(database) ${database || 'default'}`;
+  item.backgroundColor = undefined;
+  item.color = new vscode.ThemeColor(`databaseTools.statusBarItem.${profile.environment}Foreground`);
+}
+
 /** An IPv4 literal. `10.0.4.7` is an address, not a name, and must survive whole. */
 const IPV4 = /^\d{1,3}(?:\.\d{1,3}){3}$/;
 
@@ -82,21 +102,19 @@ export function shortServer(host: string): string {
 }
 
 /**
- * Connection, server, database — the three questions asked of the strip, in
- * the order they are asked.
+ * Connection and server — the two questions this entry answers.
+ *
+ * The database used to be a third part here and is now the entry next door,
+ * because it is the one of the three that changes without anybody deciding to
+ * change it. See `paintDatabase`.
  *
  * A part is dropped when it would say nothing: a profile with no name of its
- * own is named by its server already, and repeating it would spend a third of
- * the entry on one word. A blank database means the server default, which has
- * no name to print.
+ * own is named by its server already, and repeating it would spend half the
+ * entry on one word.
  */
 export function chipLabel(profile: ConnectionProfile): string {
   const server = shortServer(profile.host);
   const name = profile.name.trim();
   const parts = name && name !== server ? [name, server] : [server || profile.host];
-  const database = profile.database.trim();
-  if (database) {
-    parts.push(database);
-  }
   return parts.filter(Boolean).join(' · ');
 }

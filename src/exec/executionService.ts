@@ -1,8 +1,9 @@
 import * as vscode from 'vscode';
 import { ConnectionManager } from '../connections/connectionManager';
 import { ConnectionStore } from '../store/connectionStore';
+import { BindingStore } from '../query/bindingStore';
 import { CellValue, ColumnMeta, TableCursor, cellText } from '../shared/query';
-import { errorMessage } from '../types';
+import { effectiveDatabase, errorMessage } from '../types';
 import { DriverSession, RowSink } from '../drivers/types';
 import { PlanMode, isPlanColumn, parsePlan, wrapForPlan } from '../plan/planService';
 import { ExecutionRecord, ResultStore, SetData } from './resultStore';
@@ -77,8 +78,41 @@ export class ExecutionService implements vscode.Disposable {
     private readonly manager: ConnectionManager,
     private readonly pool: SessionPool,
     private readonly results: ResultStore,
+    private readonly bindings: BindingStore,
     private readonly output: vscode.LogOutputChannel
   ) {}
+
+  /**
+   * The database a tab runs in: where it has moved itself, or the profile's.
+   *
+   * The tab's own answer wins over the pool's, because the pool only has one
+   * once a session exists and this is asked before the first Run — and it is
+   * asked by the guard that decides whether to warn about production, which
+   * must name the database the statement is about to reach rather than the one
+   * a socket happens to be sitting in.
+   */
+  databaseFor(tab: string, profileId: string): string {
+    const profile = this.store.get(profileId);
+    const chosen = this.bindings.database(vscode.Uri.parse(tab)) ?? this.pool.databaseFor(tab);
+    return profile ? effectiveDatabase(profile, chosen) : (chosen ?? '');
+  }
+
+  /**
+   * Moves a tab to another database, the way running `USE` would.
+   *
+   * Two things happen and the order matters. The tab remembers where it is,
+   * so the next session it opens starts there; and the session it already
+   * holds is moved now, so the change is real before the user presses Run
+   * rather than at the moment they do. A tab holding no session gets only the
+   * first — opening a connection to answer a menu click would be a connection
+   * the user did not ask for.
+   */
+  async moveTo(tab: string, profileId: string, database: string): Promise<void> {
+    await this.bindings.setDatabase(vscode.Uri.parse(tab), database);
+    if (this.pool.databaseFor(tab) !== undefined) {
+      await this.pool.acquire(profileId, tab, database);
+    }
+  }
 
   dispose(): void {
     this.onDidChangeEmitter.dispose();
@@ -120,7 +154,8 @@ export class ExecutionService implements vscode.Disposable {
       });
       return undefined;
     }
-    if (!(await confirmProductionWrite(profile, options.sql))) {
+    const database = this.databaseFor(options.tab, profile.id);
+    if (!(await confirmProductionWrite(profile, options.sql, database))) {
       return undefined;
     }
 
@@ -136,7 +171,7 @@ export class ExecutionService implements vscode.Disposable {
       tab: options.tab,
       profileId: profile.id,
       connectionName: profile.name || profile.host,
-      database: profile.database,
+      database,
       environment: profile.environment,
       readOnly: profile.readOnly,
       source: options.source,
@@ -154,8 +189,12 @@ export class ExecutionService implements vscode.Disposable {
     record.batchLines = batches.map((batch) => batch.line);
 
     try {
-      const session = await this.pool.acquire(profile.id, options.tab);
+      const session = await this.pool.acquire(profile.id, options.tab, database);
       this.pool.setBusy(options.tab, true);
+      // Where the session actually landed, which is not always where it was
+      // asked to go: a remembered database that has since been dropped leaves
+      // the session in the one it opened in, and the record must say so.
+      record.database = effectiveDatabase(profile, this.pool.databaseFor(options.tab));
 
       for (let index = 0; index < batches.length; index++) {
         const batch = batches[index];
@@ -180,6 +219,9 @@ export class ExecutionService implements vscode.Disposable {
         this.pool.setBusy(options.tab, false);
         this.running.delete(options.tab);
       }
+      // A `USE` anywhere in the script moves the session, and the record
+      // belongs to where the statements ended up rather than where they began.
+      record.database = effectiveDatabase(profile, this.pool.databaseFor(options.tab) ?? record.database);
       record.finishedAt = Date.now();
       settle();
       this.fire(record);

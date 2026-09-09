@@ -53,6 +53,15 @@ See [docs/query-workspace.md](docs/query-workspace.md).
   space after it, and accepting a table in `FROM` or `JOIN` names it — the
   capitals in `empManualAttendanceSummary` make it `mas` — so the aliases in
   scope are then the first thing the list offers.
+- `USE AnotherDatabase` moves the tab, not just the statement. SQL Server tells
+  the extension where the session went, so the strip at the bottom of the
+  window renames itself, IntelliSense starts completing out of the new
+  database, and the production write warning names the database the statement
+  will actually reach. The tab stays there across a reload and across an idle
+  session being recycled. `USE ` also completes: the databases the login can
+  see, with the current one pinned first. The database entry in the strip is a
+  click target for the same move, so the name never has to be typed. PostgreSQL
+  cannot move a session between databases and says so rather than pretending.
 - Object details with computed badges — PK, FK, Identity, Clustered, Heap,
   Temporal, Partitioned, Unlogged, Materialized — and Depends On / Used By from
   real dependency tracking. Where PostgreSQL cannot answer, the fallback is a
@@ -184,6 +193,8 @@ screen and colour vision deficiency.
 | Database: Explain Plan | `Ctrl+L` |
 | Database: Explain Plan with Actual Statistics | |
 | Database: Format SQL | `Shift+Alt+F`, `Ctrl+Shift+F` in a bound SQL tab |
+| Database: Change Connection for This Tab | |
+| Database: Change Database for This Tab | |
 | Database: Connect to a Database | |
 | Database: Disconnect | |
 | Database: Disconnect All | |

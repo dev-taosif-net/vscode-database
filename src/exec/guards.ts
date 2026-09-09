@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import { ConnectionProfile, environmentLabel } from '../types';
+import { ConnectionProfile, effectiveDatabase, environmentLabel } from '../types';
 import { leadingKeywords } from './splitter';
 
 /**
@@ -88,6 +88,37 @@ export function classify(sql: string): Verdict {
 }
 
 /**
+ * The database a script moves itself into before it writes.
+ *
+ * This is the one place a `USE` has to be read out of the text rather than
+ * heard from the server, and the reason is timing: `USE Payroll; DELETE FROM
+ * dbo.Staff` is confirmed before a single statement is sent, so the server has
+ * not yet been asked anything and the only thing that knows where the `DELETE`
+ * will land is the script. Naming the tab's previous database there would be a
+ * confirmation dialog that tells the truth about nothing.
+ *
+ * The last one wins, because that is where the script ends up. It reads only
+ * statement-leading `USE`s, which is what `leadingKeywords` already finds, and
+ * it is allowed to miss a `USE` inside an `IF` or a procedure — the guard is
+ * belt to the server's own braces, not a T-SQL interpreter.
+ */
+function switchTarget(sql: string): string | undefined {
+  let found: string | undefined;
+  for (const { keyword, offset } of leadingKeywords(sql)) {
+    if (keyword !== 'USE') {
+      continue;
+    }
+    const rest = sql.slice(offset + 3);
+    const match = /^\s+(\[[^\]]+\]|"[^"]+"|[A-Za-z_][A-Za-z0-9_@#$]*)/.exec(rest);
+    if (match) {
+      const name = match[1];
+      found = /^[["]/.test(name) ? name.slice(1, -1) : name;
+    }
+  }
+  return found;
+}
+
+/**
  * Refuses a write on a connection marked read-only, by name.
  *
  * PostgreSQL already holds the whole session read-only and would refuse this
@@ -116,7 +147,11 @@ export function readOnlyRefusal(profile: ConnectionProfile, sql: string): string
  * before anything is written, because consenting to look at production is not
  * consenting to change it.
  */
-export async function confirmProductionWrite(profile: ConnectionProfile, sql: string): Promise<boolean> {
+export async function confirmProductionWrite(
+  profile: ConnectionProfile,
+  sql: string,
+  database?: string
+): Promise<boolean> {
   if (profile.environment !== 'prod') {
     return true;
   }
@@ -131,12 +166,21 @@ export async function confirmProductionWrite(profile: ConnectionProfile, sql: st
     return true;
   }
   const kinds = [...new Set(writes.map((w) => w.keyword))].join(', ');
+  /*
+   * The database the statement will actually reach.
+   *
+   * A tab that has run `USE` is not in the profile's database any more, and a
+   * confirmation naming the wrong one is worse than no confirmation at all:
+   * it is the sentence somebody reads to decide, and reading the name of a
+   * database they are not about to write to is what makes them click through.
+   */
+  const target = switchTarget(sql) ?? effectiveDatabase(profile, database);
   const choice = await vscode.window.showWarningMessage(
     `Run ${kinds} against ${profile.name || profile.host}?`,
     {
       modal: true,
       detail: `${environmentLabel(profile.environment)} · ${profile.host}${
-        profile.database ? ` · ${profile.database}` : ''
+        target ? ` · ${target}` : ''
       }\n\nThis changes rows on the server.`
     },
     'Run it'

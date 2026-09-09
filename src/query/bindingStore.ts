@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 import { FavouriteRef, OBJECT_KINDS, ObjectKind } from '../shared/catalog';
 
 const KEY = 'databaseTools.bindings.v1';
+const DATABASE_KEY = 'databaseTools.tabDatabases.v1';
 
 /**
  * Which connection a document runs against.
@@ -19,12 +20,27 @@ const KEY = 'databaseTools.bindings.v1';
  */
 export class BindingStore implements vscode.Disposable {
   private readonly map: Map<string, string>;
+  /**
+   * Which database a document is in, when it is not the profile's own.
+   *
+   * A second map rather than a field on the first, because it is keyed for
+   * every scheme and the connection map is not: a `dbquery:` tab carries its
+   * profile in its authority and can never be rebound, but it can absolutely
+   * run `USE` — the database is the one thing about such a tab that moves.
+   *
+   * It is remembered rather than read off the session for the same reason the
+   * connection is: an execution session is swept after fifteen idle minutes,
+   * and a tab whose database evaporated with it would silently run the next
+   * statement somewhere else. `SessionPool` re-applies this on every acquire.
+   */
+  private readonly databases: Map<string, string>;
   private readonly onDidChangeEmitter = new vscode.EventEmitter<vscode.Uri>();
   readonly onDidChange = this.onDidChangeEmitter.event;
 
   constructor(private readonly context: vscode.ExtensionContext) {
     const stored = context.workspaceState.get<Record<string, string>>(KEY, {});
     this.map = new Map(Object.entries(stored));
+    this.databases = new Map(Object.entries(context.workspaceState.get<Record<string, string>>(DATABASE_KEY, {})));
   }
 
   dispose(): void {
@@ -50,10 +66,44 @@ export class BindingStore implements vscode.Disposable {
       return;
     }
     const key = uri.toString();
+    if (this.map.get(key) !== profileId) {
+      // A tab pointed at another connection is a tab whose database means
+      // nothing: `Reporting` on the UAT server and `Reporting` on production
+      // are two databases, and carrying the name across is how a statement
+      // ends up in the second when the user meant the first.
+      this.databases.delete(key);
+    }
     if (profileId) {
       this.map.set(key, profileId);
     } else {
       this.map.delete(key);
+    }
+    await this.persist();
+    this.onDidChangeEmitter.fire(uri);
+  }
+
+  /**
+   * The database a document runs in, or undefined when it runs in the
+   * profile's own.
+   *
+   * Undefined is not the same as the profile's database spelled out, and the
+   * difference is what the strip draws: a tab that has never moved says
+   * nothing extra, and a tab that has says where it went.
+   */
+  database(uri: vscode.Uri): string | undefined {
+    return this.databases.get(uri.toString());
+  }
+
+  async setDatabase(uri: vscode.Uri, database: string | undefined): Promise<void> {
+    const key = uri.toString();
+    const next = (database ?? '').trim();
+    if ((this.databases.get(key) ?? '') === next) {
+      return;
+    }
+    if (next) {
+      this.databases.set(key, next);
+    } else {
+      this.databases.delete(key);
     }
     await this.persist();
     this.onDidChangeEmitter.fire(uri);
@@ -65,6 +115,16 @@ export class BindingStore implements vscode.Disposable {
     for (const [key, value] of [...this.map]) {
       if (value === profileId) {
         this.map.delete(key);
+        this.databases.delete(key);
+        changed = true;
+      }
+    }
+    // A `dbquery:` tab is never in the map above — its profile is its
+    // authority — but it can still hold a database, and a deleted connection
+    // must not leave one behind under an id nothing can reach.
+    for (const key of [...this.databases.keys()]) {
+      if (vscode.Uri.parse(key).authority === profileId) {
+        this.databases.delete(key);
         changed = true;
       }
     }
@@ -75,6 +135,7 @@ export class BindingStore implements vscode.Disposable {
 
   private async persist(): Promise<void> {
     await this.context.workspaceState.update(KEY, Object.fromEntries(this.map));
+    await this.context.workspaceState.update(DATABASE_KEY, Object.fromEntries(this.databases));
   }
 }
 

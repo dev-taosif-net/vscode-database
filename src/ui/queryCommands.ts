@@ -11,7 +11,14 @@ import { DefinitionProvider, QueryFileSystem } from '../query/queryFs';
 import { SavedQueryStore } from '../query/savedQueries';
 import { formatSql, optionsFrom } from '../query/format';
 import { FavouriteRef, KINDS } from '../shared/catalog';
-import { ConnectionProfile, DriverKind, environmentLabel, errorMessage } from '../types';
+import {
+  ConnectionProfile,
+  DriverKind,
+  effectiveDatabase,
+  environmentLabel,
+  errorMessage,
+  switchesDatabase
+} from '../types';
 import { ActiveTab } from './activeTab';
 import { CurrentConnection } from './currentConnection';
 import { ObjectTarget, objectTarget } from './objectCommands';
@@ -76,6 +83,7 @@ export class QueryCommands implements vscode.Disposable {
       on('databaseTools.formatQuery', () => this.format()),
       on('databaseTools.newQuery', (target) => this.newQuery(target)),
       on('databaseTools.bindConnection', () => this.bind()),
+      on('databaseTools.selectDatabase', () => this.selectDatabase()),
       on('databaseTools.saveQuery', () => this.saveQuery()),
       on('databaseTools.shareQuery', () => this.share()),
       on('databaseTools.disconnectTab', () => this.disconnectTab()),
@@ -258,6 +266,71 @@ export class QueryCommands implements vscode.Disposable {
     if (profile) {
       await this.bindings.set(uri, profile.id);
     }
+  }
+
+  /**
+   * The database this tab runs in, chosen from the ones the login can see.
+   *
+   * It is the same fact `USE` sets and it is set the same way — the pick runs
+   * a `USE` on the tab's own session — so a person can move between the two
+   * without the two disagreeing. What it adds is a list: `USE` needs the name
+   * spelled correctly and this one does not, which on a server with forty
+   * databases whose names differ by a suffix is most of the value.
+   *
+   * It refuses on PostgreSQL rather than offering a list that cannot be acted
+   * on, and says why. A backend there belongs to one database for its life.
+   */
+  private async selectDatabase(): Promise<void> {
+    const tab =
+      vscode.window.activeTextEditor?.document.uri.toString() ?? this.active.value;
+    if (!tab) {
+      void vscode.window.showInformationMessage('Open a SQL file to choose its database.');
+      return;
+    }
+    const uri = vscode.Uri.parse(tab);
+    const profileId = this.bindings.get(uri);
+    const profile = profileId ? this.store.get(profileId) : undefined;
+    if (!profile) {
+      void vscode.window.showInformationMessage('Choose a connection for this tab first.');
+      return;
+    }
+    if (!switchesDatabase(profile.driver)) {
+      void vscode.window.showInformationMessage(
+        'PostgreSQL cannot move a session to another database. Open a second connection for it.'
+      );
+      return;
+    }
+    if (!this.manager.isConnected(profile.id)) {
+      void vscode.window.showInformationMessage(`${profile.name || profile.host} is not connected.`);
+      return;
+    }
+
+    const current = effectiveDatabase(profile, this.bindings.database(uri));
+    const names = await vscode.window.withProgress(
+      { location: vscode.ProgressLocation.Window, title: 'Reading databases' },
+      () => this.manager.listDatabases(profile)
+    );
+    if (names.length === 0) {
+      void vscode.window.showWarningMessage(
+        `${profile.name || profile.host} did not return a database list. The login may not be allowed to see one.`
+      );
+      return;
+    }
+
+    const picked = await vscode.window.showQuickPick(
+      names.map((name) => ({
+        label: name,
+        // The one it is already in is marked rather than reordered, so the
+        // list stays alphabetical and the eye can still find it by name.
+        description: name.toLowerCase() === current.toLowerCase() ? 'current' : undefined,
+        name
+      })),
+      { title: `Database for this tab · ${profile.name || profile.host}`, placeHolder: current }
+    );
+    if (!picked || picked.name.toLowerCase() === current.toLowerCase()) {
+      return;
+    }
+    await this.execution.moveTo(tab, profile.id, picked.name);
   }
 
   private async requireBinding(document: vscode.TextDocument): Promise<ConnectionProfile | undefined> {

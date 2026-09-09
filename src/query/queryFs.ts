@@ -149,6 +149,12 @@ export class QueryFileSystem implements vscode.FileSystemProvider {
  * Open Definition still opens an editable copy, at `dbquery:`, because that
  * one is a starting point.
  */
+/** The database an object address names, when it names one. */
+function databaseOf(uri: vscode.Uri): string | undefined {
+  const match = /(?:^|&)db=([^&]*)/.exec(uri.query);
+  return match ? decodeURIComponent(match[1]) || undefined : undefined;
+}
+
 export class DefinitionProvider implements vscode.TextDocumentContentProvider {
   private readonly emitter = new vscode.EventEmitter<vscode.Uri>();
   readonly onDidChange = this.emitter.event;
@@ -162,8 +168,20 @@ export class DefinitionProvider implements vscode.TextDocumentContentProvider {
     this.emitter.dispose();
   }
 
-  static address(profileId: string, ref: FavouriteRef): vscode.Uri {
-    return objectAddress(OBJECT_SCHEME, profileId, ref, '.sql');
+  /**
+   * The address of a scripted definition.
+   *
+   * `database` rides in the query string rather than in the path, and it is
+   * the only part of the address that is optional. The path is what
+   * `objectRefOf` parses and what an older build's tabs still restore from, so
+   * it could not grow a segment; the query string is ignored by everything
+   * that does not look for it, which is every caller but this one. Two
+   * definitions of `dbo.Staff` in two databases also need two addresses, or
+   * the second would be served the first one's cached document.
+   */
+  static address(profileId: string, ref: FavouriteRef, database?: string): vscode.Uri {
+    const base = objectAddress(OBJECT_SCHEME, profileId, ref, '.sql');
+    return database ? base.with({ query: `db=${encodeURIComponent(database)}` }) : base;
   }
 
   refresh(uri: vscode.Uri): void {
@@ -177,7 +195,7 @@ export class DefinitionProvider implements vscode.TextDocumentContentProvider {
       return '-- That connection no longer exists.';
     }
     try {
-      return await this.catalog.definition(profileId, ref);
+      return await this.catalog.definition(profileId, ref, databaseOf(uri));
     } catch (error) {
       return `-- ${errorMessage(error)}`;
     }

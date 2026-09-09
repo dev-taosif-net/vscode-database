@@ -9,6 +9,7 @@ import {
   DriverSession,
   OpenResult,
   RowSink,
+  Signal,
   StreamOutcome,
   abortError,
   coerceProperty
@@ -83,7 +84,11 @@ export class MssqlDriver implements Driver {
       const latencyMs = Date.now() - started;
       const first = rows[0] ?? {};
       return {
-        session: new MssqlSession(profile.id, connection),
+        // The database comes from the server rather than from the profile: a
+        // profile that names none lands on the login's default, and the strip
+        // at the bottom of the window should say which one that turned out to
+        // be rather than leaving the question open.
+        session: new MssqlSession(profile.id, connection, String(first.db ?? profile.database ?? '')),
         serverVersion: shortVersion(String(first.version ?? '')),
         principal: String(first.principal ?? profile.user ?? ''),
         latencyMs,
@@ -112,16 +117,37 @@ class MssqlSession implements DriverSession {
   private current: TediousRequest | undefined;
   /** Where connection-level messages go while a statement is streaming. */
   private route: MessageRoute | undefined;
+  private readonly databaseSignal = new Signal<string>();
 
   constructor(
     readonly profileId: string,
-    private readonly connection: Connection
+    private readonly connection: Connection,
+    /** Where the session starts, from `DB_NAME()` at open. */
+    private database: string
   ) {
     this.connection.on('error', () => {
       this.closed = true;
     });
     this.connection.on('end', () => {
       this.closed = true;
+    });
+    /*
+     * The server saying which database this session is now in.
+     *
+     * tedious surfaces the ENVCHANGE token as this event, and it fires for
+     * every route into a database change there is: a `USE` the user typed, a
+     * `USE` twenty statements down a script, one inside a procedure, and the
+     * implicit one at login. That is the whole reason nothing here parses SQL
+     * looking for the word — a scanner would miss the last three and would be
+     * wrong about the first one whenever the statement failed.
+     */
+    this.connection.on('databaseChange', (database: string) => {
+      const name = String(database ?? '').trim();
+      if (!name || name === this.database) {
+        return;
+      }
+      this.database = name;
+      this.databaseSignal.fire(name);
     });
     this.connection.on('infoMessage', (info: { message?: string; lineNumber?: number }) => {
       if (info.message) {
@@ -142,6 +168,37 @@ class MssqlSession implements DriverSession {
       'SELECT name FROM sys.databases WHERE state = 0 AND HAS_DBACCESS(name) = 1 ORDER BY name'
     );
     return rows.map((r) => String(r.name));
+  }
+
+  currentDatabase(): string {
+    return this.database;
+  }
+
+  /**
+   * `USE`, which is the one statement the extension writes on the user's
+   * behalf that changes what every later statement means.
+   *
+   * The name is bracketed here rather than bound, because a database name is
+   * an identifier and `USE @p0` is not a statement SQL Server has. Brackets
+   * plus a doubled `]` is the engine's own escape and the only correct
+   * quoting for the position — and the name itself only ever comes from
+   * `sys.databases` or from the user's own picker.
+   */
+  async useDatabase(name: string): Promise<void> {
+    if (this.closed) {
+      throw new DriverError('The connection is closed.', 'ECLOSED', undefined, undefined);
+    }
+    await query(this.connection, `USE [${name.replace(/]/g, ']]')}]`);
+    // Belt and braces: the ENVCHANGE token normally lands first, but a server
+    // that did not send one must not leave the session claiming the old name.
+    if (this.database !== name) {
+      this.database = name;
+      this.databaseSignal.fire(name);
+    }
+  }
+
+  onDatabaseChange(listener: (database: string) => void): { dispose(): void } {
+    return this.databaseSignal.add(listener);
   }
 
   async query<T = Record<string, unknown>>(sql: string, params?: unknown[]): Promise<T[]> {
@@ -278,6 +335,7 @@ class MssqlSession implements DriverSession {
     }
     this.closed = true;
     this.current = undefined;
+    this.databaseSignal.clear();
     await new Promise<void>((resolve) => {
       const onEnd = () => {
         clearTimeout(timer);

@@ -211,6 +211,35 @@ export function secretKey(profileId: string): string {
   return `databaseTools.secret.${profileId}`;
 }
 
+/**
+ * Whether a session on this engine can move to another database without being
+ * reopened.
+ *
+ * SQL Server has `USE`, and a session that runs one is in the new database for
+ * everything that follows — temp tables, `OBJECT_ID`, `sys.*`, all of it.
+ * PostgreSQL has no equivalent and never will: a backend is bound to one
+ * database for its life, and `\c` in psql is a client reconnecting rather than
+ * a statement the server understands. So everything built on this is offered
+ * on SQL Server and withheld on PostgreSQL, rather than offered everywhere and
+ * failing on half of it.
+ */
+export function switchesDatabase(driver: DriverKind): boolean {
+  return driver === 'mssql';
+}
+
+/**
+ * The database a tab is actually in, given what the session last reported and
+ * what the profile asked for.
+ *
+ * Written once because four places ask it and a fifth would otherwise get it
+ * subtly wrong: the session's answer wins, because a profile with no database
+ * of its own lands wherever the login's default is and the profile cannot say
+ * where that was.
+ */
+export function effectiveDatabase(profile: ConnectionProfile, session: string | undefined): string {
+  return (session ?? '').trim() || profile.database.trim();
+}
+
 /** True when this profile's method needs a stored or prompted secret at all. */
 export function needsSecret(profile: ConnectionProfile): boolean {
   if (profile.driver === 'mssql') {

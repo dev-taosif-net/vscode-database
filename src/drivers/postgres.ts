@@ -58,13 +58,13 @@ export class PostgresDriver implements Driver {
         readOnlyApplied = true;
       }
 
-      const result = await client.query<{ version: string; principal: string }>(
-        'SELECT version() AS version, current_user AS principal'
+      const result = await client.query<{ version: string; principal: string; db: string }>(
+        'SELECT version() AS version, current_user AS principal, current_database() AS db'
       );
       const latencyMs = Date.now() - started;
       const row = result.rows[0];
       return {
-        session: new PostgresSession(profile.id, client, opened.config),
+        session: new PostgresSession(profile.id, client, opened.config, row?.db ?? profile.database),
         serverVersion: shortVersion(row?.version ?? ''),
         principal: row?.principal ?? profile.user,
         latencyMs,
@@ -189,7 +189,15 @@ class PostgresSession implements DriverSession {
     readonly profileId: string,
     private readonly client: Client,
     /** Kept so a cancel can open a second socket with the same settings. */
-    private readonly config: ClientConfig
+    private readonly config: ClientConfig,
+    /**
+     * Where this session is, and where it stays.
+     *
+     * A PostgreSQL backend is bound to one database for its life. There is no
+     * statement that moves it, so this is read once at open and never changes
+     * — which is why `onDatabaseChange` below has nothing to report.
+     */
+    private readonly database: string
   ) {
     this.client.on('end', () => {
       this.closed = true;
@@ -205,6 +213,33 @@ class PostgresSession implements DriverSession {
       'SELECT datname FROM pg_database WHERE datallowconn AND NOT datistemplate ORDER BY datname'
     );
     return result.rows.map((r) => r.datname);
+  }
+
+  currentDatabase(): string {
+    return this.database;
+  }
+
+  /**
+   * Refused, by the engine's design rather than by this one's.
+   *
+   * `\c` in psql looks like a statement and is a client opening a second
+   * connection. Doing the same here would silently hand back a session with
+   * none of the first one's temp tables, prepared statements or open
+   * transaction, which is a worse answer than saying it cannot be done.
+   */
+  useDatabase(name: string): Promise<void> {
+    return Promise.reject(
+      new DriverError(
+        `PostgreSQL cannot move a session to ${name}. A connection belongs to one database; open a second connection for it.`,
+        'ENOSWITCH',
+        undefined,
+        undefined
+      )
+    );
+  }
+
+  onDatabaseChange(): { dispose(): void } {
+    return { dispose: () => undefined };
   }
 
   async query<T = Record<string, unknown>>(sql: string, params?: unknown[]): Promise<T[]> {
