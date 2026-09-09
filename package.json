@@ -20,7 +20,11 @@
   ],
   "main": "./dist/extension.js",
   "activationEvents": [
-    "onLanguage:sql"
+    "onLanguage:sql",
+    "onFileSystem:dbquery",
+    "onFileSystem:dbobj",
+    "onWebviewPanel:databaseTools.data",
+    "onWebviewPanel:databaseTools.runner"
   ],
   "contributes": {
     "commands": [

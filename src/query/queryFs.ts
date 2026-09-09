@@ -5,6 +5,18 @@ import { FavouriteRef } from '../shared/catalog';
 import { errorMessage } from '../types';
 import { OBJECT_SCHEME, QUERY_SCHEME, addressOf, objectAddress, objectRefOf } from './bindingStore';
 
+/** Where the query buffers are mirrored so a window reload does not lose them. */
+const STATE_KEY = 'databaseTools.queryFiles.v1';
+
+/** Past this, a buffer stays in memory rather than going into the memento. */
+const MAX_PERSISTED_BYTES = 512 * 1024;
+
+interface StoredFile {
+  text: string;
+  ctime: number;
+  mtime: number;
+}
+
 /**
  * The file system behind `dbquery:` documents.
  *
@@ -16,19 +28,107 @@ import { OBJECT_SCHEME, QUERY_SCHEME, addressOf, objectAddress, objectRefOf } fr
  * documents live here, in memory, behind a file system provider — which is the
  * one extension point that gives a custom scheme a writable buffer.
  *
- * Nothing reaches disk. Ctrl+S writes into this map and marks the tab clean;
- * saving somewhere permanent is Save As, which turns the document into an
- * ordinary `.sql` file and hands the binding over to `BindingStore`.
+ * No query file reaches disk. Ctrl+S writes into this map and marks the tab
+ * clean; saving somewhere permanent is Save As, which turns the document into
+ * an ordinary `.sql` file and hands the binding over to `BindingStore`.
+ *
+ * The map is mirrored into `workspaceState` all the same, because a tab that
+ * survives a reload and comes back empty — or worse, comes back as "the editor
+ * could not be opened" — is somebody's unsaved work gone. The workbench
+ * restores the tab either way; this is what still has something to hand it.
  */
 export class QueryFileSystem implements vscode.FileSystemProvider {
   private readonly files = new Map<string, { content: Uint8Array; ctime: number; mtime: number }>();
   private readonly emitter = new vscode.EventEmitter<vscode.FileChangeEvent[]>();
   readonly onDidChangeFile = this.emitter.event;
   private counter = 0;
+  private timer: ReturnType<typeof setTimeout> | undefined;
+  /** The addresses that came back from the memento, and only those. */
+  private readonly restored = new Set<string>();
+  /**
+   * What is in a tab right now, when that is ahead of its last save.
+   *
+   * Kept beside the buffers rather than in them, because `stat` is what the
+   * workbench builds a document's etag from: moving the buffer under a dirty
+   * document would make its next save look like a save over somebody else's
+   * edit, and the workbench would refuse it. Nothing reads this but `persist`.
+   */
+  private readonly drafts = new Map<string, string>();
+
+  constructor(private readonly memento: vscode.Memento) {
+    for (const [key, stored] of Object.entries(memento.get<Record<string, StoredFile>>(STATE_KEY, {}))) {
+      this.files.set(key, {
+        content: Buffer.from(stored.text, 'utf8'),
+        ctime: stored.ctime,
+        mtime: stored.mtime
+      });
+      this.restored.add(key);
+    }
+  }
 
   dispose(): void {
+    if (this.timer) {
+      clearTimeout(this.timer);
+      this.timer = undefined;
+      void this.persist();
+    }
     this.emitter.dispose();
     this.files.clear();
+  }
+
+  /**
+   * Drops the buffers of restored queries no tab is showing any more.
+   *
+   * Called once at activation. What came back from the memento without a tab
+   * to go with it is a scratch query somebody closed last session, and keeping
+   * it would grow the memento without bound and push the next New Query into
+   * `Query 7.sql` — the collision check in `uniqueQuery` cannot tell a stale
+   * address from a live one.
+   *
+   * Only restored addresses are candidates, never one created since. A query
+   * opened this session exists for a moment before its tab does, and that
+   * moment is long enough for a sweep to throw the contents away.
+   */
+  async prune(): Promise<void> {
+    if (this.restored.size === 0) {
+      return;
+    }
+    const open = new Set<string>();
+    for (const group of vscode.window.tabGroups.all) {
+      for (const tab of group.tabs) {
+        if (tab.input instanceof vscode.TabInputText && tab.input.uri.scheme === QUERY_SCHEME) {
+          open.add(tab.input.uri.toString());
+        }
+      }
+    }
+    let changed = false;
+    for (const key of this.restored) {
+      if (!open.has(key)) {
+        this.files.delete(key);
+        changed = true;
+      }
+    }
+    this.restored.clear();
+    if (changed) {
+      await this.persist();
+    }
+  }
+
+  /**
+   * Keeps what is in a query tab as it is typed.
+   *
+   * A scratch query is unsaved by nature — somebody opens one, writes four
+   * lines, runs them and never presses Ctrl+S — so persisting only on save
+   * would keep the queries nobody was worried about and lose the ones they
+   * were. Every keystroke in a `dbquery:` tab lands here and, a beat later,
+   * in the memento.
+   */
+  track(document: vscode.TextDocument): void {
+    if (document.uri.scheme !== QUERY_SCHEME) {
+      return;
+    }
+    this.drafts.set(document.uri.toString(), document.getText());
+    this.schedulePersist();
   }
 
   /** A fresh, empty query bound to a connection. */
@@ -40,6 +140,7 @@ export class QueryFileSystem implements vscode.FileSystemProvider {
       ctime: Date.now(),
       mtime: Date.now()
     });
+    this.schedulePersist();
     return uri;
   }
 
@@ -85,10 +186,7 @@ export class QueryFileSystem implements vscode.FileSystemProvider {
   }
 
   stat(uri: vscode.Uri): vscode.FileStat {
-    const entry = this.files.get(uri.toString());
-    if (!entry) {
-      throw vscode.FileSystemError.FileNotFound(uri);
-    }
+    const entry = this.entry(uri);
     return { type: vscode.FileType.File, ctime: entry.ctime, mtime: entry.mtime, size: entry.content.byteLength };
   }
 
@@ -101,11 +199,27 @@ export class QueryFileSystem implements vscode.FileSystemProvider {
   }
 
   readFile(uri: vscode.Uri): Uint8Array {
-    const entry = this.files.get(uri.toString());
+    return this.entry(uri).content;
+  }
+
+  /**
+   * The buffer at an address, empty when there is nothing there.
+   *
+   * A missing address used to be `FileNotFound`, and `FileNotFound` while the
+   * workbench is restoring a tab is the "editor could not be opened due to an
+   * unexpected error" dialog — with no way back to the tab short of closing
+   * it. An empty buffer is a tab somebody can carry on typing in, which is the
+   * better failure by a distance. Contents that were there before a reload
+   * come back from the memento, not from here.
+   */
+  private entry(uri: vscode.Uri): { content: Uint8Array; ctime: number; mtime: number } {
+    const key = uri.toString();
+    let entry = this.files.get(key);
     if (!entry) {
-      throw vscode.FileSystemError.FileNotFound(uri);
+      entry = { content: new Uint8Array(0), ctime: Date.now(), mtime: Date.now() };
+      this.files.set(key, entry);
     }
-    return entry.content;
+    return entry;
   }
 
   writeFile(uri: vscode.Uri, content: Uint8Array, options: { create: boolean; overwrite: boolean }): void {
@@ -118,11 +232,16 @@ export class QueryFileSystem implements vscode.FileSystemProvider {
       throw vscode.FileSystemError.FileExists(uri);
     }
     this.files.set(key, { content, ctime: existing?.ctime ?? Date.now(), mtime: Date.now() });
+    // The buffer is the text now, so there is no draft ahead of it.
+    this.drafts.delete(key);
+    this.schedulePersist();
     this.emitter.fire([{ type: existing ? vscode.FileChangeType.Changed : vscode.FileChangeType.Created, uri }]);
   }
 
   delete(uri: vscode.Uri): void {
     this.files.delete(uri.toString());
+    this.drafts.delete(uri.toString());
+    this.schedulePersist();
     this.emitter.fire([{ type: vscode.FileChangeType.Deleted, uri }]);
   }
 
@@ -133,10 +252,53 @@ export class QueryFileSystem implements vscode.FileSystemProvider {
     }
     this.files.delete(from.toString());
     this.files.set(to.toString(), entry);
+    const draft = this.drafts.get(from.toString());
+    this.drafts.delete(from.toString());
+    if (draft !== undefined) {
+      this.drafts.set(to.toString(), draft);
+    }
+    this.schedulePersist();
     this.emitter.fire([
       { type: vscode.FileChangeType.Deleted, uri: from },
       { type: vscode.FileChangeType.Created, uri: to }
     ]);
+  }
+
+  /* ------------------------------------------------------------- memento */
+
+  /**
+   * Mirrors the map, a beat after the edit rather than on it.
+   *
+   * Every save of a query tab is a `writeFile`, and auto-save turns that into
+   * one memento write per pause in typing. A quarter of a second collapses a
+   * burst into one.
+   */
+  private schedulePersist(): void {
+    if (this.timer) {
+      return;
+    }
+    this.timer = setTimeout(() => {
+      this.timer = undefined;
+      void this.persist();
+    }, 250);
+  }
+
+  private async persist(): Promise<void> {
+    const out: Record<string, StoredFile> = {};
+    for (const [key, entry] of this.files) {
+      // What was typed wins over what was last saved: coming back to the tab
+      // as it looked when the window closed is the whole point.
+      const draft = this.drafts.get(key);
+      const text = draft ?? Buffer.from(entry.content).toString('utf8');
+      // A buffer this large is a script somebody pasted in, and a memento is
+      // not the place for it. It stays in memory and is lost on reload, which
+      // is what happened at every size before.
+      if (Buffer.byteLength(text, 'utf8') > MAX_PERSISTED_BYTES) {
+        continue;
+      }
+      out[key] = { text, ctime: entry.ctime, mtime: entry.mtime };
+    }
+    await this.memento.update(STATE_KEY, out);
   }
 }
 

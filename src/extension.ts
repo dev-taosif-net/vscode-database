@@ -87,7 +87,9 @@ export function activate(context: vscode.ExtensionContext): void {
   const bindings = new BindingStore(context);
   const execution = new ExecutionService(store, manager, pool, results, bindings, output);
   const history = new HistoryStore(historyDir);
-  const files = new QueryFileSystem();
+  // Its buffers live in `workspaceState`, so the query tabs the workbench has
+  // just restored have something to read.
+  const files = new QueryFileSystem(context.workspaceState);
   const definitions = new DefinitionProvider(store, catalog);
   const saved = new SavedQueryStore(context, store);
   const index = new MetadataIndex(store, manager, catalog, details);
@@ -181,6 +183,17 @@ export function activate(context: vscode.ExtensionContext): void {
   // The explorer's cursor drives the details panel, through a notification the
   // explorer does not know anybody is listening to.
   context.subscriptions.push(view.onDidSelectObject(({ profileId, ref }) => detailsView.show(profileId, ref)));
+
+  // The tabs are already restored by the time activation runs, so anything
+  // held for an address with no tab is a query somebody closed last session.
+  void files.prune();
+
+  // A query tab is kept as it is typed rather than as it is saved. Ctrl+S on a
+  // scratch query is a habit most people never form, and the tab surviving a
+  // restart is worth more than the tidiness of only keeping saved text.
+  context.subscriptions.push(
+    vscode.workspace.onDidChangeTextDocument((event) => files.track(event.document))
+  );
 
   context.subscriptions.push(
     vscode.workspace.registerFileSystemProvider(QUERY_SCHEME, files, { isCaseSensitive: true }),
