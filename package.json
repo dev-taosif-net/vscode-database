@@ -222,9 +222,12 @@
       },
       {
         "command": "databaseTools.run",
-        "title": "Run",
+        "title": "Execute SQL",
         "category": "Database",
-        "icon": "$(play)"
+        "icon": {
+          "light": "media/run-sql-light.svg",
+          "dark": "media/run-sql-dark.svg"
+        }
       },
       {
         "command": "databaseTools.runStatement",
@@ -234,9 +237,12 @@
       },
       {
         "command": "databaseTools.cancelQuery",
-        "title": "Cancel",
+        "title": "Cancel SQL Execution",
         "category": "Database",
-        "icon": "$(debug-stop)"
+        "icon": {
+          "light": "media/cancel-sql-light.svg",
+          "dark": "media/cancel-sql-dark.svg"
+        }
       },
       {
         "command": "databaseTools.explainPlan",

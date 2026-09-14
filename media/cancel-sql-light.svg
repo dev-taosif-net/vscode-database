@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16">
+  <defs>
+    <mask id="cut">
+      <rect width="16" height="16" fill="#fff"/>
+      <rect x="7.8" y="7.8" width="9" height="9" fill="#000"/>
+    </mask>
+  </defs>
+  <g mask="url(#cut)" fill="none" stroke="#424242" stroke-width="1.2">
+    <ellipse cx="5.5" cy="3.5" rx="4.5" ry="1.9"/>
+    <path d="M1 3.5v8.6a4.5 1.9 0 0 0 9 0V3.5"/>
+    <path d="M1 7.8a4.5 1.9 0 0 0 9 0"/>
+  </g>
+  <rect x="9" y="9" width="6.5" height="6.5" rx="1" fill="#C93C37"/>
+</svg>
