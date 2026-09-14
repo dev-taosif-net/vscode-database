@@ -5,6 +5,7 @@ import {
   DriverKind,
   EnvironmentId,
   defaultPort,
+  homeDatabase,
   needsSecret,
   secretKey
 } from '../types';
@@ -244,18 +245,24 @@ export class ConnectionStore {
    * would move a row the user is about to click.
    */
   async setObjectFavourite(id: string, ref: FavouriteRef, on: boolean): Promise<void> {
-    if (!this.get(id)) {
+    const profile = this.get(id);
+    if (!profile) {
       return;
     }
-    const key = favouriteKey(ref);
+    // A pin without a database is a pin in the connection's own, so the two
+    // spellings of the same object compare equal and unpinning either works.
+    const home = homeDatabase(profile);
+    const pinKey = (entry: FavouriteRef) =>
+      `${(entry.database ?? home).toLowerCase()}${String.fromCharCode(31)}${favouriteKey(entry)}`;
+    const key = pinKey(ref);
     const held = this.objectPins[id] ?? [];
-    const has = held.some((entry) => favouriteKey(entry) === key);
+    const has = held.some((entry) => pinKey(entry) === key);
     if (has === on) {
       return;
     }
     const next = on
-      ? [...held, { kind: ref.kind, schema: ref.schema, name: ref.name }]
-      : held.filter((entry) => favouriteKey(entry) !== key);
+      ? [...held, { kind: ref.kind, schema: ref.schema, name: ref.name, database: ref.database ?? home }]
+      : held.filter((entry) => pinKey(entry) !== key);
 
     if (next.length === 0) {
       delete this.objectPins[id];
@@ -395,6 +402,7 @@ export function blankProfile(seed: Partial<ConnectionProfile> = {}): ConnectionP
     readOnly: seed.readOnly ?? environment === 'prod',
     multiSubnetFailover: seed.multiSubnetFailover ?? false,
     searchPath: seed.searchPath ?? 'public',
+    showAllDatabases: seed.showAllDatabases ?? false,
     properties: seed.properties ?? [],
     createdAt: seed.createdAt ?? now,
     updatedAt: now
@@ -438,6 +446,9 @@ export function normalise(input: ConnectionProfile): ConnectionProfile {
     host: (input.host ?? '').toString().trim(),
     port,
     database: (input.database ?? '').toString().trim(),
+    // Profiles stored before the switch existed draw their own database only,
+    // which is exactly what they drew before.
+    showAllDatabases: input.showAllDatabases === true,
     user: (input.user ?? '').toString().trim(),
     properties: Array.isArray(input.properties)
       ? input.properties

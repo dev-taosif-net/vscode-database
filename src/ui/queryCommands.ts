@@ -409,6 +409,14 @@ export class QueryCommands implements vscode.Disposable {
       return;
     }
     const uri = this.files.uniqueQuery(profile.id, 'Query');
+    // A database row names its database. Anything else — the title bar, the
+    // palette, the connection's own menu — opens where the user last worked on
+    // this connection, and only falls back to its default when there is none.
+    const named = target && typeof target === 'object' ? (target as { databaseName?: unknown }).databaseName : undefined;
+    const database = typeof named === 'string' && named ? named : this.current.databaseFor(profile.id);
+    if (database) {
+      await this.files.placeIn(uri, profile.id, database);
+    }
     const document = await vscode.workspace.openTextDocument(uri);
     await vscode.window.showTextDocument(document, { preview: false });
 
@@ -558,7 +566,12 @@ export class QueryCommands implements vscode.Disposable {
       return;
     }
     const sql = selectTop(profile.driver, target.ref, limit);
-    const document = await this.files.openScratch(profile.id, `${target.ref.name} top ${limit}`, sql);
+    const document = await this.files.openScratch(
+      profile.id,
+      `${target.ref.name} top ${limit}`,
+      sql,
+      target.ref.database
+    );
     await this.resultsView.reveal();
     await this.execution.run({ tab: document.uri.toString(), profileId: profile.id, sql, source: 'query', limit });
   }
@@ -591,20 +604,21 @@ export class QueryCommands implements vscode.Disposable {
         profile.driver === 'mssql'
           ? `IF OBJECT_ID(N'${target.ref.schema}.${target.ref.name}') IS NOT NULL\n    DROP ${sqlNoun(target.ref)} ${name};\n`
           : `DROP ${sqlNoun(target.ref)} IF EXISTS ${name};\n`;
-      await this.openScratch(profile.id, `Drop ${target.ref.name}`, sql);
+      await this.openScratch(profile.id, `Drop ${target.ref.name}`, sql, target.ref.database);
       return;
     }
 
     if (target.ref.kind === 'table') {
-      const columns = await this.catalog.members(target.profileId, target.ref);
+      const columns = await this.catalog.members(target.profileId, target.ref, target.ref.database);
       await this.openScratch(
         profile.id,
         `${target.ref.name} CREATE`,
-        tableScript(profile.driver, target.ref, columns)
+        tableScript(profile.driver, target.ref, columns),
+        target.ref.database
       );
       return;
     }
-    const uri = DefinitionProvider.address(profile.id, target.ref);
+    const uri = DefinitionProvider.address(profile.id, target.ref, target.ref.database);
     this.definitions.refresh(uri);
     const document = await vscode.workspace.openTextDocument(uri);
     await vscode.window.showTextDocument(document, { preview: true });
@@ -628,7 +642,12 @@ export class QueryCommands implements vscode.Disposable {
         }`
       );
     }
-    await this.openScratch(target.profileId, `${target.ref.name} dependencies`, `${lines.join('\n')}\n`);
+    await this.openScratch(
+      target.profileId,
+      `${target.ref.name} dependencies`,
+      `${lines.join('\n')}\n`,
+      target.ref.database
+    );
   }
 
   /**
@@ -665,15 +684,15 @@ export class QueryCommands implements vscode.Disposable {
     }
     await vscode.commands.executeCommand(
       'vscode.diff',
-      DefinitionProvider.address(target.profileId, target.ref),
+      DefinitionProvider.address(target.profileId, target.ref, target.ref.database),
       DefinitionProvider.address(picked.id, target.ref),
       `${target.ref.name}: ${this.store.get(target.profileId)?.name} ↔ ${picked.label}`
     );
   }
 
   /** Opens a scratch query bound to a connection. Never saved anywhere. */
-  async openScratch(profileId: string, name: string, content: string): Promise<void> {
-    await this.files.openScratch(profileId, name, content);
+  async openScratch(profileId: string, name: string, content: string, database?: string): Promise<void> {
+    await this.files.openScratch(profileId, name, content, database);
   }
 }
 

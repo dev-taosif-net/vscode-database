@@ -2,7 +2,7 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import type { Client, ClientConfig, FieldDef, Query, QueryResult } from 'pg';
-import { ConnectionProfile, defaultPort } from '../types';
+import { ConnectionProfile, defaultDatabase, defaultPort } from '../types';
 import { CellValue, ColumnMeta } from '../shared/query';
 import { encodeCell, kindOfSqlType } from '../exec/encode';
 import {
@@ -33,6 +33,12 @@ function load(): PgModule {
   return pg;
 }
 
+/**
+ * Where a profile with no database goes when `postgres` has been dropped.
+ * `template1` exists on every cluster, because `CREATE DATABASE` copies it.
+ */
+const FALLBACK_DATABASE = 'template1';
+
 /** libpq reads this when sslrootcert is unset. Node does not, so we do. */
 const LIBPQ_DEFAULT_ROOT_CERT = path.join(os.homedir(), '.postgresql', 'root.crt');
 
@@ -44,7 +50,7 @@ export class PostgresDriver implements Driver {
     let opened: Opened;
 
     try {
-      opened = await this.connectWithSslPolicy(profile, secrets, signal);
+      opened = await this.connectWithDefault(profile, secrets, signal);
     } catch (error) {
       throw toDriverError(error);
     }
@@ -73,6 +79,30 @@ export class PostgresDriver implements Driver {
     } catch (error) {
       await client.end().catch(() => undefined);
       throw toDriverError(error);
+    }
+  }
+
+  /**
+   * Opens the profile's database, or `postgres` when it names none, and
+   * `template1` when `postgres` is not there either.
+   *
+   * The fallback only applies to a profile that named nothing. A database the
+   * user typed that does not exist is an answer they need to see, not one to
+   * paper over by landing them somewhere else.
+   */
+  private async connectWithDefault(
+    profile: ConnectionProfile,
+    secrets: ConnectSecrets,
+    signal?: AbortSignal
+  ): Promise<Opened> {
+    try {
+      return await this.connectWithSslPolicy(profile, secrets, signal);
+    } catch (error) {
+      const missing = (error as { code?: unknown } | null)?.code === '3D000';
+      if (!missing || profile.database.trim() !== '' || signal?.aborted) {
+        throw error;
+      }
+      return this.connectWithSslPolicy({ ...profile, database: FALLBACK_DATABASE }, secrets, signal);
     }
   }
 
@@ -507,7 +537,9 @@ function buildConfig(
   const config: Record<string, unknown> = {
     host: profile.host,
     port: profile.port ?? defaultPort('postgres'),
-    database: profile.database || undefined,
+    // Left unset, node-postgres would use the user name as the database, which
+    // on most servers does not exist.
+    database: profile.database || defaultDatabase('postgres'),
     // A `trust` or `peer` login still names a role when one is given; only an
     // empty box falls back to the operating system user.
     user: profile.user || undefined,

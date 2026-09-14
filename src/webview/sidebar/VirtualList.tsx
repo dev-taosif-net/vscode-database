@@ -13,7 +13,7 @@ import { NoMatch } from './EmptyState';
 import { GroupHeader, PinnedHeader } from './GroupHeader';
 import { Row } from './Row';
 import { StickyHeader } from './StickyHeader';
-import { FolderRow, MemberRow, NoteRow, ObjectRow, ResultsHeader, SchemaRow } from './TreeRow';
+import { DatabaseRow, FolderRow, MemberRow, NoteRow, ObjectRow, ResultsHeader, SchemaRow } from './TreeRow';
 import { parseQuery } from '../../shared/fuzzy';
 import {
   CatalogMap,
@@ -507,6 +507,19 @@ export function VirtualList({ handle, initialTop, onTop }: Props): JSX.Element {
             setsize={n}
           />
         );
+      case 'database':
+        return (
+          <DatabaseRow
+            key={item.key}
+            gkey={item.key}
+            level={item.level}
+            profileId={item.profileId}
+            name={item.name}
+            isDefault={item.isDefault}
+            expanded={item.expanded}
+            {...shared}
+          />
+        );
       case 'folder':
         return (
           <FolderRow
@@ -544,6 +557,7 @@ export function VirtualList({ handle, initialTop, onTop }: Props): JSX.Element {
             objKind={item.objKind}
             schema={item.schema}
             name={item.name}
+            database={item.database}
             detail={item.detail}
             qualify={item.qualify}
             expandable={item.expandable}

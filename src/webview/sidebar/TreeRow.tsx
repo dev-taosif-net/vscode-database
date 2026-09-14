@@ -29,8 +29,8 @@ function take(gkey: string): void {
  * it, and a window with the panel closed drops it on the floor. That is what
  * keeps the explorer from having to know the panel exists.
  */
-function announce(profileId: string, kind: ObjectKind, schema: string, name: string): void {
-  post({ type: 'selectObject', profileId, ref: { kind, schema, name } });
+function announce(profileId: string, kind: ObjectKind, schema: string, name: string, database: string): void {
+  post({ type: 'selectObject', profileId, ref: { kind, schema, name, database } });
 }
 
 /**
@@ -152,6 +152,74 @@ export const SchemaRow = memo(function SchemaRow(
   );
 });
 
+/* --------------------------------------------------------------- database */
+
+/**
+ * One database under a connection.
+ *
+ * Drawn with the workbench's own database glyph rather than a folder, because
+ * it is the one level in the tree that is a place on the server rather than a
+ * grouping this panel invented. The database the connection opened in says
+ * so in the right-hand column, where the counts sit on every other row.
+ */
+export const DatabaseRow = memo(function DatabaseRow(
+  props: Common & { profileId: string; name: string; isDefault: boolean; expanded: boolean }
+) {
+  const { gkey, top, level, ariaLevel, posinset, setsize, profileId, name, isDefault, expanded } = props;
+  const cursor = useIsCursor(gkey);
+
+  return (
+    <div
+      className={`node node-database${cursor ? ' is-cursor' : ''}`}
+      role="treeitem"
+      aria-level={ariaLevel}
+      aria-posinset={posinset}
+      aria-setsize={setsize}
+      aria-expanded={expanded}
+      aria-label={`Database ${name}${isDefault ? ', default' : ''}`}
+      data-id={gkey}
+      tabIndex={cursor ? 0 : -1}
+      title={isDefault ? `${name} · the database this connection opened in` : name}
+      style={{ top, height: H.node, ['--lvl' as string]: level }}
+      data-vscode-context={JSON.stringify({
+        webviewSection: 'database',
+        connectionId: profileId,
+        databaseName: name,
+        preventDefaultContextMenuItems: true
+      })}
+      onContextMenu={() => take(gkey)}
+      onClick={() => {
+        take(gkey);
+        toggleExpanded(gkey);
+      }}
+    >
+      <Twistie expanded={expanded} />
+      <span className="node-glyph" aria-hidden="true">
+        <Codicon name="database" />
+      </span>
+      <span className="node-name">{name}</span>
+      {isDefault ? <span className="node-tail">default</span> : null}
+      {/* Not a tab stop, for the reason `RowActions` gives: the row is a
+          treeitem under a roving tabindex. New Query on the right-click menu
+          is the keyboard route to the same thing. */}
+      <button
+        type="button"
+        className="act node-act"
+        tabIndex={-1}
+        aria-hidden="true"
+        title={`New Query in ${name}`}
+        onClick={(event) => {
+          event.stopPropagation();
+          take(gkey);
+          post({ type: 'newQuery', profileId, database: name });
+        }}
+      >
+        <Codicon name="new-file" />
+      </button>
+    </div>
+  );
+});
+
 /* ----------------------------------------------------------------- object */
 
 export const ObjectRow = memo(function ObjectRow(
@@ -160,6 +228,7 @@ export const ObjectRow = memo(function ObjectRow(
     objKind: ObjectKind;
     schema: string;
     name: string;
+    database: string;
     detail: string;
     qualify: boolean;
     expandable: boolean;
@@ -179,6 +248,7 @@ export const ObjectRow = memo(function ObjectRow(
     objKind,
     schema,
     name,
+    database,
     detail,
     qualify,
     expandable,
@@ -211,14 +281,14 @@ export const ObjectRow = memo(function ObjectRow(
       // The workbench draws the menu, not the page. The keys below are what the
       // `webview/context` `when` clauses read, which is what makes one row's
       // menu offer Select Top 100 and the next row's offer Execute.
-      data-vscode-context={contextFor(profileId, objKind, schema, name, favourite)}
+      data-vscode-context={contextFor(profileId, objKind, schema, name, database, favourite)}
       onContextMenu={() => {
         take(gkey);
-        announce(profileId, objKind, schema, name);
+        announce(profileId, objKind, schema, name, database);
       }}
       onClick={() => {
         take(gkey);
-        announce(profileId, objKind, schema, name);
+        announce(profileId, objKind, schema, name, database);
         if (expandable) {
           toggleExpanded(gkey);
         }
@@ -427,6 +497,7 @@ function contextFor(
   kind: ObjectKind,
   schema: string,
   name: string,
+  database: string,
   favourite: boolean
 ): string {
   return JSON.stringify({
@@ -435,6 +506,9 @@ function contextFor(
     objectKind: kind,
     objectSchema: schema,
     objectName: name,
+    // Every command on the menu reads the object from here, so the database
+    // rides along: Select Top on `Sales.dbo.Order` must not run in `master`.
+    objectDatabase: database,
     dbObjectPinned: favourite,
     // `dbObjectRelational` collapses "a thing you can select rows from" into
     // one key, so the two menu items that share that condition are not two

@@ -1,11 +1,16 @@
 import { useCallback } from 'react';
 import {
   CatalogSummary,
+  DATABASES_NODE,
   DbMember,
   DbObject,
   ObjectKind,
+  catalogKey,
+  databaseNode,
+  databaseOfNode,
   globalKey,
-  parseFolderNode
+  parseFolderNode,
+  summaryNode
 } from '../../shared/catalog';
 import { ConnectionRow, SessionUpdate, SortOrder } from '../../shared/sidebar';
 import { EnvironmentId } from '../../types';
@@ -194,36 +199,81 @@ export function index(rows: ConnectionRow[]): Record<string, ConnectionRow> {
 
 /* --------------------------------------------------------------- catalogue */
 
-function patch(profileId: string, change: Partial<ConnectionCatalog>): void {
+/** Merges into one catalog entry: a connection's list, or one database's tree. */
+function patch(key: string, change: Partial<ConnectionCatalog>): void {
   catalogStore.setState((s) => ({
     ...s,
-    [profileId]: { ...(s[profileId] ?? EMPTY_CATALOG), ...change }
+    [key]: { ...(s[key] ?? EMPTY_CATALOG), ...change }
   }));
 }
 
-export function applySummary(profileId: string, summary: CatalogSummary): void {
-  patch(profileId, { state: 'ready', summary, error: undefined });
+/**
+ * Connections whose one database has already been opened for them, so a
+ * connection the user collapsed by hand is not reopened on every refresh of
+ * the list. Forgotten with the catalog.
+ */
+const opened = new Set<string>();
+
+export function applyDatabases(profileId: string, names: string[], current: string, all: boolean): void {
+  patch(profileId, { state: 'ready', databases: { names, current, all }, error: undefined });
+  // A connection that draws exactly one database opens straight into it, so
+  // a named-database profile is still one click from its tables.
+  if (!all && names.length === 1 && !opened.has(profileId)) {
+    opened.add(profileId);
+    setExpanded(globalKey(profileId, databaseNode(names[0])), true);
+  }
 }
 
-export function applyCatalogError(profileId: string, message: string): void {
+export function applyDatabasesError(profileId: string, message: string): void {
   patch(profileId, { state: 'error', error: message });
+  asked.delete(`databases:${profileId}`);
+}
+
+/**
+ * Forgets a connection's database list, so it is read again.
+ *
+ * Called when a profile starts or stops showing every database. The trees
+ * already read under each database are kept: they are still true.
+ */
+export function resetDatabases(profileId: string): void {
+  catalogStore.setState((s) => {
+    if (!s[profileId]) {
+      return s;
+    }
+    const next = { ...s };
+    delete next[profileId];
+    return next;
+  });
+  asked.delete(`databases:${profileId}`);
+  opened.delete(profileId);
+}
+
+export function applySummary(profileId: string, database: string, summary: CatalogSummary): void {
+  patch(catalogKey(profileId, database), { state: 'ready', summary, error: undefined, database });
+}
+
+export function applyCatalogError(profileId: string, database: string, message: string): void {
+  const key = catalogKey(profileId, database);
+  patch(key, { state: 'error', error: message, database });
   // The request failed, so the guard that stops it being asked twice has to be
-  // lifted: the user can collapse the connection and open it again to retry,
+  // lifted: the user can collapse the database and open it again to retry,
   // and without this that retry would be a no-op for the rest of the session.
-  asked.delete(`catalog:${profileId}`);
+  asked.delete(`catalog:${key}`);
 }
 
 export function applyObjects(
   profileId: string,
+  database: string,
   node: string,
   objects: DbObject[],
   total: number
 ): void {
+  const key = catalogKey(profileId, database);
   catalogStore.setState((s) => {
-    const held = s[profileId] ?? EMPTY_CATALOG;
+    const held = s[key] ?? EMPTY_CATALOG;
     return {
       ...s,
-      [profileId]: { ...held, nodes: { ...held.nodes, [node]: { objects, total } } }
+      [key]: { ...held, database, nodes: { ...held.nodes, [node]: { objects, total } } }
     };
   });
   // The `asked` entry for this page is deliberately kept. The answer is now in
@@ -231,20 +281,23 @@ export function applyObjects(
   // would only reopen the window in which a re-render could ask again.
 }
 
-export function applyMembers(profileId: string, node: string, members: DbMember[]): void {
+export function applyMembers(profileId: string, database: string, node: string, members: DbMember[]): void {
+  const key = catalogKey(profileId, database);
   catalogStore.setState((s) => {
-    const held = s[profileId] ?? EMPTY_CATALOG;
-    return { ...s, [profileId]: { ...held, members: { ...held.members, [node]: members } } };
+    const held = s[key] ?? EMPTY_CATALOG;
+    return { ...s, [key]: { ...held, database, members: { ...held.members, [node]: members } } };
   });
 }
 
-export function applyNodeError(profileId: string, node: string, message: string): void {
+export function applyNodeError(profileId: string, database: string, node: string, message: string): void {
+  const key = catalogKey(profileId, database);
   catalogStore.setState((s) => {
-    const held = s[profileId] ?? EMPTY_CATALOG;
+    const held = s[key] ?? EMPTY_CATALOG;
     return {
       ...s,
-      [profileId]: {
+      [key]: {
         ...held,
+        database,
         nodes: { ...held.nodes, [node]: { objects: [], total: 0, error: message } }
       }
     };
@@ -254,11 +307,12 @@ export function applyNodeError(profileId: string, node: string, message: string)
 
 export function applySearchAnswer(
   profileId: string,
+  database: string,
   query: string,
   objects: DbObject[],
   capped: boolean
 ): void {
-  patch(profileId, { hits: { query, objects, capped } });
+  patch(catalogKey(profileId, database), { database, hits: { query, objects, capped } });
 }
 
 /**
@@ -272,19 +326,29 @@ export function applySearchAnswer(
  * thousand times a second if nothing waits for a person in between.
  */
 export function retry(profileId: string, node: string): void {
-  if (node === 'sum') {
-    asked.delete(`catalog:${profileId}`);
+  if (node === DATABASES_NODE) {
+    asked.delete(`databases:${profileId}`);
     patch(profileId, { state: 'idle', error: undefined });
     return;
   }
+  const database = databaseOfNode(node);
+  if (database === undefined) {
+    return;
+  }
+  const key = catalogKey(profileId, database);
+  if (node === summaryNode(database)) {
+    asked.delete(`catalog:${key}`);
+    patch(key, { state: 'idle', error: undefined });
+    return;
+  }
   catalogStore.setState((s) => {
-    const held = s[profileId];
+    const held = s[key];
     if (!held || !held.nodes[node]) {
       return s;
     }
     const nodes = { ...held.nodes };
     delete nodes[node];
-    return { ...s, [profileId]: { ...held, nodes } };
+    return { ...s, [key]: { ...held, nodes } };
   });
   for (const key of [...asked]) {
     if (key.startsWith(`node:${profileId}:${node}:`)) {
@@ -307,18 +371,25 @@ export function clearCatalog(profileId: string): void {
   if (profileId === '') {
     catalogStore.setState(() => ({}));
     asked.clear();
+    opened.clear();
     return;
   }
+  // The connection's database list and every database tree under it.
+  const prefix = globalKey(profileId, '');
   catalogStore.setState((s) => {
-    if (!s[profileId]) {
+    const doomed = Object.keys(s).filter((key) => key === profileId || key.startsWith(prefix));
+    if (doomed.length === 0) {
       return s;
     }
     const next = { ...s };
-    delete next[profileId];
+    for (const key of doomed) {
+      delete next[key];
+    }
     return next;
   });
   forgetAsked(profileId);
   pruneExpanded(profileId);
+  opened.delete(profileId);
 }
 
 /**
@@ -373,8 +444,10 @@ function forgetAsked(profileId: string): void {
 
 function keyOfWant(want: Want): string {
   switch (want.what) {
+    case 'databases':
+      return `databases:${want.profileId}`;
     case 'catalog':
-      return `catalog:${want.profileId}`;
+      return `catalog:${catalogKey(want.profileId, want.database)}`;
     case 'node':
       return `node:${want.profileId}:${want.node}:${want.offset}`;
     case 'members':
@@ -392,14 +465,19 @@ export function request(wants: readonly Want[]): void {
     asked.add(key);
 
     switch (want.what) {
-      case 'catalog':
+      case 'databases':
         patch(want.profileId, { state: 'loading' });
-        post({ type: 'loadCatalog', profileId: want.profileId });
+        post({ type: 'loadDatabases', profileId: want.profileId });
+        break;
+      case 'catalog':
+        patch(catalogKey(want.profileId, want.database), { state: 'loading', database: want.database });
+        post({ type: 'loadCatalog', profileId: want.profileId, database: want.database });
         break;
       case 'node':
         post({
           type: 'loadNode',
           profileId: want.profileId,
+          database: want.database,
           node: want.node,
           kind: want.kind,
           schema: want.schema,
@@ -408,7 +486,13 @@ export function request(wants: readonly Want[]): void {
         });
         break;
       case 'members':
-        post({ type: 'loadMembers', profileId: want.profileId, node: want.node, ref: want.ref });
+        post({
+          type: 'loadMembers',
+          profileId: want.profileId,
+          database: want.database,
+          node: want.node,
+          ref: want.ref
+        });
         break;
     }
   }
@@ -423,13 +507,14 @@ export function request(wants: readonly Want[]): void {
  */
 export function loadMore(profileId: string, node: string, offset: number): void {
   const parsed = parseFolderNode(node);
-  if (!parsed) {
+  if (!parsed || parsed.database === undefined) {
     return;
   }
   request([
     {
       what: 'node',
       profileId,
+      database: parsed.database,
       node,
       kind: parsed.kind as ObjectKind,
       schema: parsed.schema,

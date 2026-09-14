@@ -1,5 +1,5 @@
 import type { Connection, ConnectionConfiguration, Request as TediousRequest } from 'tedious';
-import { ConnectionProfile, defaultPort } from '../types';
+import { ConnectionProfile, defaultDatabase, defaultPort } from '../types';
 import { CellValue, ColumnMeta } from '../shared/query';
 import { encodeCell, kindOfSqlType } from '../exec/encode';
 import {
@@ -363,7 +363,9 @@ function buildConfig(profile: ConnectionProfile, secrets: ConnectSecrets): Conne
 
   const options: Record<string, unknown> = {
     port: profile.port ?? defaultPort('mssql'),
-    database: profile.database || undefined,
+    // `master` rather than the login's default: every login can open it, and
+    // the explorer lists the other databases from there.
+    database: profile.database || defaultDatabase('mssql'),
     // tedious takes `true`, `false`, or the string 'strict' for TDS 8.0.
     encrypt: profile.encrypt === 'strict' ? 'strict' : profile.encrypt === 'mandatory',
     trustServerCertificate: profile.trustServerCertificate,

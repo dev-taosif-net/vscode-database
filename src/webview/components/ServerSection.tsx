@@ -1,10 +1,10 @@
 import { useEffect, useRef } from 'react';
-import { defaultPort } from '../../types';
+import { defaultDatabase, defaultPort } from '../../types';
 import { portInvalid, useField, useProblem, useSelect, useStore } from '../state/editor';
 import { post } from '../state/vscode';
 import { Codicon } from '../primitives/Codicon';
 import { Field } from '../primitives/Field';
-import { NumberInput, SelectInput, TextInput } from '../primitives/Inputs';
+import { Checkbox, NumberInput, SelectInput, TextInput } from '../primitives/Inputs';
 
 const PROBE_DELAY_MS = 650;
 
@@ -53,6 +53,7 @@ export function ServerSection() {
 
       <ProbeStrip />
       <DatabaseField />
+      <AllDatabasesField />
     </div>
   );
 }
@@ -129,6 +130,7 @@ function DatabaseField() {
   const databases = useSelect((state) => state.databases);
   const busy = useSelect((state) => Boolean(state.draft && state.host.busy === state.draft.id));
   const database = useField('database') ?? '';
+  const driver = useField('driver') ?? 'mssql';
 
   return (
     <Field
@@ -137,7 +139,7 @@ function DatabaseField() {
       hint={
         databases
           ? `${databases.length} read from the server just now.`
-          : "Optional. Leave blank to land in the login's default database."
+          : `Optional. Leave blank to open in ${defaultDatabase(driver)} and list every database.`
       }
     >
       <div className="row">
@@ -176,5 +178,27 @@ function DatabaseField() {
         <p className="hint warn">{database} was not in the list the server returned.</p>
       ) : null}
     </Field>
+  );
+}
+
+/**
+ * Whether the explorer lists every database or only the one named above.
+ *
+ * Drawn only when a database is named, because a profile that names none
+ * always lists them all and a box that could not be unticked would be a box
+ * that lies.
+ */
+function AllDatabasesField() {
+  const database = useField('database') ?? '';
+  if (!database.trim()) {
+    return null;
+  }
+  return (
+    <Checkbox
+      id="f-all-databases"
+      field="showAllDatabases"
+      label="Show all databases in the explorer"
+      hint="Off lists only this database. With no database named, every database is always listed."
+    />
   );
 }

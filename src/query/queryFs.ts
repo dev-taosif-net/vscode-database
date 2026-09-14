@@ -55,6 +55,9 @@ export class QueryFileSystem implements vscode.FileSystemProvider {
    */
   private readonly drafts = new Map<string, string>();
 
+  /** Records which database a new tab starts in. Supplied at activation. */
+  private binder: ((uri: vscode.Uri, profileId: string, database: string) => Promise<void>) | undefined;
+
   constructor(private readonly memento: vscode.Memento) {
     for (const [key, stored] of Object.entries(memento.get<Record<string, StoredFile>>(STATE_KEY, {}))) {
       this.files.set(key, {
@@ -170,11 +173,35 @@ export class QueryFileSystem implements vscode.FileSystemProvider {
    * untitled document has neither and is the first thing a person has to
    * repair before the statement can be run.
    */
-  async openScratch(profileId: string, name: string, content: string): Promise<vscode.TextDocument> {
+  async openScratch(
+    profileId: string,
+    name: string,
+    content: string,
+    database?: string
+  ): Promise<vscode.TextDocument> {
     const uri = this.uniqueQuery(profileId, name, content);
+    await this.placeIn(uri, profileId, database);
     const document = await vscode.workspace.openTextDocument(uri);
     await vscode.window.showTextDocument(document, { preview: false });
     return document;
+  }
+
+  setDatabaseBinder(binder: (uri: vscode.Uri, profileId: string, database: string) => Promise<void>): void {
+    this.binder = binder;
+  }
+
+  /**
+   * Puts a tab in a database before it opens.
+   *
+   * Before, not after: the status bar and IntelliSense both read the tab's
+   * database the moment the document appears, and a tab that briefly claimed
+   * the connection's own database would have its first completions read from
+   * the wrong catalog.
+   */
+  async placeIn(uri: vscode.Uri, profileId: string, database: string | undefined): Promise<void> {
+    if (database?.trim() && this.binder) {
+      await this.binder(uri, profileId, database.trim());
+    }
   }
 
   /* ------------------------------------------------- FileSystemProvider */

@@ -128,10 +128,13 @@ export class SessionPool implements vscode.Disposable {
     const existing = this.leases.get(owner);
     if (existing && existing.profileId === profileId && !existing.session.isClosed()) {
       existing.lastUsed = Date.now();
-      await this.settleDatabase(existing, database);
-      return existing.session;
-    }
-    if (existing) {
+      if (await this.settleDatabase(existing, database)) {
+        return existing.session;
+      }
+      // A PostgreSQL session cannot move, so a tab that wants another database
+      // gets a session opened there instead.
+      await this.release(owner);
+    } else if (existing) {
       // The tab was rebound to another connection, or its session died.
       await this.release(owner);
     }
@@ -149,7 +152,7 @@ export class SessionPool implements vscode.Disposable {
       await this.release(spare.owner);
     }
 
-    const session = await this.manager.openAuxiliary(profileId);
+    const session = await this.openIn(profileId, owner, database);
     const lease: Lease = {
       session,
       profileId,
@@ -179,18 +182,46 @@ export class SessionPool implements vscode.Disposable {
    * shows, because `noteDatabase` reports what actually happened rather than
    * what was asked for.
    */
-  private async settleDatabase(lease: Lease, wanted: string | undefined): Promise<void> {
+  private async settleDatabase(lease: Lease, wanted: string | undefined): Promise<boolean> {
     const target = (wanted ?? '').trim();
     if (!target || target.toLowerCase() === lease.database.trim().toLowerCase()) {
-      return;
+      return true;
     }
     try {
       await lease.session.useDatabase(target);
     } catch (error) {
+      if ((error as { code?: unknown } | null)?.code === 'ENOSWITCH') {
+        // Not a failure to report: the engine cannot move a session, and the
+        // caller answers by opening one where the tab wants to be.
+        return false;
+      }
       this.output.warn(
         `${lease.owner}: could not switch to ${target}: ${error instanceof Error ? error.message : String(error)}`
       );
     }
+    return true;
+  }
+
+  /**
+   * A new execution session, opened in the tab's database when it has one.
+   *
+   * Opening there directly is the only way on PostgreSQL and one round trip
+   * fewer on SQL Server. A database that cannot be opened falls back to the
+   * connection's own, for the same reason `settleDatabase` swallows a failed
+   * `USE`: running and saying where beats refusing to run.
+   */
+  private async openIn(profileId: string, owner: string, database: string | undefined): Promise<DriverSession> {
+    const target = (database ?? '').trim();
+    if (target) {
+      try {
+        return await this.manager.openAuxiliary(profileId, target);
+      } catch (error) {
+        this.output.warn(
+          `${owner}: could not open in ${target}: ${error instanceof Error ? error.message : String(error)}`
+        );
+      }
+    }
+    return this.manager.openAuxiliary(profileId);
   }
 
   private noteDatabase(lease: Lease, database: string): void {

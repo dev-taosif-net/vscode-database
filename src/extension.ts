@@ -26,7 +26,7 @@ import { ActiveConnectionContext } from './ui/activeConnectionContext';
 import { WorkspacePanels } from './ui/workspacePanels';
 import { WorkspaceStatusBar } from './ui/workspaceStatusBar';
 import { DetailsAction } from './shared/details';
-import { ConnectionProfile, environmentLabel } from './types';
+import { ConnectionProfile, effectiveDatabase, environmentLabel, homeDatabase } from './types';
 
 /**
  * A command arrives from the palette with nothing, from the sidebar with a
@@ -90,6 +90,14 @@ export function activate(context: vscode.ExtensionContext): void {
   // Its buffers live in `workspaceState`, so the query tabs the workbench has
   // just restored have something to read.
   const files = new QueryFileSystem(context.workspaceState);
+  // A query opened from an object in another database starts in that
+  // database. Recorded the way a `USE` is, so the strip, IntelliSense and the
+  // next Run all agree about where the tab is.
+  files.setDatabaseBinder(async (uri, profileId, database) => {
+    const profile = store.get(profileId);
+    const home = profile ? homeDatabase(profile) : '';
+    await bindings.setDatabase(uri, home.toLowerCase() === database.toLowerCase() ? undefined : database);
+  });
   const definitions = new DefinitionProvider(store, catalog);
   const saved = new SavedQueryStore(context, store);
   const index = new MetadataIndex(store, manager, catalog, details);
@@ -174,7 +182,8 @@ export function activate(context: vscode.ExtensionContext): void {
    */
   context.subscriptions.push(
     pool.onDidChangeDatabase(({ owner, profileId, database }) => {
-      const home = store.get(profileId)?.database.trim() ?? '';
+      const profile = store.get(profileId);
+      const home = profile ? homeDatabase(profile) : '';
       const away = home && home.toLowerCase() === database.trim().toLowerCase() ? undefined : database;
       void bindings.setDatabase(vscode.Uri.parse(owner), away);
     })
@@ -183,6 +192,23 @@ export function activate(context: vscode.ExtensionContext): void {
   // The explorer's cursor drives the details panel, through a notification the
   // explorer does not know anybody is listening to.
   context.subscriptions.push(view.onDidSelectObject(({ profileId, ref }) => detailsView.show(profileId, ref)));
+
+  /*
+   * The database a query tab is working in counts as where the user is
+   * working, alongside the explorer's cursor. Whichever happened last wins, so
+   * New Query from the title bar opens beside the tab somebody just ran `USE
+   * PeopleDeskMatador` in rather than back in `master`.
+   */
+  const noteActiveDatabase = (): void => {
+    const tab = active.value;
+    const uri = tab ? vscode.Uri.parse(tab) : undefined;
+    const profileId = uri ? bindings.get(uri) : undefined;
+    const profile = profileId ? store.get(profileId) : undefined;
+    if (uri && profile) {
+      current.noteDatabase(profile.id, effectiveDatabase(profile, bindings.database(uri)));
+    }
+  };
+  context.subscriptions.push(active.onDidChange(noteActiveDatabase), bindings.onDidChange(noteActiveDatabase));
 
   // The tabs are already restored by the time activation runs, so anything
   // held for an address with no tab is a query somebody closed last session.
@@ -394,6 +420,25 @@ export function activate(context: vscode.ExtensionContext): void {
       const id = targetId(target);
       if (id) {
         await store.setExplorerMode(id, 'general');
+      }
+    }),
+
+    /*
+     * Every database on the server, or only the connection's own. A property of
+     * the profile rather than a reading of the list, because it is also a box
+     * in the connection editor and the two must not disagree.
+     */
+    vscode.commands.registerCommand('databaseTools.showAllDatabases', async (target?: CommandTarget) => {
+      const id = targetId(target);
+      if (id) {
+        await store.update(id, { showAllDatabases: true });
+      }
+    }),
+
+    vscode.commands.registerCommand('databaseTools.showConnectionDatabase', async (target?: CommandTarget) => {
+      const id = targetId(target);
+      if (id) {
+        await store.update(id, { showAllDatabases: false });
       }
     }),
 

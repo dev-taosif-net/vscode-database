@@ -91,6 +91,12 @@ export interface ConnectionProfile {
   multiSubnetFailover: boolean;
   /** PostgreSQL only. */
   searchPath: string;
+  /**
+   * Draw every database on the server in the explorer, not only this one.
+   * A profile that names no database always does, because there is no one
+   * database to draw.
+   */
+  showAllDatabases: boolean;
 
   /** Arbitrary driver keywords, applied last. */
   properties: Array<{ name: string; value: string }>;
@@ -207,6 +213,29 @@ export function defaultPort(driver: DriverKind): number {
   return driver === 'mssql' ? 1433 : 5432;
 }
 
+/**
+ * Where a profile that names no database lands.
+ *
+ * Named here rather than left to the driver, because neither driver's own
+ * answer is one to build on: tedious lands on the login's default, which is
+ * whatever an administrator last set, and node-postgres uses the user name as
+ * the database, which on most servers does not exist. `master` and `postgres`
+ * are the databases every server has and every tool falls back to.
+ */
+export function defaultDatabase(driver: DriverKind): string {
+  return driver === 'mssql' ? 'master' : 'postgres';
+}
+
+/** The database a profile opens in: its own, or the engine's default. */
+export function homeDatabase(profile: ConnectionProfile): string {
+  return profile.database.trim() || defaultDatabase(profile.driver);
+}
+
+/** Whether the explorer lists every database rather than the profile's own. */
+export function showsAllDatabases(profile: ConnectionProfile): boolean {
+  return profile.showAllDatabases || profile.database.trim() === '';
+}
+
 export function secretKey(profileId: string): string {
   return `databaseTools.secret.${profileId}`;
 }
@@ -232,12 +261,11 @@ export function switchesDatabase(driver: DriverKind): boolean {
  * what the profile asked for.
  *
  * Written once because four places ask it and a fifth would otherwise get it
- * subtly wrong: the session's answer wins, because a profile with no database
- * of its own lands wherever the login's default is and the profile cannot say
- * where that was.
+ * subtly wrong: the session's answer wins, and a profile with no database of
+ * its own falls back to the engine's default, which is where it opens.
  */
 export function effectiveDatabase(profile: ConnectionProfile, session: string | undefined): string {
-  return (session ?? '').trim() || profile.database.trim();
+  return (session ?? '').trim() || homeDatabase(profile);
 }
 
 /** True when this profile's method needs a stored or prompted secret at all. */

@@ -7,10 +7,12 @@ import { EmptyState } from './EmptyState';
 import { Footer } from './Footer';
 import { SearchBand } from './SearchBand';
 import { ListHandle, VirtualList } from './VirtualList';
-import { FlatItem, expansionOf, isHeader, profileOfKey } from './model';
+import { FlatItem, databaseOfKey, expansionOf, isHeader, profileOfKey } from './model';
 import {
   ListState,
   applyCatalogError,
+  applyDatabases,
+  applyDatabasesError,
   applyMembers,
   applyNodeError,
   applyObjects,
@@ -24,6 +26,7 @@ import {
   index,
   listStore,
   loadMore,
+  resetDatabases,
   retry,
   sessionStore,
   setExpanded,
@@ -53,6 +56,14 @@ export function Sidebar(): JSX.Element {
         case 'state': {
           const byId = index(message.rows);
           const previous = listStore.getState().byId;
+          // A profile that started or stopped listing every database, or now
+          // names a different one, draws a different level under itself.
+          for (const row of message.rows) {
+            const before = previous[row.id];
+            if (before && (before.allDatabases !== row.allDatabases || before.database !== row.database)) {
+              resetDatabases(row.id);
+            }
+          }
           // The query is the panel's own and survives every state message; a
           // filter that cleared itself whenever a session opened would be
           // unusable at two hundred rows.
@@ -118,28 +129,42 @@ export function Sidebar(): JSX.Element {
           list.current?.reveal(message.id);
           return;
 
+        case 'databases':
+          applyDatabases(message.profileId, message.names, message.current, message.all);
+          return;
+
+        case 'databasesError':
+          applyDatabasesError(message.profileId, message.message);
+          return;
+
         case 'catalog':
-          applySummary(message.profileId, message.summary);
+          applySummary(message.profileId, message.database, message.summary);
           return;
 
         case 'catalogError':
-          applyCatalogError(message.profileId, message.message);
+          applyCatalogError(message.profileId, message.database, message.message);
           return;
 
         case 'objects':
-          applyObjects(message.profileId, message.node, message.objects, message.total);
+          applyObjects(message.profileId, message.database ?? '', message.node, message.objects, message.total);
           return;
 
         case 'members':
-          applyMembers(message.profileId, message.node, message.members);
+          applyMembers(message.profileId, message.database ?? '', message.node, message.members);
           return;
 
         case 'nodeError':
-          applyNodeError(message.profileId, message.node, message.message);
+          applyNodeError(message.profileId, message.database, message.node, message.message);
           return;
 
         case 'searchAnswer':
-          applySearchAnswer(message.profileId, message.query, message.objects, message.capped);
+          applySearchAnswer(
+            message.profileId,
+            message.database ?? '',
+            message.query,
+            message.objects,
+            message.capped
+          );
           return;
 
         case 'catalogCleared':
@@ -190,10 +215,18 @@ export function Sidebar(): JSX.Element {
   useEffect(() => {
     let last: string | null = null;
     return cursorStore.subscribe(() => {
-      const id = profileOfKey(cursorStore.getState().cursorId);
-      if (id && id !== last) {
-        last = id;
-        post({ type: 'selectConnection', id });
+      const key = cursorStore.getState().cursorId;
+      const id = profileOfKey(key);
+      if (!id) {
+        return;
+      }
+      // The database travels too, so New Query from the title bar opens in the
+      // database the user is browsing rather than the connection's default.
+      const database = databaseOfKey(key);
+      const mark = `${id}|${database ?? ''}`;
+      if (mark !== last) {
+        last = mark;
+        post(database ? { type: 'selectConnection', id, database } : { type: 'selectConnection', id });
       }
     });
   }, []);
@@ -259,6 +292,7 @@ export function Sidebar(): JSX.Element {
         return item.expandable ? connectionKey(item.id) : null;
       case 'folder':
       case 'schema':
+      case 'database':
         return item.key;
       case 'object':
         return item.expandable ? item.key : null;

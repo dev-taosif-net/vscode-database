@@ -1,18 +1,26 @@
 import {
   CatalogState,
   CatalogSummary,
+  DATABASES_NODE,
   DbMember,
   DbObject,
   FAVOURITES_NODE,
   FavouriteRef,
   KINDS,
   ObjectKind,
+  SYSTEM_DATABASES_NODE,
+  catalogKey,
+  databaseNode,
+  databaseOfNode,
   favouriteKey,
+  inDatabase,
+  isSystemDatabase,
   kindNode,
   kindsFor,
   memberNode,
   schemaKindNode,
-  schemaNode
+  schemaNode,
+  summaryNode
 } from '../../shared/catalog';
 import { ConnectionRow, SortOrder } from '../../shared/sidebar';
 import { EnvironmentId } from '../../types';
@@ -78,11 +86,22 @@ interface CatalogNode {
   error?: string;
 }
 
-/** One connection's tree, as the panel holds it. */
+/**
+ * One entry in the panel's catalog map.
+ *
+ * The entry under a bare profile id holds that connection's database list, in
+ * `databases`. The entry under `catalogKey(profileId, database)` holds one
+ * database's tree. One shape for both keeps a single store and a single prefix
+ * sweep when the connection goes away.
+ */
 export interface ConnectionCatalog {
   state: CatalogState;
   summary?: CatalogSummary;
   error?: string;
+  /** The database this tree was read from, as the server spells it. */
+  database?: string;
+  /** On the connection's own entry: the databases it draws. */
+  databases?: { names: string[]; current: string; all: boolean };
   /** Folder node key to the rows it holds. Cumulative across pages. */
   nodes: Readonly<Record<string, CatalogNode>>;
   /** Object node key to its columns or parameters. */
@@ -158,12 +177,25 @@ export type FlatItem =
       objKind: ObjectKind;
       schema: string;
       name: string;
+      /** The database the object is in, so its menu acts on the right one. */
+      database: string;
       detail: string;
       /** Draw `sales.Order` rather than `Order`, when the schema is not implied. */
       qualify: boolean;
       expandable: boolean;
       expanded: boolean;
       favourite: boolean;
+    }
+  | {
+      kind: 'database';
+      key: string;
+      profileId: string;
+      node: string;
+      level: number;
+      name: string;
+      /** The database the connection opened in. */
+      isDefault: boolean;
+      expanded: boolean;
     }
   | {
       kind: 'member';
@@ -241,6 +273,7 @@ export function expansionOf(item: FlatItem): { expandable: boolean; expanded: bo
       return { expandable: item.expandable, expanded: item.expanded };
     case 'folder':
     case 'schema':
+    case 'database':
       return { expandable: true, expanded: item.expanded };
     default:
       return null;
@@ -382,9 +415,18 @@ export function compare(sort: SortOrder, a: ConnectionRow, b: ConnectionRow): nu
  * query.
  */
 export type Want =
-  | { what: 'catalog'; profileId: string }
-  | { what: 'node'; profileId: string; node: string; kind: ObjectKind; schema?: string; offset: number }
-  | { what: 'members'; profileId: string; node: string; ref: FavouriteRef };
+  | { what: 'databases'; profileId: string }
+  | { what: 'catalog'; profileId: string; database: string }
+  | {
+      what: 'node';
+      profileId: string;
+      database: string;
+      node: string;
+      kind: ObjectKind;
+      schema?: string;
+      offset: number;
+    }
+  | { what: 'members'; profileId: string; database: string; node: string; ref: FavouriteRef };
 
 interface FlattenInput {
   rows: ConnectionRow[];
@@ -440,7 +482,30 @@ export function profileOfKey(key: string | null): string | null {
     return key === 'pinned' || key === 'nomatch' || key.startsWith('environment:') ? null : key;
   }
   const head = key.slice(0, cut);
-  return head === 'results' ? key.slice(cut + 1) : head;
+  if (head !== 'results') {
+    return head;
+  }
+  // `results`, the profile id, then the database the section is for.
+  const rest = key.slice(cut + 1);
+  const next = rest.indexOf(SEP);
+  return next < 0 ? rest : rest.slice(0, next);
+}
+
+/** The database a cursor key sits inside, or undefined when it is in none. */
+export function databaseOfKey(key: string | null): string | undefined {
+  if (!key) {
+    return undefined;
+  }
+  const cut = key.indexOf(SEP);
+  if (cut < 0) {
+    return undefined;
+  }
+  if (key.slice(0, cut) === 'results') {
+    // `results`, the profile id, the database.
+    const parts = key.split(SEP);
+    return parts[2];
+  }
+  return databaseOfNode(key.slice(cut + 1));
 }
 
 /**
@@ -543,8 +608,103 @@ function browse(input: FlattenInput): Flattened {
  * is a shortcut and a shortcut below forty schemas is not one.
  */
 function children(row: ConnectionRow, input: FlattenInput, items: FlatItem[], wanted: Want[]): void {
-  const catalog = input.catalog[row.id] ?? EMPTY_CATALOG;
+  const list = input.catalog[row.id] ?? EMPTY_CATALOG;
   const level = 2;
+
+  if (list.state === 'idle') {
+    wanted.push({ what: 'databases', profileId: row.id });
+    items.push(note(row.id, DATABASES_NODE, level, 'loading', 'Reading the databases'));
+    return;
+  }
+  if (list.state === 'loading') {
+    items.push(note(row.id, DATABASES_NODE, level, 'loading', 'Reading the databases'));
+    return;
+  }
+  if (list.state === 'error' || !list.databases) {
+    items.push(note(row.id, DATABASES_NODE, level, 'error', list.error ?? 'The databases could not be listed.'));
+    return;
+  }
+
+  const { names, current, all } = list.databases;
+  /*
+   * SQL Server's four system databases go in a folder of their own, the way
+   * SSMS files them. Only when every database is listed: a profile pointed at
+   * `msdb` on purpose shows `msdb`, not a folder with `msdb` in it.
+   */
+  const system = all ? names.filter((name) => isSystemDatabase(row.driver, name)) : [];
+  const user = system.length > 0 ? names.filter((name) => !isSystemDatabase(row.driver, name)) : names;
+
+  // The folder comes first, the way SSMS places it: a fixed row at the top,
+  // with the user's databases below it in name order.
+  if (system.length > 0) {
+    const open = input.expanded.has(gkey(row.id, SYSTEM_DATABASES_NODE));
+    items.push({
+      kind: 'folder',
+      key: gkey(row.id, SYSTEM_DATABASES_NODE),
+      profileId: row.id,
+      node: SYSTEM_DATABASES_NODE,
+      level,
+      label: 'System Databases',
+      count: system.length,
+      mark: 'folder',
+      expanded: open
+    });
+    if (open) {
+      for (const name of system) {
+        emitDatabase(row, input, items, wanted, name, current, level + 1);
+      }
+    }
+  }
+  for (const name of user) {
+    emitDatabase(row, input, items, wanted, name, current, level);
+  }
+}
+
+/** One database row, and its tree when it is open. */
+function emitDatabase(
+  row: ConnectionRow,
+  input: FlattenInput,
+  items: FlatItem[],
+  wanted: Want[],
+  name: string,
+  current: string,
+  level: number
+): void {
+  const node = databaseNode(name);
+  const expanded = input.expanded.has(gkey(row.id, node));
+  items.push({
+    kind: 'database',
+    key: gkey(row.id, node),
+    profileId: row.id,
+    node,
+    level,
+    name,
+    isDefault: name.toLowerCase() === current.toLowerCase(),
+    expanded
+  });
+  if (expanded) {
+    databaseChildren(row, input, items, wanted, name, current, level + 1);
+  }
+}
+
+/**
+ * Everything under one expanded database.
+ *
+ * This is what used to sit directly under the connection, one level deeper
+ * and with every node key placed inside the database, so the same folder in
+ * two databases is two folders.
+ */
+function databaseChildren(
+  row: ConnectionRow,
+  input: FlattenInput,
+  items: FlatItem[],
+  wanted: Want[],
+  database: string,
+  current: string,
+  level: number
+): void {
+  const catalog = input.catalog[catalogKey(row.id, database)] ?? EMPTY_CATALOG;
+  const at = (node: string) => inDatabase(database, node);
   /*
    * The pins as a set, built once per connection rather than scanned per
    * object.
@@ -554,19 +714,22 @@ function children(row: ConnectionRow, input: FlattenInput, items: FlatItem[], wa
    * object. A folder of five hundred tables against twenty pins is ten
    * thousand string builds, on a function that runs on every keystroke.
    */
-  const pins = pinSet(row);
+  const pinned = pinsIn(row, database, current);
+  const pins = pinSet(pinned);
 
   if (catalog.state === 'idle') {
-    wanted.push({ what: 'catalog', profileId: row.id });
-    items.push(note(row.id, 'sum', level, 'loading', 'Reading the catalogue'));
+    wanted.push({ what: 'catalog', profileId: row.id, database });
+    items.push(note(row.id, summaryNode(database), level, 'loading', 'Reading the catalogue'));
     return;
   }
   if (catalog.state === 'loading') {
-    items.push(note(row.id, 'sum', level, 'loading', 'Reading the catalogue'));
+    items.push(note(row.id, summaryNode(database), level, 'loading', 'Reading the catalogue'));
     return;
   }
   if (catalog.state === 'error' || !catalog.summary) {
-    items.push(note(row.id, 'sum', level, 'error', catalog.error ?? 'The catalogue could not be read.'));
+    items.push(
+      note(row.id, summaryNode(database), level, 'error', catalog.error ?? 'The catalogue could not be read.')
+    );
     return;
   }
 
@@ -576,30 +739,30 @@ function children(row: ConnectionRow, input: FlattenInput, items: FlatItem[], wa
   /* Favourites. Always drawn, empty or not: it is where pinning puts things,
      and a folder that appears only once you have used the feature is a folder
      nobody discovers. */
+  const favourites = at(FAVOURITES_NODE);
   items.push({
     kind: 'folder',
-    key: gkey(row.id, FAVOURITES_NODE),
+    key: gkey(row.id, favourites),
     profileId: row.id,
-    node: FAVOURITES_NODE,
+    node: favourites,
     level,
     label: 'Favourites',
-    count: row.pins.length,
+    count: pinned.length,
     mark: 'favourite',
-    expanded: isOpen(FAVOURITES_NODE)
+    expanded: isOpen(favourites)
   });
-  if (isOpen(FAVOURITES_NODE)) {
-    if (row.pins.length === 0) {
-      items.push(
-        note(row.id, FAVOURITES_NODE, level + 1, 'empty', 'Right-click an object to pin it here')
-      );
+  if (isOpen(favourites)) {
+    if (pinned.length === 0) {
+      items.push(note(row.id, favourites, level + 1, 'empty', 'Right-click an object to pin it here'));
     } else {
-      for (const pin of row.pins) {
+      for (const pin of pinned) {
         emitObject(
           { kind: pin.kind, schema: pin.schema, name: pin.name, detail: KINDS[pin.kind].singular },
           row,
           input,
           items,
           wanted,
+          database,
           level + 1,
           true,
           pins
@@ -618,7 +781,7 @@ function children(row: ConnectionRow, input: FlattenInput, items: FlatItem[], wa
         // is already known, so the folder is simply not drawn.
         continue;
       }
-      const node = kindNode(kind);
+      const node = at(kindNode(kind));
       items.push({
         kind: 'folder',
         key: gkey(row.id, node),
@@ -631,14 +794,14 @@ function children(row: ConnectionRow, input: FlattenInput, items: FlatItem[], wa
         expanded: isOpen(node)
       });
       if (isOpen(node)) {
-        objects(row, input, items, wanted, node, kind, undefined, level + 1, pins);
+        objects(row, input, items, wanted, database, node, kind, undefined, level + 1, pins);
       }
     }
     return;
   }
 
   for (const schema of summary.schemas) {
-    const node = schemaNode(schema.name);
+    const node = at(schemaNode(schema.name));
     items.push({
       kind: 'schema',
       key: gkey(row.id, node),
@@ -657,7 +820,7 @@ function children(row: ConnectionRow, input: FlattenInput, items: FlatItem[], wa
       if (count === 0) {
         continue;
       }
-      const child = schemaKindNode(schema.name, kind);
+      const child = at(schemaKindNode(schema.name, kind));
       items.push({
         kind: 'folder',
         key: gkey(row.id, child),
@@ -670,7 +833,7 @@ function children(row: ConnectionRow, input: FlattenInput, items: FlatItem[], wa
         expanded: isOpen(child)
       });
       if (isOpen(child)) {
-        objects(row, input, items, wanted, child, kind, schema.name, level + 2, pins);
+        objects(row, input, items, wanted, database, child, kind, schema.name, level + 2, pins);
       }
     }
   }
@@ -682,17 +845,18 @@ function objects(
   input: FlattenInput,
   items: FlatItem[],
   wanted: Want[],
+  database: string,
   node: string,
   kind: ObjectKind,
   schema: string | undefined,
   level: number,
   pins: ReadonlySet<string>
 ): void {
-  const catalog = input.catalog[row.id] ?? EMPTY_CATALOG;
+  const catalog = input.catalog[catalogKey(row.id, database)] ?? EMPTY_CATALOG;
   const held = catalog.nodes[node];
 
   if (!held) {
-    wanted.push({ what: 'node', profileId: row.id, node, kind, schema, offset: 0 });
+    wanted.push({ what: 'node', profileId: row.id, database, node, kind, schema, offset: 0 });
     items.push(note(row.id, node, level, 'loading', `Reading ${KINDS[kind].plural.toLowerCase()}`));
     return;
   }
@@ -706,7 +870,7 @@ function objects(
   }
 
   for (const object of held.objects) {
-    emitObject(object, row, input, items, wanted, level, schema === undefined, pins);
+    emitObject(object, row, input, items, wanted, database, level, schema === undefined, pins);
   }
 
   const remaining = held.total - held.objects.length;
@@ -731,12 +895,13 @@ function emitObject(
   input: FlattenInput,
   items: FlatItem[],
   wanted: Want[],
+  database: string,
   level: number,
   qualify: boolean,
   pins: ReadonlySet<string>
 ): void {
-  const ref: FavouriteRef = { kind: object.kind, schema: object.schema, name: object.name };
-  const node = memberNode(ref);
+  const ref: FavouriteRef = { kind: object.kind, schema: object.schema, name: object.name, database };
+  const node = inDatabase(database, memberNode(ref));
   const expandable = HAS_MEMBERS.has(object.kind);
   const expanded = expandable && input.expanded.has(gkey(row.id, node));
 
@@ -749,6 +914,7 @@ function emitObject(
     objKind: object.kind,
     schema: object.schema,
     name: object.name,
+    database,
     detail: object.detail,
     qualify,
     expandable,
@@ -760,10 +926,10 @@ function emitObject(
     return;
   }
 
-  const catalog = input.catalog[row.id] ?? EMPTY_CATALOG;
+  const catalog = input.catalog[catalogKey(row.id, database)] ?? EMPTY_CATALOG;
   const members = catalog.members[node];
   if (!members) {
-    wanted.push({ what: 'members', profileId: row.id, node, ref });
+    wanted.push({ what: 'members', profileId: row.id, database, node, ref });
     items.push(note(row.id, node, level + 1, 'loading', 'Reading'));
     return;
   }
@@ -785,11 +951,21 @@ function emitObject(
 }
 
 /** One connection's pins, as keys, for a constant-time "is this pinned?". */
-function pinSet(row: ConnectionRow): ReadonlySet<string> {
-  if (row.pins.length === 0) {
+function pinSet(pins: readonly FavouriteRef[]): ReadonlySet<string> {
+  if (pins.length === 0) {
     return EMPTY_PINS;
   }
-  return new Set(row.pins.map(favouriteKey));
+  return new Set(pins.map(favouriteKey));
+}
+
+/**
+ * The pins that belong to one database. A pin with no database was made
+ * before the tree drew databases, and it belongs to the one the connection
+ * opened in.
+ */
+function pinsIn(row: ConnectionRow, database: string, current: string): FavouriteRef[] {
+  const here = database.toLowerCase();
+  return row.pins.filter((pin) => (pin.database ?? current).toLowerCase() === here);
 }
 
 const EMPTY_PINS: ReadonlySet<string> = new Set<string>();
@@ -891,22 +1067,37 @@ function search(input: FlattenInput, parsed: ParsedQuery): Flattened {
     if (!input.open.has(row.id)) {
       continue;
     }
-    const found = matchObjects(input.catalog[row.id] ?? EMPTY_CATALOG, parsed, needle);
-    if (found.objects.length === 0) {
-      continue;
+    // One section per database that matched. The database is named on the
+    // heading only when more than one did, because `dbo.Customer` in two
+    // databases is exactly the case where the heading has to say which.
+    const prefix = catalogKey(row.id, '');
+    const sections: Array<{ database: string; found: { objects: DbObject[]; capped: boolean } }> = [];
+    for (const key of Object.keys(input.catalog).sort()) {
+      if (!key.startsWith(prefix)) {
+        continue;
+      }
+      const catalog = input.catalog[key];
+      const found = matchObjects(catalog, parsed, needle);
+      if (found.objects.length > 0) {
+        sections.push({ database: catalog.database ?? key.slice(prefix.length), found });
+      }
     }
-    objectHits += found.objects.length;
-    items.push({
-      kind: 'results',
-      key: `results${SEP}${row.id}`,
-      profileId: row.id,
-      label: row.name || row.host,
-      count: found.objects.length,
-      capped: found.capped
-    });
-    const pins = pinSet(row);
-    for (const object of found.objects) {
-      emitObject(object, row, input, items, wanted, 2, true, pins);
+    const current = input.catalog[row.id]?.databases?.current ?? '';
+    for (const { database, found } of sections) {
+      objectHits += found.objects.length;
+      const connection = row.name || row.host;
+      items.push({
+        kind: 'results',
+        key: `results${SEP}${row.id}${SEP}${database}`,
+        profileId: row.id,
+        label: sections.length > 1 ? `${connection} · ${database}` : connection,
+        count: found.objects.length,
+        capped: found.capped
+      });
+      const pins = pinSet(pinsIn(row, database, current));
+      for (const object of found.objects) {
+        emitObject(object, row, input, items, wanted, database, 2, true, pins);
+      }
     }
   }
 

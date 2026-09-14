@@ -4,6 +4,7 @@ import { ConnectionStore } from '../store/connectionStore';
 import { DriverSession } from '../drivers/types';
 import {
   CatalogSummary,
+  DatabaseList,
   DbMember,
   DbObject,
   FavouriteRef,
@@ -12,6 +13,7 @@ import {
   SearchAnswer,
   memberNode
 } from '../shared/catalog';
+import { errorMessage, showsAllDatabases } from '../types';
 import { MssqlCatalog } from './mssql';
 import { PostgresCatalog } from './postgres';
 import { CatalogQueries } from './types';
@@ -66,6 +68,14 @@ export class CatalogService implements vscode.Disposable {
   private readonly summaries = new Map<string, Cached<CatalogSummary>>();
   private readonly nodes = new Map<string, NodeCache>();
   private readonly memberCache = new Map<string, Cached<DbMember[]>>();
+  /** A connection's database list, keyed `<profile>|all` or `<profile>|own`. */
+  private readonly databaseLists = new Map<string, Cached<DatabaseList>>();
+  /**
+   * The name each database scope was read under, spelled the way the server
+   * spells it. The scope key is lower-cased, and PostgreSQL database names are
+   * case-sensitive, so a search has to go back to the original spelling.
+   */
+  private readonly scopeNames = new Map<string, string>();
 
   /**
    * Answers already in the air, keyed the same way the caches are.
@@ -114,6 +124,8 @@ export class CatalogService implements vscode.Disposable {
     this.summaries.clear();
     this.nodes.clear();
     this.memberCache.clear();
+    this.databaseLists.clear();
+    this.scopeNames.clear();
     this.inFlight.clear();
   }
 
@@ -149,6 +161,9 @@ export class CatalogService implements vscode.Disposable {
         `Catalog summary for ${scope} in ${Date.now() - started} ms: ${value.schemas.length} schemas`
       );
       this.summaries.set(scope, { value, at: Date.now() });
+      if (database?.trim()) {
+        this.scopeNames.set(scope, database.trim());
+      }
       return value;
     });
   }
@@ -171,6 +186,7 @@ export class CatalogService implements vscode.Disposable {
       return {
         profileId: request.profileId,
         node: request.node,
+        database: request.database,
         offset: 0,
         objects: held.objects,
         total: held.total
@@ -196,6 +212,7 @@ export class CatalogService implements vscode.Disposable {
       return {
         profileId: request.profileId,
         node: request.node,
+        database: request.database,
         offset: 0,
         objects,
         total: result.total
@@ -237,8 +254,56 @@ export class CatalogService implements vscode.Disposable {
     return this.once(`search:${this.scope(profileId, database)}:${needle}`, async () => {
       const { session, engine } = await this.resolve(profileId, database);
       const result = await engine.search(session, needle, SEARCH_LIMIT);
-      return { profileId, query, objects: result.objects, capped: result.capped };
+      return { profileId, database, query, objects: result.objects, capped: result.capped };
     });
+  }
+
+  /**
+   * The databases the explorer draws under a connection.
+   *
+   * A profile that shows only its own database gets that one name back and
+   * the server is not asked for a list at all, because the login may not be
+   * allowed to see one. A profile that shows them all asks, and a login that
+   * cannot list databases still gets the one it is in rather than an error:
+   * a tree with one database is useful, and a tree with a red row is not.
+   */
+  async databases(profileId: string): Promise<DatabaseList> {
+    const profile = this.store.get(profileId);
+    const all = profile ? showsAllDatabases(profile) : false;
+    const key = `${profileId}|${all ? 'all' : 'own'}`;
+    const cached = this.databaseLists.get(key);
+    if (cached && Date.now() - cached.at < TTL_MS) {
+      return cached.value;
+    }
+    return this.once(`databases:${key}`, async () => {
+      const session = this.manager.sessionFor(profileId);
+      if (!session) {
+        throw new Error('This connection is not open. Connect it to browse its objects.');
+      }
+      const current = session.currentDatabase();
+      let names = [current];
+      if (all) {
+        try {
+          const listed = await session.listDatabases();
+          // The database the session is in is always drawn, even when the list
+          // leaves it out, because it is the one the session can certainly read.
+          names = listed.some((name) => name.toLowerCase() === current.toLowerCase())
+            ? listed
+            : [...listed, current].sort((a, b) => a.localeCompare(b));
+        } catch (error) {
+          this.output.warn(`Database list for ${profileId}: ${errorMessage(error)}`);
+        }
+      }
+      const value: DatabaseList = { profileId, names, current, all };
+      this.databaseLists.set(key, { value, at: Date.now() });
+      return value;
+    });
+  }
+
+  /** The databases whose catalog has been read through one connection. */
+  browsedDatabases(profileId: string): string[] {
+    const prefix = `${profileId}|`;
+    return [...this.scopeNames].filter(([scope]) => scope.startsWith(prefix)).map(([, name]) => name);
   }
 
   /** The object's source, for Open Definition and Script As ALTER. */
@@ -260,6 +325,8 @@ export class CatalogService implements vscode.Disposable {
       this.summaries.clear();
       this.nodes.clear();
       this.memberCache.clear();
+      this.databaseLists.clear();
+      this.scopeNames.clear();
       this.onDidChangeEmitter.fire('');
       return;
     }
@@ -267,6 +334,8 @@ export class CatalogService implements vscode.Disposable {
     this.forgetPrefix(this.summaries, `${profileId}|`);
     this.forgetPrefix(this.nodes, `${profileId}|`);
     this.forgetPrefix(this.memberCache, `${profileId}|`);
+    this.forgetPrefix(this.databaseLists, `${profileId}|`);
+    this.forgetPrefix(this.scopeNames, `${profileId}|`);
     this.onDidChangeEmitter.fire(profileId);
   }
 
@@ -335,7 +404,8 @@ export class CatalogService implements vscode.Disposable {
 
   /** The connections anything is held for, from the scoped keys. */
   private cachedProfiles(): string[] {
-    return [...new Set([...this.summaries.keys()].map((key) => key.slice(0, key.indexOf('|'))))];
+    const keys = [...this.summaries.keys(), ...this.databaseLists.keys()];
+    return [...new Set(keys.map((key) => key.slice(0, key.indexOf('|'))))];
   }
 
   private forgetPrefix(map: Map<string, unknown>, prefix: string): void {

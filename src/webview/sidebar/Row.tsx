@@ -127,7 +127,7 @@ export const Row = memo(function Row(props: {
       // the manifest, which is what makes one entry say Connect and the next
       // row's say Disconnect, and one say Enable Schema Focused Mode and the
       // next say Disable.
-      data-vscode-context={contextFor(id, state, pinned, schemaMode)}
+      data-vscode-context={contextFor(id, state, pinned, schemaMode, row.allDatabases, row.database.trim() !== '')}
       // Roving tabindex: the cursor row is the tree's single tab stop and
       // every other item is -1, so Tab crosses the whole list in one press
       // the way a tree does. The row has no controls of its own to tab
@@ -397,7 +397,9 @@ function contextFor(
   id: string,
   state: ConnectionState,
   pinned: boolean,
-  schemaMode: boolean
+  schemaMode: boolean,
+  allDatabases: boolean,
+  namedDatabase: boolean
 ): string {
   return JSON.stringify({
     webviewSection: 'connection',
@@ -405,6 +407,9 @@ function contextFor(
     dbConnectionLive: state === 'connected',
     dbConnectionPinned: pinned,
     dbSchemaMode: schemaMode,
+    dbAllDatabases: allDatabases,
+    // "Only this database" means nothing on a profile that names none.
+    dbNamedDatabase: namedDatabase,
     preventDefaultContextMenuItems: true
   });
 }

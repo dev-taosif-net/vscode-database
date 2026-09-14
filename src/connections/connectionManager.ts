@@ -167,8 +167,7 @@ export class ConnectionManager implements vscode.Disposable {
     if (!primary || !wanted || same(primary.currentDatabase(), wanted)) {
       return primary;
     }
-    const profile = this.store.get(profileId);
-    if (!profile || !switchesDatabase(profile.driver)) {
+    if (!this.store.get(profileId)) {
       return primary;
     }
 
@@ -187,17 +186,27 @@ export class ConnectionManager implements vscode.Disposable {
     return work;
   }
 
+  /*
+   * SQL Server opens where the profile points and moves with `USE`. PostgreSQL
+   * cannot move a backend at all, so its session is opened in the database
+   * from the start — which is what every PostgreSQL client that shows more
+   * than one database does.
+   */
   private async openScoped(profileId: string, database: string, key: string): Promise<DriverSession | undefined> {
     try {
-      const session = await this.openAuxiliary(profileId);
-      try {
-        await session.useDatabase(database);
-      } catch (error) {
-        // A database the login cannot reach is not a failure worth a
-        // notification — the completion list simply has nothing to offer —
-        // but leaving the socket open would leak one per attempt.
-        await session.close().catch(() => undefined);
-        throw error;
+      const profile = this.store.get(profileId);
+      const moves = !profile || switchesDatabase(profile.driver);
+      const session = await this.openAuxiliary(profileId, moves ? undefined : database);
+      if (moves) {
+        try {
+          await session.useDatabase(database);
+        } catch (error) {
+          // A database the login cannot reach is not a failure worth a
+          // notification — the completion list simply has nothing to offer —
+          // but leaving the socket open would leak one per attempt.
+          await session.close().catch(() => undefined);
+          throw error;
+        }
       }
       this.scoped.set(key, session);
       this.output.info(`Catalog session opened for ${profileId} in ${database}`);
@@ -267,13 +276,16 @@ export class ConnectionManager implements vscode.Disposable {
    * connection is not open, because a second session to a server nobody has
    * connected to is a connection nobody authorised.
    */
-  async openAuxiliary(profileId: string): Promise<DriverSession> {
+  async openAuxiliary(profileId: string, database?: string): Promise<DriverSession> {
     const entry = this.active.get(profileId);
     const profile = this.store.get(profileId);
     if (!entry || !profile) {
       throw new Error('The connection is not open.');
     }
-    const opened = await this.driverFor(profile).open(profile, entry.secrets);
+    // A named database opens the session there, for the engine that cannot
+    // move a session once it is open.
+    const target = database?.trim() ? { ...profile, database: database.trim() } : profile;
+    const opened = await this.driverFor(profile).open(target, entry.secrets);
     return opened.session;
   }
 

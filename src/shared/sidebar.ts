@@ -15,6 +15,7 @@
  */
 import {
   CatalogSummary,
+  DatabaseList,
   ExplorerMode,
   FavouriteRef,
   MemberList,
@@ -76,6 +77,12 @@ export interface ConnectionRow {
    */
   mode: ExplorerMode;
   pins: FavouriteRef[];
+  /**
+   * Whether the tree lists every database on the server or only the profile's
+   * own. Structural for the same reason `mode` is: flipping it redraws the
+   * level under the connection.
+   */
+  allDatabases: boolean;
 }
 
 /** The volatile half, sent on its own so a connect never rebuilds the index. */
@@ -132,13 +139,16 @@ export type SidebarHostMessage =
    * three folders while a slow query was in flight must not pour that query's
    * five hundred rows into whichever folder happens to be open when it lands.
    */
-  /** A connection's counts and schema list, or why they could not be read. */
-  | { type: 'catalog'; profileId: string; summary: CatalogSummary }
-  | { type: 'catalogError'; profileId: string; message: string }
+  /** The databases a connection draws, or why they could not be listed. */
+  | ({ type: 'databases' } & DatabaseList)
+  | { type: 'databasesError'; profileId: string; message: string }
+  /** One database's counts and schema list, or why they could not be read. */
+  | { type: 'catalog'; profileId: string; database: string; summary: CatalogSummary }
+  | { type: 'catalogError'; profileId: string; database: string; message: string }
   /** One folder's rows, cumulative: `objects` is the whole folder, not a page. */
   | ({ type: 'objects' } & ObjectPage)
   | ({ type: 'members' } & MemberList)
-  | { type: 'nodeError'; profileId: string; node: string; message: string }
+  | { type: 'nodeError'; profileId: string; database: string; node: string; message: string }
   /** Server-side matches, merged into whatever the panel already found. */
   | ({ type: 'searchAnswer' } & SearchAnswer)
   /**
@@ -170,11 +180,13 @@ export type SidebarWebviewMessage =
    * separate from `loadNode` because the counts are one query for the whole
    * connection rather than one per folder.
    */
-  | { type: 'loadCatalog'; profileId: string }
+  | { type: 'loadDatabases'; profileId: string }
+  /** A database was expanded and has no summary yet. */
+  | { type: 'loadCatalog'; profileId: string; database: string }
   /** A folder was opened, or its `Load more` row was pressed. */
   | ({ type: 'loadNode' } & ObjectPageRequest)
   /** An object was expanded: its columns, or its parameters. */
-  | { type: 'loadMembers'; profileId: string; node: string; ref: FavouriteRef }
+  | { type: 'loadMembers'; profileId: string; database: string; node: string; ref: FavouriteRef }
   /**
    * Ask every open connection for matches. The panel has already matched what
    * it holds; this is for the rest of a database it has never read.
@@ -199,4 +211,11 @@ export type SidebarWebviewMessage =
    * `selectObject` it is a notification and changes nothing in the tree, so a
    * dropped one costs a fallback rather than a wrong answer.
    */
-  | { type: 'selectConnection'; id: string };
+  | {
+      type: 'selectConnection';
+      id: string;
+      /** The database the cursor is inside, when it is inside one. */
+      database?: string;
+    }
+  /** The New Query button on a database row. */
+  | { type: 'newQuery'; profileId: string; database: string };

@@ -2,7 +2,6 @@ import * as vscode from 'vscode';
 import { CatalogService } from '../catalog/catalogService';
 import { ConnectionManager } from '../connections/connectionManager';
 import { ConnectionStore } from '../store/connectionStore';
-import { DriverSession } from '../drivers/types';
 import { FavouriteRef, favouriteKey } from '../shared/catalog';
 import { KeyColumns, ObjectDetails } from '../shared/details';
 import { MssqlDetails } from './mssql';
@@ -109,7 +108,7 @@ export class DetailsService implements vscode.Disposable {
     }
 
     return this.coalesce(`d${SEP}${key}`, async () => {
-      const session = this.sessionFor(profileId);
+      const session = await this.manager.scopedSession(profileId, ref.database);
       if (!session) {
         return { ...base, error: 'The connection is not open.' };
       }
@@ -125,7 +124,7 @@ export class DetailsService implements vscode.Disposable {
       }
 
       try {
-        value.columns = await this.catalog.members(profileId, ref);
+        value.columns = await this.catalog.members(profileId, ref, ref.database);
       } catch {
         // A login with rights to the object but not its columns is ordinary on
         // production. The panel drops the section rather than the object.
@@ -160,7 +159,7 @@ export class DetailsService implements vscode.Disposable {
       return cached.value;
     }
     return this.coalesce(`k${SEP}${key}`, async () => {
-      const session = this.sessionFor(profileId);
+      const session = await this.manager.scopedSession(profileId, ref.database);
       const profile = this.store.get(profileId);
       if (!session || !profile) {
         return { columns: [], usable: false };
@@ -179,7 +178,7 @@ export class DetailsService implements vscode.Disposable {
       return cached.value;
     }
     return this.coalesce(`e${SEP}${key}`, async () => {
-      const session = this.sessionFor(profileId);
+      const session = await this.manager.scopedSession(profileId, ref.database);
       const profile = this.store.get(profileId);
       if (!session || !profile) {
         return undefined;
@@ -199,7 +198,7 @@ export class DetailsService implements vscode.Disposable {
    * one to spend filling a label nobody asked about.
    */
   async exactCount(profileId: string, ref: FavouriteRef): Promise<number | undefined> {
-    const session = this.sessionFor(profileId);
+    const session = await this.manager.scopedSession(profileId, ref.database);
     const profile = this.store.get(profileId);
     if (!session || !profile) {
       return undefined;
@@ -257,12 +256,9 @@ export class DetailsService implements vscode.Disposable {
     ];
   }
 
-  private sessionFor(profileId: string): DriverSession | undefined {
-    return this.manager.sessionFor(profileId);
-  }
-
+  /** Keyed by the database too: `dbo.Staff` in two databases is two objects. */
   private key(profileId: string, ref: FavouriteRef): string {
-    return `${profileId}${SEP}${favouriteKey(ref)}`;
+    return `${profileId}${SEP}${(ref.database ?? '').toLowerCase()}${SEP}${favouriteKey(ref)}`;
   }
 
   /** One request in the air per key, the way `CatalogService` does it. */

@@ -6,7 +6,14 @@ import { ExecutionService } from '../exec/executionService';
 import { ResultStore } from '../exec/resultStore';
 import { FavouriteRef, KINDS } from '../shared/catalog';
 import { QueryHostMessage, QueryWebviewMessage, RunnerValue } from '../shared/query';
-import { DATA_SCHEME, RUNNER_SCHEME, objectAddress, objectRefOf } from '../query/bindingStore';
+import {
+  DATA_SCHEME,
+  RUNNER_SCHEME,
+  databaseOfAddress,
+  inDatabaseAddress,
+  objectAddress,
+  objectRefOf
+} from '../query/bindingStore';
 import { errorMessage } from '../types';
 import { ActiveTab } from './activeTab';
 import { QueryBridge } from './queryBridge';
@@ -81,11 +88,16 @@ export class WorkspacePanels implements vscode.Disposable {
   /* --------------------------------------------------------------- opening */
 
   async openData(profileId: string, ref: FavouriteRef): Promise<void> {
-    const uri = objectAddress(DATA_SCHEME, profileId, ref);
+    const uri = inDatabaseAddress(objectAddress(DATA_SCHEME, profileId, ref), ref.database);
     const existing = this.panels.get(uri.toString());
     if (existing) {
       existing.panel.reveal(existing.panel.viewColumn);
       return;
+    }
+    if (ref.database) {
+      // The tab runs its pages through the pool, which reads the tab's
+      // database from the binding — so the binding goes first.
+      await this.execution.moveTo(uri.toString(), profileId, ref.database);
     }
     const panel = vscode.window.createWebviewPanel(
       WorkspacePanels.dataViewType,
@@ -98,11 +110,14 @@ export class WorkspacePanels implements vscode.Disposable {
   }
 
   async openRunner(profileId: string, ref: FavouriteRef): Promise<void> {
-    const uri = objectAddress(RUNNER_SCHEME, profileId, ref);
+    const uri = inDatabaseAddress(objectAddress(RUNNER_SCHEME, profileId, ref), ref.database);
     const existing = this.panels.get(uri.toString());
     if (existing) {
       existing.panel.reveal(existing.panel.viewColumn);
       return;
+    }
+    if (ref.database) {
+      await this.execution.moveTo(uri.toString(), profileId, ref.database);
     }
     const panel = vscode.window.createWebviewPanel(
       WorkspacePanels.runnerViewType,
@@ -132,6 +147,10 @@ export class WorkspacePanels implements vscode.Disposable {
     if (!ref || !this.store.get(profileId)) {
       panel.dispose();
       return;
+    }
+    const database = databaseOfAddress(uri);
+    if (database) {
+      ref.database = database;
     }
     this.adopt(panel, uri, kind, profileId, ref);
   }
@@ -281,7 +300,7 @@ export class WorkspacePanels implements vscode.Disposable {
 
   private async sendForm(managed: Managed, post: (message: QueryHostMessage) => void): Promise<void> {
     try {
-      const members = await this.catalog.members(managed.profileId, managed.ref);
+      const members = await this.catalog.members(managed.profileId, managed.ref, managed.ref.database);
       const saved = this.savedValues(managed.profileId, managed.ref);
       post({ type: 'form', form: buildForm(managed.ref, members, saved) });
     } catch (error) {
@@ -299,7 +318,7 @@ export class WorkspacePanels implements vscode.Disposable {
       return;
     }
     try {
-      const members = await this.catalog.members(managed.profileId, managed.ref);
+      const members = await this.catalog.members(managed.profileId, managed.ref, managed.ref.database);
       const form = buildForm(managed.ref, members, values);
       const call = buildCall(profile.driver, managed.ref, form.parameters, values);
       await this.rememberValues(managed.profileId, managed.ref, values);

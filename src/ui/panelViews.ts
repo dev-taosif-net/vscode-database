@@ -113,7 +113,11 @@ export class DetailsView extends PanelView implements vscode.Disposable {
       // A late answer for an object the user has moved off is dropped rather
       // than drawn: the panel would otherwise flicker between two objects as
       // somebody arrows down a folder.
-      if (this.target?.ref.name === ref.name && this.target.ref.schema === ref.schema) {
+      if (
+        this.target?.ref.name === ref.name &&
+        this.target.ref.schema === ref.schema &&
+        this.target.ref.database === ref.database
+      ) {
         this.post({ type: 'details', details });
       }
     } catch (error) {

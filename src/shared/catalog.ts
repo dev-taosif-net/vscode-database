@@ -144,6 +144,14 @@ export interface FavouriteRef {
   kind: ObjectKind;
   schema: string;
   name: string;
+  /**
+   * The database the object lives in, when the caller knows it.
+   *
+   * Absent means the connection's own database. That is what every pin
+   * written before the explorer drew databases means, and what every caller
+   * that never leaves that database — a data tab, IntelliSense — still means.
+   */
+  database?: string;
 }
 
 export function favouriteKey(ref: FavouriteRef): string {
@@ -169,6 +177,62 @@ export type ExplorerMode = 'general' | 'schema';
 const SEP = String.fromCharCode(31);
 
 export const FAVOURITES_NODE = 'fav';
+
+/** The note a connection draws while its database list is being read. */
+export const DATABASES_NODE = 'dbs';
+
+/** SQL Server's system databases, folded away the way SSMS folds them. */
+export const SYSTEM_DATABASES_NODE = 'sysdbs';
+
+/**
+ * One database under a connection.
+ *
+ * Every node below it is prefixed with this, so a folder, a schema or a table
+ * in `Sales` never shares a key with the same folder in `Reporting`, and one
+ * database's subtree can be swept by prefix.
+ */
+export function databaseNode(database: string): string {
+  return `d${SEP}${database}`;
+}
+
+/** A node key, placed inside one database. */
+export function inDatabase(database: string, node: string): string {
+  return `${databaseNode(database)}${SEP}${node}`;
+}
+
+/** The note a database draws while its counts are being read. */
+export function summaryNode(database: string): string {
+  return inDatabase(database, 'sum');
+}
+
+/** The database a node key sits in, or undefined for a key outside any. */
+export function databaseOfNode(node: string): string | undefined {
+  const parts = node.split(SEP);
+  return parts[0] === 'd' && parts.length >= 2 ? parts[1] : undefined;
+}
+
+/**
+ * Where the sidebar holds one database's catalog.
+ *
+ * The bare profile id holds the connection's database list; this holds one
+ * database's counts, folders and members. Both start with the profile id, so
+ * forgetting a connection is still one prefix sweep.
+ */
+export function catalogKey(profileId: string, database: string): string {
+  return globalKey(profileId, databaseNode(database));
+}
+
+/**
+ * The databases SQL Server ships with. They are real and occasionally wanted,
+ * and they are never what somebody opens a server to look at, so the tree
+ * files them in a folder of their own. PostgreSQL's `postgres` is an ordinary
+ * database that people do use, and its templates are already filtered out.
+ */
+const MSSQL_SYSTEM_DATABASES: ReadonlySet<string> = new Set(['master', 'model', 'msdb', 'tempdb']);
+
+export function isSystemDatabase(driver: DriverKind, name: string): boolean {
+  return driver === 'mssql' && MSSQL_SYSTEM_DATABASES.has(name.toLowerCase());
+}
 
 export function kindNode(kind: ObjectKind): string {
   return `k${SEP}${kind}`;
@@ -201,13 +265,18 @@ export function globalKey(profileId: string, node: string): string {
  * from the builders above because it is checked against them by construction:
  * a key this does not recognise returns null rather than a guess.
  */
-export function parseFolderNode(node: string): { kind: ObjectKind; schema?: string } | null {
-  const parts = node.split(SEP);
+export function parseFolderNode(node: string): { kind: ObjectKind; schema?: string; database?: string } | null {
+  let parts = node.split(SEP);
+  let database: string | undefined;
+  if (parts[0] === 'd' && parts.length > 2) {
+    database = parts[1];
+    parts = parts.slice(2);
+  }
   if (parts[0] === 'k' && parts.length === 2) {
-    return isKind(parts[1]) ? { kind: parts[1] } : null;
+    return isKind(parts[1]) ? { kind: parts[1], database } : null;
   }
   if (parts[0] === 's' && parts[2] === 'k' && parts.length === 4) {
-    return isKind(parts[3]) ? { kind: parts[3], schema: parts[1] } : null;
+    return isKind(parts[3]) ? { kind: parts[3], schema: parts[1], database } : null;
   }
   return null;
 }
@@ -227,12 +296,10 @@ export interface ObjectPageRequest {
   /** Absent in general mode; the schema to restrict to in schema-focused mode. */
   schema?: string;
   /**
-   * The database to read, when it is not the connection's own.
+   * The database to read. Absent means the connection's own.
    *
-   * The object explorer never sets it — the tree is drawn from the profile's
-   * database and stays there. IntelliSense sets it for a query tab that has
-   * run `USE`, which is the one caller that has to read a catalog the control
-   * session cannot see.
+   * The object explorer always sets it, because the tree draws a node per
+   * database. IntelliSense sets it for a query tab that has run `USE`.
    */
   database?: string;
   offset: number;
@@ -242,6 +309,8 @@ export interface ObjectPageRequest {
 export interface ObjectPage {
   profileId: string;
   node: string;
+  /** Echoed from the request, so the panel knows whose catalog to fill. */
+  database?: string;
   offset: number;
   objects: DbObject[];
   /** How many there are in total, so "Load more" can say how many are left. */
@@ -251,7 +320,18 @@ export interface ObjectPage {
 export interface MemberList {
   profileId: string;
   node: string;
+  database?: string;
   members: DbMember[];
+}
+
+/** The databases a connection's explorer draws, and which one it opened in. */
+export interface DatabaseList {
+  profileId: string;
+  names: string[];
+  /** Where the control session is, as the server reported it. */
+  current: string;
+  /** False when the profile draws only its own database. */
+  all: boolean;
 }
 
 /**
@@ -265,6 +345,8 @@ export interface MemberList {
  */
 export interface SearchAnswer {
   profileId: string;
+  /** The database that was searched. */
+  database?: string;
   /** The query this answers. A stale answer is dropped rather than merged. */
   query: string;
   objects: DbObject[];

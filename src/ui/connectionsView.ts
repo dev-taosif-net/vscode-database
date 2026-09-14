@@ -12,7 +12,14 @@ import {
   SortOrder
 } from '../shared/sidebar';
 import { FavouriteRef, ObjectPageRequest } from '../shared/catalog';
-import { ConnectionProfile, ENVIRONMENTS, EnvironmentId, errorMessage, firstLine } from '../types';
+import {
+  ConnectionProfile,
+  ENVIRONMENTS,
+  EnvironmentId,
+  errorMessage,
+  firstLine,
+  showsAllDatabases
+} from '../types';
 import { CurrentConnection } from './currentConnection';
 import { webviewHtml } from './webviewHtml';
 
@@ -182,8 +189,12 @@ export class ConnectionsView implements vscode.WebviewViewProvider, vscode.Dispo
         await this.context.globalState.update(COLLAPSED_KEY, [...this.collapsed]);
         return;
 
+      case 'loadDatabases':
+        await this.loadDatabases(message.profileId);
+        return;
+
       case 'loadCatalog':
-        await this.loadCatalog(message.profileId);
+        await this.loadCatalog(message.profileId, message.database);
         return;
 
       case 'loadNode':
@@ -191,7 +202,7 @@ export class ConnectionsView implements vscode.WebviewViewProvider, vscode.Dispo
         return;
 
       case 'loadMembers':
-        await this.loadMembers(message.profileId, message.node, message.ref);
+        await this.loadMembers(message.profileId, message.database, message.node, message.ref);
         return;
 
       case 'searchObjects':
@@ -209,7 +220,15 @@ export class ConnectionsView implements vscode.WebviewViewProvider, vscode.Dispo
         // Recorded and nothing else. In particular no `postState`: this
         // arrives on every arrow key, and answering it with the whole row
         // array would hand every windowed row a new identity to walk a tree.
-        this.current.set(message.id);
+        this.current.set(message.id, message.database);
+        return;
+
+      case 'newQuery':
+        this.current.set(message.profileId, message.database);
+        await vscode.commands.executeCommand('databaseTools.newQuery', {
+          connectionId: message.profileId,
+          databaseName: message.database
+        });
         return;
 
       default:
@@ -230,12 +249,21 @@ export class ConnectionsView implements vscode.WebviewViewProvider, vscode.Dispo
    * of forty.
    */
 
-  private async loadCatalog(profileId: string): Promise<void> {
+  private async loadDatabases(profileId: string): Promise<void> {
     try {
-      const summary = await this.catalog.summary(profileId);
-      await this.send({ type: 'catalog', profileId, summary });
+      const list = await this.catalog.databases(profileId);
+      await this.send({ type: 'databases', ...list });
     } catch (error) {
-      await this.send({ type: 'catalogError', profileId, message: firstLine(errorMessage(error)) });
+      await this.send({ type: 'databasesError', profileId, message: firstLine(errorMessage(error)) });
+    }
+  }
+
+  private async loadCatalog(profileId: string, database: string): Promise<void> {
+    try {
+      const summary = await this.catalog.summary(profileId, database);
+      await this.send({ type: 'catalog', profileId, database, summary });
+    } catch (error) {
+      await this.send({ type: 'catalogError', profileId, database, message: firstLine(errorMessage(error)) });
     }
   }
 
@@ -247,22 +275,19 @@ export class ConnectionsView implements vscode.WebviewViewProvider, vscode.Dispo
       await this.send({
         type: 'nodeError',
         profileId: request.profileId,
+        database: request.database ?? '',
         node: request.node,
         message: firstLine(errorMessage(error))
       });
     }
   }
 
-  private async loadMembers(
-    profileId: string,
-    node: string,
-    ref: { kind: ObjectPageRequest['kind']; schema: string; name: string }
-  ): Promise<void> {
+  private async loadMembers(profileId: string, database: string, node: string, ref: FavouriteRef): Promise<void> {
     try {
-      const members = await this.catalog.members(profileId, ref);
-      await this.send({ type: 'members', profileId, node, members });
+      const members = await this.catalog.members(profileId, ref, database);
+      await this.send({ type: 'members', profileId, database, node, members });
     } catch (error) {
-      await this.send({ type: 'nodeError', profileId, node, message: firstLine(errorMessage(error)) });
+      await this.send({ type: 'nodeError', profileId, database, node, message: firstLine(errorMessage(error)) });
     }
   }
 
@@ -279,14 +304,24 @@ export class ConnectionsView implements vscode.WebviewViewProvider, vscode.Dispo
     const open = this.manager.activeIds();
     await Promise.all(
       open.map(async (profileId) => {
-        try {
-          const answer = await this.catalog.search(profileId, query);
-          if (answer.objects.length > 0) {
-            await this.send({ type: 'searchAnswer', ...answer });
-          }
-        } catch {
-          // Deliberately quiet. See above.
-        }
+        // The databases somebody has opened in the tree, or the one the
+        // connection is in. Searching every database on a server with forty
+        // of them would be forty sessions opened to answer one keystroke.
+        const browsed = this.catalog.browsedDatabases(profileId);
+        const current = this.manager.databaseOf(profileId);
+        const databases = browsed.length > 0 ? browsed : current ? [current] : [];
+        await Promise.all(
+          databases.map(async (database) => {
+            try {
+              const answer = await this.catalog.search(profileId, query, database);
+              if (answer.objects.length > 0) {
+                await this.send({ type: 'searchAnswer', ...answer });
+              }
+            } catch {
+              // Deliberately quiet. See above.
+            }
+          })
+        );
       })
     );
   }
@@ -556,7 +591,8 @@ function rowFor(profile: ConnectionProfile, store: ConnectionStore): ConnectionR
     readOnly: profile.readOnly,
     updatedAt: profile.updatedAt,
     mode: store.explorerMode(profile.id),
-    pins: store.objectFavourites(profile.id)
+    pins: store.objectFavourites(profile.id),
+    allDatabases: showsAllDatabases(profile)
   };
 }
 

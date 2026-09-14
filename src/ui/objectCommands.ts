@@ -43,6 +43,7 @@ export function objectTarget(input: unknown): ObjectTarget | undefined {
   const kind = raw.objectKind;
   const schema = raw.objectSchema;
   const name = raw.objectName;
+  const database = raw.objectDatabase;
 
   if (
     typeof profileId !== 'string' ||
@@ -53,7 +54,11 @@ export function objectTarget(input: unknown): ObjectTarget | undefined {
   ) {
     return undefined;
   }
-  return { profileId, ref: { kind: kind as ObjectKind, schema, name } };
+  const ref: FavouriteRef = { kind: kind as ObjectKind, schema, name };
+  if (typeof database === 'string' && database.trim() !== '') {
+    ref.database = database;
+  }
+  return { profileId, ref };
 }
 
 /**
@@ -66,7 +71,8 @@ export function contextOf(target: ObjectTarget): Record<string, string> {
     connectionId: target.profileId,
     objectKind: target.ref.kind,
     objectSchema: target.ref.schema,
-    objectName: target.ref.name
+    objectName: target.ref.name,
+    ...(target.ref.database ? { objectDatabase: target.ref.database } : {})
   };
 }
 
@@ -114,7 +120,7 @@ export class ObjectCommands {
   /* ------------------------------------------------------------- actions */
 
   private async openDefinition(target: ObjectTarget, asAlter: boolean): Promise<void> {
-    const source = await this.catalog.definition(target.profileId, target.ref);
+    const source = await this.catalog.definition(target.profileId, target.ref, target.ref.database);
     const text = asAlter ? toAlter(source) : source;
     await this.show(target, text, asAlter ? `Alter ${target.ref.name}` : target.ref.name);
   }
@@ -125,7 +131,7 @@ export class ObjectCommands {
    * columns in it is a scaffold that gets deleted rather than edited.
    */
   private async generateCrud(target: ObjectTarget): Promise<void> {
-    const columns = await this.catalog.members(target.profileId, target.ref);
+    const columns = await this.catalog.members(target.profileId, target.ref, target.ref.database);
     if (columns.length === 0) {
       throw new Error(`${target.ref.schema}.${target.ref.name} has no columns to script.`);
     }
@@ -134,7 +140,7 @@ export class ObjectCommands {
 
   /** An `EXEC` or `CALL` with one line per parameter, to edit before running. */
   private async scriptExecute(target: ObjectTarget): Promise<void> {
-    const parameters = await this.catalog.members(target.profileId, target.ref);
+    const parameters = await this.catalog.members(target.profileId, target.ref, target.ref.database);
     await this.show(
       target,
       executeScript(this.driverOf(target.profileId), target.ref, parameters),
@@ -157,7 +163,7 @@ export class ObjectCommands {
   }
 
   private async show(target: ObjectTarget, content: string, name: string): Promise<void> {
-    await this.files.openScratch(target.profileId, name, content);
+    await this.files.openScratch(target.profileId, name, content, target.ref.database);
     this.output.info(`${name}: ${KINDS[target.ref.kind].singular} ${target.ref.schema}.${target.ref.name}`);
   }
 

@@ -175,6 +175,24 @@ export function objectAddress(scheme: string, profileId: string, ref: FavouriteR
 }
 
 /**
+ * An object address placed in one database.
+ *
+ * The database rides in the query string, the way `DefinitionProvider` does
+ * it: the path is what `objectRefOf` parses and what an older build's tabs
+ * restore from, and `dbo.Staff` in two databases needs two addresses or the
+ * second tab would reveal the first.
+ */
+export function inDatabaseAddress(uri: vscode.Uri, database: string | undefined): vscode.Uri {
+  return database ? uri.with({ query: `db=${encodeURIComponent(database)}` }) : uri;
+}
+
+/** The database an object address names, when it names one. */
+export function databaseOfAddress(uri: vscode.Uri): string | undefined {
+  const match = /(?:^|&)db=([^&]*)/.exec(uri.query);
+  return match ? decodeURIComponent(match[1]) || undefined : undefined;
+}
+
+/**
  * The object an address names, or undefined for an address this version did
  * not write. Reads the pre-kind form too — `/<schema>.<name>` — with the kind
  * the scheme implied, so a tab serialized by an earlier build still restores.

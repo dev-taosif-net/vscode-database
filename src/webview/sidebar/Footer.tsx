@@ -89,7 +89,7 @@ export function Footer({ onReveal }: Props): JSX.Element {
   const readout = cursorRow
     ? [
         fullHost(cursorRow),
-        cursorRow.database || 'no database',
+        cursorRow.database || 'default database',
         stateWord(sessions[cursorRow.id]),
         ...(cursorRow.readOnly ? ['Read-only'] : [])
       ].join(' · ')

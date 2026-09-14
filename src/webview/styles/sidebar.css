@@ -887,6 +887,23 @@ mark {
   font-size: 16px;
 }
 
+/* A database row's New Query button: the same button, one step smaller to fit
+   a 22px tree row, and quiet until the row is under the pointer or cursor. */
+.node-act {
+  width: 18px;
+  height: 18px;
+  margin-left: 4px;
+}
+
+.node-act .codicon {
+  font-size: 14px;
+}
+
+.node:hover .node-act,
+.list:focus-within .node.is-cursor .node-act {
+  color: inherit;
+}
+
 /* ------------------------------------------------- no match, empty state */
 
 /* Two lines inside 44px: the message beside its icon, then the link under it.
@@ -1316,6 +1333,21 @@ mark {
   color: var(--obj-member);
 }
 
+/*
+ * A database row's mark: the workbench's own database glyph, in the box every
+ * `.oi` mark sits in, so the names beneath it still land one indent right.
+ */
+.node-glyph {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  margin-right: 5px;
+  color: var(--obj-folder);
+}
+
 /* ------------------------------------------------------------- name column */
 
 /*
@@ -1335,6 +1367,7 @@ mark {
 
 /* A folder is a heading for the rows under it, and weight is the only channel
    left: it cannot take a hue, because the hue beside it is the object type's. */
+.node-database .node-name,
 .node-folder .node-name,
 .node-schema .node-name {
   font-weight: 600;

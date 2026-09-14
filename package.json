@@ -155,6 +155,18 @@
         "icon": "$(symbol-namespace)"
       },
       {
+        "command": "databaseTools.showAllDatabases",
+        "title": "Show All Databases",
+        "category": "Database",
+        "icon": "$(database)"
+      },
+      {
+        "command": "databaseTools.showConnectionDatabase",
+        "title": "Show Only the Connection's Database",
+        "category": "Database",
+        "icon": "$(database)"
+      },
+      {
         "command": "databaseTools.openDefinition",
         "title": "Open Definition",
         "category": "Database",
@@ -565,6 +577,14 @@
           "when": "false"
         },
         {
+          "command": "databaseTools.showAllDatabases",
+          "when": "false"
+        },
+        {
+          "command": "databaseTools.showConnectionDatabase",
+          "when": "false"
+        },
+        {
           "command": "databaseTools.openDefinition",
           "when": "false"
         },
@@ -763,6 +783,26 @@
           "command": "databaseTools.disableSchemaMode",
           "when": "webviewSection == 'connection' && dbSchemaMode",
           "group": "2_reading@2"
+        },
+        {
+          "command": "databaseTools.showAllDatabases",
+          "when": "webviewSection == 'connection' && !dbAllDatabases",
+          "group": "2_reading@3"
+        },
+        {
+          "command": "databaseTools.showConnectionDatabase",
+          "when": "webviewSection == 'connection' && dbAllDatabases && dbNamedDatabase",
+          "group": "2_reading@3"
+        },
+        {
+          "command": "databaseTools.newQuery",
+          "when": "webviewSection == 'database'",
+          "group": "1_session@1"
+        },
+        {
+          "command": "databaseTools.refreshCatalog",
+          "when": "webviewSection == 'database'",
+          "group": "1_session@2"
         },
         {
           "command": "databaseTools.editConnection",
