@@ -13,6 +13,7 @@ import { SavedQueryStore } from './query/savedQueries';
 import { SqlDiagnostics } from './query/diagnostics';
 import { MetadataIndex } from './query/language/index';
 import { SqlLanguageProviders } from './query/language/providers';
+import { KeywordCase } from './query/language/keywordCase';
 import { ActiveTab } from './ui/activeTab';
 import { ConnectionsPanel } from './ui/connectionsPanel';
 import { ConnectionsView } from './ui/connectionsView';
@@ -107,6 +108,7 @@ export function activate(context: vscode.ExtensionContext): void {
   const panels = new WorkspacePanels(context, store, catalog, details, execution, results, bridge, active, output);
   const workspaceStatus = new WorkspaceStatusBar(store, bindings, results, execution, active);
   const language = new SqlLanguageProviders(store, bindings, index);
+  const keywordCase = new KeywordCase(bindings);
   const diagnostics = new SqlDiagnostics(execution, results);
 
   const detailsView = new DetailsView(context, store, details, (profileId, ref, action) => {
@@ -156,6 +158,7 @@ export function activate(context: vscode.ExtensionContext): void {
     panels,
     workspaceStatus,
     language,
+    keywordCase,
     diagnostics,
     detailsView,
     historyView,
