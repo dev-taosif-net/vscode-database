@@ -365,8 +365,11 @@ interface PageRow {
  * written so that a null means "every schema" rather than "no schema".
  */
 function pageStatement(args: PageArgs): { sql: string; params: unknown[] } {
-  const params = [args.schema ?? null, args.offset, args.limit];
-  const schemaFilter = '(@p0 IS NULL OR s.name = @p0)';
+  const filter = args.filter?.trim();
+  const params = [args.schema ?? null, args.offset, args.limit, filter ? `%${escapeLike(filter)}%` : null];
+  const scoped = '(@p0 IS NULL OR s.name = @p0)';
+  // `@p3` is the folder's own name filter, null when there is none.
+  const schemaFilter = (name: string) => `${scoped} AND (@p3 IS NULL OR ${name} LIKE @p3 ESCAPE '\\')`;
   const tail = 'OFFSET @p1 ROWS FETCH NEXT @p2 ROWS ONLY';
   const total = 'COUNT(*) OVER() AS total';
 
@@ -379,7 +382,7 @@ function pageStatement(args: PageArgs): { sql: string; params: unknown[] } {
           FROM ${args.kind === 'table' ? 'sys.tables' : 'sys.views'} o
           JOIN sys.schemas s ON s.schema_id = o.schema_id
           OUTER APPLY (SELECT COUNT(*) AS n FROM sys.columns c WHERE c.object_id = o.object_id) cols
-          WHERE o.is_ms_shipped = 0 AND ${schemaFilter}
+          WHERE o.is_ms_shipped = 0 AND ${schemaFilter('o.name')}
           ORDER BY s.name, o.name
           ${tail}`,
         params
@@ -392,7 +395,7 @@ function pageStatement(args: PageArgs): { sql: string; params: unknown[] } {
           FROM sys.procedures o
           JOIN sys.schemas s ON s.schema_id = o.schema_id
           OUTER APPLY (SELECT COUNT(*) AS n FROM sys.parameters p WHERE p.object_id = o.object_id) args
-          WHERE o.is_ms_shipped = 0 AND ${schemaFilter}
+          WHERE o.is_ms_shipped = 0 AND ${schemaFilter('o.name')}
           ORDER BY s.name, o.name
           ${tail}`,
         params
@@ -405,7 +408,7 @@ function pageStatement(args: PageArgs): { sql: string; params: unknown[] } {
           FROM sys.objects o
           JOIN sys.schemas s ON s.schema_id = o.schema_id
           OUTER APPLY (SELECT COUNT(*) AS n FROM sys.parameters p WHERE p.object_id = o.object_id) args
-          WHERE o.is_ms_shipped = 0 AND o.type IN ('FN', 'IF', 'TF', 'AF', 'FS', 'FT') AND ${schemaFilter}
+          WHERE o.is_ms_shipped = 0 AND o.type IN ('FN', 'IF', 'TF', 'AF', 'FS', 'FT') AND ${schemaFilter('o.name')}
           ORDER BY s.name, o.name
           ${tail}`,
         params
@@ -419,7 +422,7 @@ function pageStatement(args: PageArgs): { sql: string; params: unknown[] } {
           FROM sys.triggers tr
           JOIN sys.objects p ON p.object_id = tr.parent_id
           JOIN sys.schemas s ON s.schema_id = p.schema_id
-          WHERE tr.is_ms_shipped = 0 AND tr.parent_class = 1 AND ${schemaFilter}
+          WHERE tr.is_ms_shipped = 0 AND tr.parent_class = 1 AND ${schemaFilter('tr.name')}
           ORDER BY s.name, p.name, tr.name
           ${tail}`,
         params
@@ -432,7 +435,7 @@ function pageStatement(args: PageArgs): { sql: string; params: unknown[] } {
           FROM sys.sequences sq
           JOIN sys.schemas s ON s.schema_id = sq.schema_id
           JOIN sys.types ty ON ty.user_type_id = sq.user_type_id
-          WHERE sq.is_ms_shipped = 0 AND ${schemaFilter}
+          WHERE sq.is_ms_shipped = 0 AND ${schemaFilter('sq.name')}
           ORDER BY s.name, sq.name
           ${tail}`,
         params
@@ -446,7 +449,7 @@ function pageStatement(args: PageArgs): { sql: string; params: unknown[] } {
           FROM sys.types t
           JOIN sys.schemas s ON s.schema_id = t.schema_id
           LEFT JOIN sys.types bt ON bt.user_type_id = t.system_type_id AND bt.is_user_defined = 0
-          WHERE t.is_user_defined = 1 AND s.name NOT IN ${SYSTEM_SCHEMAS} AND ${schemaFilter}
+          WHERE t.is_user_defined = 1 AND s.name NOT IN ${SYSTEM_SCHEMAS} AND ${schemaFilter('t.name')}
           ORDER BY s.name, t.name
           ${tail}`,
         params
@@ -458,7 +461,7 @@ function pageStatement(args: PageArgs): { sql: string; params: unknown[] } {
           SELECT s.name AS sch, sn.name AS nm, sn.base_object_name AS extra, ${total}
           FROM sys.synonyms sn
           JOIN sys.schemas s ON s.schema_id = sn.schema_id
-          WHERE sn.is_ms_shipped = 0 AND ${schemaFilter}
+          WHERE sn.is_ms_shipped = 0 AND ${schemaFilter('sn.name')}
           ORDER BY s.name, sn.name
           ${tail}`,
         params

@@ -1,11 +1,22 @@
-import { memo } from 'react';
+import { memo, useEffect, useRef } from 'react';
 import { KINDS, ObjectKind } from '../../shared/catalog';
 import { Codicon } from '../primitives/Codicon';
 import { IconMark, ObjectIcon } from '../primitives/ObjectIcon';
 import { post } from './api';
 import { segments } from './host';
 import { H } from './model';
-import { cursorStore, loadMore, retry, toggleExpanded, useIsCursor } from './state';
+import {
+  closeFilter,
+  consumeFilterFocus,
+  cursorStore,
+  loadMore,
+  openFilter,
+  retry,
+  setFilterText,
+  toggleExpanded,
+  useFilterFocus,
+  useIsCursor
+} from './state';
 
 /**
  * Clicking a row makes it the cursor.
@@ -81,9 +92,14 @@ export const FolderRow = memo(function FolderRow(
     expanded: boolean;
     /** Favourites is the one folder whose count of zero still means something. */
     alwaysCount: boolean;
+    /** The folder holds objects, so it offers a filter box. */
+    filterable: boolean;
+    /** Something is typed into that box. */
+    filtering: boolean;
   }
 ) {
-  const { gkey, top, level, ariaLevel, posinset, setsize, label, count, mark, expanded } = props;
+  const { gkey, top, level, ariaLevel, posinset, setsize, label, count, mark, expanded, filterable, filtering } =
+    props;
   const cursor = useIsCursor(gkey);
 
   return (
@@ -94,7 +110,7 @@ export const FolderRow = memo(function FolderRow(
       aria-posinset={posinset}
       aria-setsize={setsize}
       aria-expanded={expanded}
-      aria-label={`${label}, ${count.toLocaleString()}`}
+      aria-label={`${label}, ${count.toLocaleString()}${filtering ? ', filtered' : ''}`}
       data-id={gkey}
       tabIndex={cursor ? 0 : -1}
       style={{ top, height: H.node, ['--lvl' as string]: level }}
@@ -108,6 +124,25 @@ export const FolderRow = memo(function FolderRow(
       <span className="node-name">{label}</span>
       {count > 0 || props.alwaysCount ? (
         <span className="node-tail num">{count.toLocaleString()}</span>
+      ) : null}
+      {/* Not a tab stop, for the reason `RowActions` gives. `/` on the folder
+          is the keyboard route to the same box. It stays lit while a filter
+          is typed, so a folder showing twelve of its tables says why. */}
+      {filterable ? (
+        <button
+          type="button"
+          className={`act node-act${filtering ? ' is-on' : ''}`}
+          tabIndex={-1}
+          aria-hidden="true"
+          title={`Filter ${label}`}
+          onClick={(event) => {
+            event.stopPropagation();
+            take(gkey);
+            openFilter(gkey);
+          }}
+        >
+          <Codicon name={filtering ? 'filter-filled' : 'filter'} />
+        </button>
       ) : null}
     </div>
   );
@@ -343,6 +378,93 @@ export const MemberRow = memo(function MemberRow(
           mostly nullable, and marking the majority would be noise. */}
       {nullable ? null : <span className="node-notnull" aria-hidden="true" />}
       <span className="node-tail mono">{type}</span>
+    </div>
+  );
+});
+
+/* ----------------------------------------------------------------- filter */
+
+/**
+ * A folder's filter box, drawn as the folder's first child.
+ *
+ * It is a treeitem like every row around it, so the arrow keys walk onto it and
+ * off it, and focus landing on the row passes straight to the input. The keys
+ * the input gives back — ↑, ↓, Enter and Escape — are handled by the panel's
+ * keyboard table, which is the only thing that knows the geometry.
+ */
+export const FilterRow = memo(function FilterRow(
+  props: Common & { folderKey: string; label: string; text: string; summary: string }
+) {
+  const { gkey, top, level, ariaLevel, posinset, setsize, folderKey, label, text, summary } = props;
+  const cursor = useIsCursor(gkey);
+  const input = useRef<HTMLInputElement>(null);
+  const asked = useFilterFocus(folderKey);
+
+  useEffect(() => {
+    const el = input.current;
+    if (asked && el) {
+      el.focus();
+      el.select();
+      consumeFilterFocus();
+    }
+  }, [asked]);
+
+  return (
+    <div
+      className={`node node-filter${cursor ? ' is-cursor' : ''}`}
+      role="treeitem"
+      aria-level={ariaLevel}
+      aria-posinset={posinset}
+      aria-setsize={setsize}
+      aria-label={`Filter ${label}${summary ? `, ${summary}` : ''}`}
+      data-id={gkey}
+      tabIndex={cursor ? 0 : -1}
+      style={{ top, height: H.node, ['--lvl' as string]: level }}
+      onFocus={(event) => {
+        if (event.target === event.currentTarget) {
+          input.current?.focus();
+        }
+      }}
+      onClick={() => take(gkey)}
+    >
+      <span className="twistie-gap" aria-hidden="true" />
+      <span className="node-glyph" aria-hidden="true">
+        <Codicon name="filter" />
+      </span>
+      <input
+        ref={input}
+        className="node-filter-input"
+        type="text"
+        value={text}
+        placeholder={`Filter ${label.toLowerCase()}`}
+        aria-label={`Filter ${label}`}
+        spellCheck={false}
+        tabIndex={-1}
+        onFocus={() => take(gkey)}
+        onChange={(event) => setFilterText(folderKey, event.target.value)}
+      />
+      {summary ? <span className="node-tail num">{summary}</span> : null}
+      <button
+        type="button"
+        className="act node-act is-on"
+        tabIndex={-1}
+        aria-hidden="true"
+        title="Close filter (Escape)"
+        onClick={(event) => {
+          event.stopPropagation();
+          closeFilter(folderKey);
+          take(folderKey);
+          // The box is gone after this commit, and focus would go with it to
+          // the body; it goes back to the folder that owned it instead.
+          requestAnimationFrame(() => {
+            document
+              .querySelector<HTMLElement>(`.spacer > [data-id="${CSS.escape(folderKey)}"]`)
+              ?.focus({ preventScroll: true });
+          });
+        }}
+      >
+        <Codicon name="close" />
+      </button>
     </div>
   );
 });

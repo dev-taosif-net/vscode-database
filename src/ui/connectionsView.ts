@@ -277,6 +277,7 @@ export class ConnectionsView implements vscode.WebviewViewProvider, vscode.Dispo
         profileId: request.profileId,
         database: request.database ?? '',
         node: request.node,
+        filter: request.filter,
         message: firstLine(errorMessage(error))
       });
     }

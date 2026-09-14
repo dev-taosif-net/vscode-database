@@ -13,6 +13,8 @@ export interface PageArgs {
   schema?: string;
   offset: number;
   limit: number;
+  /** Only objects whose name contains this, matched literally. */
+  filter?: string;
 }
 
 export interface PageResult {

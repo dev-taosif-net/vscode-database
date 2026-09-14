@@ -148,7 +148,15 @@ export type SidebarHostMessage =
   /** One folder's rows, cumulative: `objects` is the whole folder, not a page. */
   | ({ type: 'objects' } & ObjectPage)
   | ({ type: 'members' } & MemberList)
-  | { type: 'nodeError'; profileId: string; database: string; node: string; message: string }
+  | {
+      type: 'nodeError';
+      profileId: string;
+      database: string;
+      node: string;
+      /** Set when the failed read was a folder's filter rather than the folder. */
+      filter?: string;
+      message: string;
+    }
   /** Server-side matches, merged into whatever the panel already found. */
   | ({ type: 'searchAnswer' } & SearchAnswer)
   /**

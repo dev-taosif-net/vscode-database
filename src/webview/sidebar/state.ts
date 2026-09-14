@@ -16,7 +16,7 @@ import { ConnectionRow, SessionUpdate, SortOrder } from '../../shared/sidebar';
 import { EnvironmentId } from '../../types';
 import { Store, createStore, useStoreSelector } from '../state/store';
 import { post, readPersisted, writePersisted } from './api';
-import { CatalogMap, ConnectionCatalog, EMPTY_CATALOG, PAGE, Want } from './model';
+import { CatalogMap, ConnectionCatalog, EMPTY_CATALOG, FilterMap, PAGE, Want } from './model';
 
 export interface ListState {
   rows: ConnectionRow[];
@@ -145,6 +145,77 @@ export function toggleExpanded(key: string): void {
   setExpanded(key, !expandedStore.getState()[key]);
 }
 
+/* ---------------------------------------------------------- folder filters */
+
+/**
+ * Every folder that has a filter box open, and what is typed into it.
+ *
+ * Not persisted. A filter is a question asked of the folder right now, and a
+ * folder that reopened tomorrow still narrowed to `cust` would look like a
+ * folder that had lost its tables.
+ */
+export const filterStore: Store<FilterMap> = createStore<FilterMap>({});
+
+/** How long typing has to pause before a large folder asks the server. */
+const FILTER_DELAY_MS = 250;
+
+const filterTimers = new Map<string, number>();
+
+/** A request for the filter box of one folder to take focus once it can. */
+const filterFocusStore: Store<{ key: string | null; n: number }> = createStore<{ key: string | null; n: number }>({
+  key: null,
+  n: 0
+});
+
+/** Opens a folder's filter box, opening the folder too, and focuses the box. */
+export function openFilter(folderKey: string): void {
+  filterStore.setState((s) => (s[folderKey] ? s : { ...s, [folderKey]: { text: '', committed: '' } }));
+  setExpanded(folderKey, true);
+  filterFocusStore.setState((s) => ({ key: folderKey, n: s.n + 1 }));
+}
+
+export function setFilterText(folderKey: string, text: string): void {
+  filterStore.setState((s) => ({ ...s, [folderKey]: { text, committed: s[folderKey]?.committed ?? '' } }));
+  window.clearTimeout(filterTimers.get(folderKey));
+  filterTimers.set(
+    folderKey,
+    window.setTimeout(() => {
+      filterTimers.delete(folderKey);
+      filterStore.setState((s) => {
+        const held = s[folderKey];
+        return held && held.committed !== held.text ? { ...s, [folderKey]: { ...held, committed: held.text } } : s;
+      });
+    }, FILTER_DELAY_MS)
+  );
+}
+
+export function closeFilter(folderKey: string): void {
+  window.clearTimeout(filterTimers.get(folderKey));
+  filterTimers.delete(folderKey);
+  filterStore.setState((s) => {
+    if (!s[folderKey]) {
+      return s;
+    }
+    const next = { ...s };
+    delete next[folderKey];
+    return next;
+  });
+}
+
+/**
+ * A number that changes when this folder's box has been asked to take focus,
+ * and zero otherwise. The box focuses itself on a change and then consumes the
+ * request, so a row that is scrolled away and back does not steal focus again.
+ */
+export function useFilterFocus(folderKey: string): number {
+  const select = useCallback((s: { key: string | null; n: number }) => (s.key === folderKey ? s.n : 0), [folderKey]);
+  return useStoreSelector(filterFocusStore, select);
+}
+
+export function consumeFilterFocus(): void {
+  filterFocusStore.setState((s) => (s.key === null ? s : { ...s, key: null }));
+}
+
 /** The key a connection's own subtree is opened under. */
 export function connectionKey(profileId: string): string {
   return globalKey(profileId, '');
@@ -266,9 +337,28 @@ export function applyObjects(
   database: string,
   node: string,
   objects: DbObject[],
-  total: number
+  total: number,
+  filter?: string
 ): void {
   const key = catalogKey(profileId, database);
+  if (filter) {
+    // Answers can land out of order, and an answer for a filter the box no
+    // longer holds must not replace the one it does. Its guard is lifted so
+    // typing that filter again asks again rather than waiting for ever.
+    if (filterStore.getState()[globalKey(profileId, node)]?.committed.trim() !== filter) {
+      forgetFilterAsked(profileId, node, '');
+      return;
+    }
+    catalogStore.setState((s) => {
+      const held = s[key] ?? EMPTY_CATALOG;
+      return {
+        ...s,
+        [key]: { ...held, database, filtered: { ...held.filtered, [node]: { objects, total, filter } } }
+      };
+    });
+    forgetFilterAsked(profileId, node, filter);
+    return;
+  }
   catalogStore.setState((s) => {
     const held = s[key] ?? EMPTY_CATALOG;
     return {
@@ -289,8 +379,31 @@ export function applyMembers(profileId: string, database: string, node: string, 
   });
 }
 
-export function applyNodeError(profileId: string, database: string, node: string, message: string): void {
+export function applyNodeError(
+  profileId: string,
+  database: string,
+  node: string,
+  message: string,
+  filter?: string
+): void {
   const key = catalogKey(profileId, database);
+  if (filter) {
+    // Beside the folder, not in it: a filter that failed has not made the
+    // tables already on screen any less true.
+    catalogStore.setState((s) => {
+      const held = s[key] ?? EMPTY_CATALOG;
+      return {
+        ...s,
+        [key]: {
+          ...held,
+          database,
+          filtered: { ...held.filtered, [node]: { objects: [], total: 0, error: message, filter } }
+        }
+      };
+    });
+    forgetAsked(profileId);
+    return;
+  }
   catalogStore.setState((s) => {
     const held = s[key] ?? EMPTY_CATALOG;
     return {
@@ -343,6 +456,12 @@ export function retry(profileId: string, node: string): void {
   }
   catalogStore.setState((s) => {
     const held = s[key];
+    // A filter that failed is retried on its own; the folder under it is fine.
+    if (held?.filtered?.[node]?.error) {
+      const filtered = { ...held.filtered };
+      delete filtered[node];
+      return { ...s, [key]: { ...held, filtered } };
+    }
     if (!held || !held.nodes[node]) {
       return s;
     }
@@ -442,6 +561,9 @@ function forgetAsked(profileId: string): void {
   }
 }
 
+/** Separates a filter from the rest of a `node` key, because a filter may contain `:`. */
+const FILTER_MARK = String.fromCharCode(30);
+
 function keyOfWant(want: Want): string {
   switch (want.what) {
     case 'databases':
@@ -449,9 +571,26 @@ function keyOfWant(want: Want): string {
     case 'catalog':
       return `catalog:${catalogKey(want.profileId, want.database)}`;
     case 'node':
-      return `node:${want.profileId}:${want.node}:${want.offset}`;
+      return `node:${want.profileId}:${want.node}:${want.offset}${want.filter ? `${FILTER_MARK}${want.filter}` : ''}`;
     case 'members':
       return `members:${want.profileId}:${want.node}`;
+  }
+}
+
+/**
+ * Lifts the guard on a folder's filtered reads, all but the one for `keep`.
+ *
+ * Only the latest filter per folder is held, so a filter that has been
+ * replaced by another is no longer answered anywhere, and typing it again has
+ * to be able to ask again.
+ */
+function forgetFilterAsked(profileId: string, node: string, keep: string): void {
+  const prefix = `node:${profileId}:${node}:`;
+  for (const key of [...asked]) {
+    const mark = key.indexOf(FILTER_MARK);
+    if (mark >= 0 && key.startsWith(prefix) && key.slice(mark + 1) !== keep) {
+      asked.delete(key);
+    }
   }
 }
 
@@ -482,7 +621,8 @@ export function request(wants: readonly Want[]): void {
           kind: want.kind,
           schema: want.schema,
           offset: want.offset,
-          limit: PAGE
+          limit: PAGE,
+          ...(want.filter ? { filter: want.filter } : {})
         });
         break;
       case 'members':
@@ -510,6 +650,11 @@ export function loadMore(profileId: string, node: string, offset: number): void 
   if (!parsed || parsed.database === undefined) {
     return;
   }
+  // A folder showing a filtered answer pages through that answer rather than
+  // through the folder, because that is the list its `Load more` row counted.
+  const typed = filterStore.getState()[globalKey(profileId, node)];
+  const filter = typed && typed.text.trim() === typed.committed.trim() ? typed.committed.trim() : '';
+  const answer = catalogStore.getState()[catalogKey(profileId, parsed.database)]?.filtered?.[node];
   request([
     {
       what: 'node',
@@ -518,7 +663,8 @@ export function loadMore(profileId: string, node: string, offset: number): void 
       node,
       kind: parsed.kind as ObjectKind,
       schema: parsed.schema,
-      offset
+      offset,
+      ...(filter && answer?.filter === filter ? { filter } : {})
     }
   ]);
 }

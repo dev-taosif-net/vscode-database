@@ -900,8 +900,38 @@ mark {
 }
 
 .node:hover .node-act,
-.list:focus-within .node.is-cursor .node-act {
+.list:focus-within .node.is-cursor .node-act,
+.node-act.is-on {
   color: inherit;
+}
+
+/* A folder's filter box: one tree row, indented with the objects it narrows,
+   so it reads as the first thing inside the folder rather than as a toolbar. */
+.node-filter {
+  cursor: text;
+}
+
+.node-filter-input {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 18px;
+  margin-right: 6px;
+  padding: 0 4px;
+  border: 1px solid var(--vscode-input-border, transparent);
+  border-radius: 2px;
+  background: var(--vscode-input-background);
+  color: var(--vscode-input-foreground);
+  font: inherit;
+  outline: none;
+  user-select: text;
+}
+
+.node-filter-input:focus {
+  border-color: var(--vscode-focusBorder);
+}
+
+.node-filter-input::placeholder {
+  color: var(--vscode-input-placeholderForeground);
 }
 
 /* ------------------------------------------------- no match, empty state */

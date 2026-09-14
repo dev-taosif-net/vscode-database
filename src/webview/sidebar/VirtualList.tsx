@@ -13,10 +13,11 @@ import { NoMatch } from './EmptyState';
 import { GroupHeader, PinnedHeader } from './GroupHeader';
 import { Row } from './Row';
 import { StickyHeader } from './StickyHeader';
-import { DatabaseRow, FolderRow, MemberRow, NoteRow, ObjectRow, ResultsHeader, SchemaRow } from './TreeRow';
+import { DatabaseRow, FilterRow, FolderRow, MemberRow, NoteRow, ObjectRow, ResultsHeader, SchemaRow } from './TreeRow';
 import { parseQuery } from '../../shared/fuzzy';
 import {
   CatalogMap,
+  FilterMap,
   FlatItem,
   depthOf,
   flatten,
@@ -35,6 +36,7 @@ import {
   catalogStore,
   cursorStore,
   expandedStore,
+  filterStore,
   listStore,
   request,
   sessionStore,
@@ -63,6 +65,7 @@ const selQuery = (s: ListState) => s.query;
 const selCursor = (s: CursorState) => s.cursorId;
 const selCatalog = (s: CatalogMap) => s;
 const selExpanded = (s: ExpandedMap) => s;
+const selFilters = (s: FilterMap) => s;
 
 /**
  * A value, not an object, so `useSyncExternalStore` compares it with `Object.is`
@@ -134,6 +137,7 @@ export function VirtualList({ handle, initialTop, onTop }: Props): JSX.Element {
   const openKey = useStoreSelector(sessionStore, selOpenKey);
   const catalog = useStoreSelector(catalogStore, selCatalog);
   const expandedMap = useStoreSelector(expandedStore, selExpanded);
+  const filters = useStoreSelector(filterStore, selFilters);
 
   const open = useMemo(() => new Set(openKey ? openKey.split(' ') : []), [openKey]);
   const expanded = useMemo(() => new Set(Object.keys(expandedMap)), [expandedMap]);
@@ -147,14 +151,14 @@ export function VirtualList({ handle, initialTop, onTop }: Props): JSX.Element {
    * opens. Not per frame, not per scroll, and never for a spinner.
    */
   const geom = useMemo(() => {
-    const flat = flatten({ rows, grouped, sort, collapsed, query, open, catalog, expanded });
+    const flat = flatten({ rows, grouped, sort, collapsed, query, open, catalog, expanded, filters });
     return {
       ...measure(flat.items),
       matches: flat.matches,
       wanted: flat.wanted,
       counts: { matched: flat.matched, productionHidden: flat.productionHidden, objectHits: flat.objectHits }
     };
-  }, [rows, grouped, sort, collapsed, query, open, catalog, expanded]);
+  }, [rows, grouped, sort, collapsed, query, open, catalog, expanded, filters]);
 
   /**
    * Whatever the tree is waiting for, asked for once.
@@ -531,6 +535,21 @@ export function VirtualList({ handle, initialTop, onTop }: Props): JSX.Element {
             mark={item.mark}
             expanded={item.expanded}
             alwaysCount={item.mark === 'favourite'}
+            filterable={item.filterable}
+            filtering={item.filtering}
+            {...shared}
+          />
+        );
+      case 'filter':
+        return (
+          <FilterRow
+            key={item.key}
+            gkey={item.key}
+            level={item.level}
+            folderKey={item.folderKey}
+            label={item.label}
+            text={item.text}
+            summary={item.summary}
             {...shared}
           />
         );
@@ -563,7 +582,7 @@ export function VirtualList({ handle, initialTop, onTop }: Props): JSX.Element {
             expandable={item.expandable}
             expanded={item.expanded}
             favourite={item.favourite}
-            needle={objectNeedle}
+            needle={item.needle || objectNeedle}
             {...shared}
           />
         );

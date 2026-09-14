@@ -46,6 +46,8 @@ interface NodeCache {
   objects: DbObject[];
   total: number;
   at: number;
+  /** The name filter this answer is for, on the entry held beside a folder. */
+  filter?: string;
 }
 
 /**
@@ -179,40 +181,53 @@ export class CatalogService implements vscode.Disposable {
    * meet the end of what is held is a request that has already been answered.
    */
   async page(request: ObjectPageRequest): Promise<ObjectPage> {
-    const key = `${this.scope(request.profileId, request.database)}:${request.node}`;
+    const filter = request.filter?.trim() || undefined;
+    // A filtered folder is held beside the folder rather than in it, and only
+    // for its latest filter: one entry per folder however many keystrokes it
+    // took, and the unfiltered folder is never overwritten by a subset of it.
+    const key = `${this.scope(request.profileId, request.database)}:${request.node}${filter ? ':filter' : ''}`;
     const held = this.nodes.get(key);
 
-    if (held && Date.now() - held.at < TTL_MS && held.objects.length >= request.offset + 1) {
+    if (
+      held &&
+      held.filter === filter &&
+      Date.now() - held.at < TTL_MS &&
+      held.objects.length >= request.offset + 1
+    ) {
       return {
         profileId: request.profileId,
         node: request.node,
         database: request.database,
+        filter,
         offset: 0,
         objects: held.objects,
         total: held.total
       };
     }
 
-    return this.once(`page:${key}:${request.offset}`, async () => {
+    return this.once(`page:${key}:${filter ?? ''}:${request.offset}`, async () => {
       const { session, engine } = await this.resolve(request.profileId, request.database);
       const result = await engine.page(session, {
         kind: request.kind,
         schema: request.schema,
         offset: request.offset,
-        limit: request.limit || PAGE
+        limit: request.limit || PAGE,
+        filter
       });
 
-      const previous = request.offset > 0 ? (this.nodes.get(key)?.objects ?? []) : [];
+      const before = this.nodes.get(key);
+      const previous = request.offset > 0 && before && before.filter === filter ? before.objects : [];
       const objects =
         request.offset > 0 && previous.length === request.offset
           ? [...previous, ...result.objects]
           : result.objects;
 
-      this.nodes.set(key, { objects, total: result.total, at: Date.now() });
+      this.nodes.set(key, { objects, total: result.total, at: Date.now(), filter });
       return {
         profileId: request.profileId,
         node: request.node,
         database: request.database,
+        filter,
         offset: 0,
         objects,
         total: result.total

@@ -7,7 +7,7 @@ import { EmptyState } from './EmptyState';
 import { Footer } from './Footer';
 import { SearchBand } from './SearchBand';
 import { ListHandle, VirtualList } from './VirtualList';
-import { FlatItem, databaseOfKey, expansionOf, isHeader, profileOfKey } from './model';
+import { FlatItem, databaseOfKey, expansionOf, isHeader, keyOf, profileOfKey } from './model';
 import {
   ListState,
   applyCatalogError,
@@ -19,7 +19,10 @@ import {
   applySearchAnswer,
   applySummary,
   clearCatalog,
+  closeFilter,
   collapseTree,
+  openFilter,
+  setFilterText,
   connectionKey,
   cursorStore,
   fold,
@@ -146,7 +149,14 @@ export function Sidebar(): JSX.Element {
           return;
 
         case 'objects':
-          applyObjects(message.profileId, message.database ?? '', message.node, message.objects, message.total);
+          applyObjects(
+            message.profileId,
+            message.database ?? '',
+            message.node,
+            message.objects,
+            message.total,
+            message.filter
+          );
           return;
 
         case 'members':
@@ -154,7 +164,7 @@ export function Sidebar(): JSX.Element {
           return;
 
         case 'nodeError':
-          applyNodeError(message.profileId, message.database, message.node, message.message);
+          applyNodeError(message.profileId, message.database, message.node, message.message, message.filter);
           return;
 
         case 'searchAnswer':
@@ -341,6 +351,59 @@ export function Sidebar(): JSX.Element {
   };
 
   /**
+   * The keys a folder's filter box gives back to the tree.
+   *
+   * Everything else — letters, the caret keys, Home and End — belongs to the
+   * input, which is why this runs ahead of the table below rather than inside
+   * it: the table would otherwise send every letter to the search box.
+   */
+  const filterKey = (event: KeyboardEvent<HTMLDivElement>, target: HTMLElement): void => {
+    const handle = list.current;
+    const key = target.closest<HTMLElement>('[data-id]')?.dataset.id;
+    if (!handle || !key) {
+      return;
+    }
+    const items = handle.items();
+    const i = items.findIndex((item) => keyOf(item) === key);
+    const item = items[i];
+    if (!item || item.kind !== 'filter') {
+      return;
+    }
+    switch (event.key) {
+      case 'Escape': {
+        event.preventDefault();
+        // Once to clear, twice to close, the way the workbench's own find
+        // widgets behave.
+        if (item.text !== '') {
+          setFilterText(item.folderKey, '');
+          return;
+        }
+        const folder = items.findIndex((candidate) => keyOf(candidate) === item.folderKey);
+        closeFilter(item.folderKey);
+        if (folder >= 0) {
+          handle.focusIndex(folder);
+        }
+        return;
+      }
+      case 'ArrowDown':
+      case 'Enter':
+        event.preventDefault();
+        if (i + 1 < items.length) {
+          handle.focusIndex(i + 1);
+        }
+        return;
+      case 'ArrowUp':
+        event.preventDefault();
+        if (i > 0) {
+          handle.focusIndex(i - 1);
+        }
+        return;
+      default:
+        return;
+    }
+  };
+
+  /**
    * The whole keyboard model, in one table.
    *
    * It is bound to the panel rather than to each row because a virtualized row
@@ -354,6 +417,11 @@ export function Sidebar(): JSX.Element {
     if ((event.key === 'f' || event.key === 'F') && (event.ctrlKey || event.metaKey)) {
       event.preventDefault();
       focusSearch(true);
+      return;
+    }
+
+    if (target?.classList.contains('node-filter-input')) {
+      filterKey(event, target);
       return;
     }
 
@@ -515,6 +583,16 @@ export function Sidebar(): JSX.Element {
         }
         return;
       }
+
+      case '/':
+        // A folder's own filter. Anywhere else `/` is a printable character
+        // like any other and goes to the search box below.
+        if (item.kind === 'folder' && item.filterable) {
+          event.preventDefault();
+          openFilter(item.key);
+          return;
+        }
+        break;
 
       default:
         break;

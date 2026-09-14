@@ -97,7 +97,12 @@ export class PostgresCatalog implements CatalogQueries {
       prokind: version >= PROKIND_SINCE,
       sequences: version >= PG_SEQUENCES_SINCE
     });
-    const rows = await session.query<PageRow>(sql, [args.schema ?? null, args.limit, args.offset]);
+    const rows = await session.query<PageRow>(sql, [
+      args.schema ?? null,
+      args.limit,
+      args.offset,
+      args.filter?.trim() ? `%${escapeLike(args.filter.trim())}%` : null
+    ]);
     return {
       objects: rows.map((row) => ({
         kind: args.kind,
@@ -416,7 +421,9 @@ interface Features {
 }
 
 function pageStatement(args: PageArgs, features: Features): string {
-  const filter = '($1::text IS NULL OR n.nspname = $1)';
+  // `$4` is the folder's own name filter, null when there is none. `ILIKE`,
+  // because PostgreSQL's `LIKE` is case-sensitive and a filter box is not.
+  const filter = (name: string) => `($1::text IS NULL OR n.nspname = $1) AND ($4::text IS NULL OR ${name} ILIKE $4)`;
   const tail = 'LIMIT $2 OFFSET $3';
   const total = 'count(*) OVER () AS total';
 
@@ -429,7 +436,7 @@ function pageStatement(args: PageArgs, features: Features): string {
                (SELECT count(*) FROM pg_attribute a
                 WHERE a.attrelid = c.oid AND a.attnum > 0 AND NOT a.attisdropped) AS n
         FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
-        WHERE c.relkind IN (${kinds}) AND ${VISIBLE_SCHEMA} AND ${filter}
+        WHERE c.relkind IN (${kinds}) AND ${VISIBLE_SCHEMA} AND ${filter('c.relname')}
         ORDER BY n.nspname, c.relname
         ${tail}`;
     }
@@ -445,7 +452,7 @@ function pageStatement(args: PageArgs, features: Features): string {
         SELECT n.nspname AS sch, p.proname AS nm, p.pronargs AS n, ${total},
                CASE WHEN p.proretset THEN 'set' ELSE '' END AS extra
         FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
-        WHERE ${predicate} AND ${VISIBLE_SCHEMA} AND ${filter}
+        WHERE ${predicate} AND ${VISIBLE_SCHEMA} AND ${filter('p.proname')}
         ORDER BY n.nspname, p.proname
         ${tail}`;
     }
@@ -457,7 +464,7 @@ function pageStatement(args: PageArgs, features: Features): string {
         FROM pg_trigger t
         JOIN pg_class c ON c.oid = t.tgrelid
         JOIN pg_namespace n ON n.oid = c.relnamespace
-        WHERE NOT t.tgisinternal AND ${VISIBLE_SCHEMA} AND ${filter}
+        WHERE NOT t.tgisinternal AND ${VISIBLE_SCHEMA} AND ${filter('t.tgname')}
         ORDER BY n.nspname, c.relname, t.tgname
         ${tail}`;
 
@@ -471,7 +478,7 @@ function pageStatement(args: PageArgs, features: Features): string {
         FROM pg_class c
         JOIN pg_namespace n ON n.oid = c.relnamespace
         ${features.sequences ? 'LEFT JOIN pg_sequences q ON q.schemaname = n.nspname AND q.sequencename = c.relname' : ''}
-        WHERE c.relkind = 'S' AND ${VISIBLE_SCHEMA} AND ${filter}
+        WHERE c.relkind = 'S' AND ${VISIBLE_SCHEMA} AND ${filter('c.relname')}
         ORDER BY n.nspname, c.relname
         ${tail}`;
 
@@ -483,7 +490,7 @@ function pageStatement(args: PageArgs, features: Features): string {
         FROM pg_type t
         JOIN pg_namespace n ON n.oid = t.typnamespace
         LEFT JOIN pg_class c ON c.oid = t.typrelid
-        WHERE ${VISIBLE_SCHEMA} AND ${filter}
+        WHERE ${VISIBLE_SCHEMA} AND ${filter('t.typname')}
           AND (t.typtype IN ('e', 'd') OR (t.typtype = 'c' AND c.relkind = 'c'))
         ORDER BY n.nspname, t.typname
         ${tail}`;

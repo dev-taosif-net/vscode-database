@@ -313,6 +313,12 @@ export interface ObjectPageRequest {
   database?: string;
   offset: number;
   limit: number;
+  /**
+   * A folder's own filter: only objects whose name contains this. Sent only
+   * when the folder holds more than one page, because a folder that is fully
+   * loaded is filtered in the panel without asking.
+   */
+  filter?: string;
 }
 
 export interface ObjectPage {
@@ -320,6 +326,8 @@ export interface ObjectPage {
   node: string;
   /** Echoed from the request, so the panel knows whose catalog to fill. */
   database?: string;
+  /** Echoed from the request. A filtered page never lands in the folder itself. */
+  filter?: string;
   offset: number;
   objects: DbObject[];
   /** How many there are in total, so "Load more" can say how many are left. */

@@ -108,7 +108,27 @@ export interface ConnectionCatalog {
   members: Readonly<Record<string, DbMember[]>>;
   /** The last server-side search answer, and the query it answers. */
   hits?: { query: string; objects: DbObject[]; capped: boolean };
+  /**
+   * A folder's filtered answer from the server, keyed like `nodes`. Only the
+   * latest filter per folder is held, and only folders too large to have been
+   * read whole ever ask for one.
+   */
+  filtered?: Readonly<Record<string, CatalogNode & { filter: string }>>;
 }
+
+/**
+ * A folder's own filter, keyed by the folder's global key.
+ *
+ * `text` is what is in the box, and filters what is already loaded on every
+ * keystroke. `committed` is the same text once typing pauses, and it is what
+ * the server is asked for — one query per pause rather than one per character.
+ */
+export interface FolderFilter {
+  text: string;
+  committed: string;
+}
+
+export type FilterMap = Readonly<Record<string, FolderFilter>>;
 
 export type CatalogMap = Readonly<Record<string, ConnectionCatalog>>;
 
@@ -157,6 +177,26 @@ export type FlatItem =
       count: number;
       mark: IconMark;
       expanded: boolean;
+      /** The folder holds objects, so it offers a filter box. */
+      filterable: boolean;
+      /** Its filter box has something typed into it. */
+      filtering: boolean;
+    }
+  | {
+      /**
+       * A folder's filter box, drawn as the folder's first child.
+       *
+       * `summary` is what the right-hand column says — `12 of 1,240`, or that
+       * the rest of the folder is still being searched.
+       */
+      kind: 'filter';
+      key: string;
+      /** The folder's own global key, which is what the filter is stored under. */
+      folderKey: string;
+      level: number;
+      label: string;
+      text: string;
+      summary: string;
     }
   | {
       kind: 'schema';
@@ -185,6 +225,8 @@ export type FlatItem =
       expandable: boolean;
       expanded: boolean;
       favourite: boolean;
+      /** The folder filter it is shown because of, to mark in the name. Empty otherwise. */
+      needle: string;
     }
   | {
       kind: 'database';
@@ -425,6 +467,8 @@ export type Want =
       kind: ObjectKind;
       schema?: string;
       offset: number;
+      /** A folder's committed filter, when the folder is too large to filter locally. */
+      filter?: string;
     }
   | { what: 'members'; profileId: string; database: string; node: string; ref: FavouriteRef };
 
@@ -439,6 +483,8 @@ interface FlattenInput {
   catalog: CatalogMap;
   /** Global keys — `profileId + separator + node` — that are open. */
   expanded: ReadonlySet<string>;
+  /** Folder global key to the filter box open on it. */
+  filters: FilterMap;
 }
 
 interface Flattened {
@@ -647,7 +693,10 @@ function children(row: ConnectionRow, input: FlattenInput, items: FlatItem[], wa
       label: 'System Databases',
       count: system.length,
       mark: 'folder',
-      expanded: open
+      expanded: open,
+      // It holds databases, not objects, and there are only ever four.
+      filterable: false,
+      filtering: false
     });
     if (open) {
       for (const name of system) {
@@ -740,22 +789,36 @@ function databaseChildren(
      and a folder that appears only once you have used the feature is a folder
      nobody discovers. */
   const favourites = at(FAVOURITES_NODE);
+  const favouritesKey = gkey(row.id, favourites);
+  const favouritesFilter = input.filters[favouritesKey];
   items.push({
     kind: 'folder',
-    key: gkey(row.id, favourites),
+    key: favouritesKey,
     profileId: row.id,
     node: favourites,
     level,
     label: 'Favourites',
     count: pinned.length,
     mark: 'favourite',
-    expanded: isOpen(favourites)
+    expanded: isOpen(favourites),
+    filterable: true,
+    filtering: needleOf(favouritesFilter) !== ''
   });
   if (isOpen(favourites)) {
+    // Pins are all in memory, so this folder is only ever filtered locally.
+    const needle = needleOf(favouritesFilter);
+    const shown = needle ? pinned.filter((pin) => pin.name.toLowerCase().includes(needle)) : pinned;
+    if (favouritesFilter) {
+      items.push(
+        filterItem(favouritesKey, level + 1, 'Favourites', favouritesFilter, needle ? `${shown.length} of ${pinned.length}` : '')
+      );
+    }
     if (pinned.length === 0) {
       items.push(note(row.id, favourites, level + 1, 'empty', 'Right-click an object to pin it here'));
+    } else if (shown.length === 0) {
+      items.push(note(row.id, favourites, level + 1, 'empty', 'No favourites match'));
     } else {
-      for (const pin of pinned) {
+      for (const pin of shown) {
         emitObject(
           { kind: pin.kind, schema: pin.schema, name: pin.name, detail: KINDS[pin.kind].singular },
           row,
@@ -765,7 +828,8 @@ function databaseChildren(
           database,
           level + 1,
           true,
-          pins
+          pins,
+          needle
         );
       }
     }
@@ -782,6 +846,7 @@ function databaseChildren(
         continue;
       }
       const node = at(kindNode(kind));
+      const filter = input.filters[gkey(row.id, node)];
       items.push({
         kind: 'folder',
         key: gkey(row.id, node),
@@ -791,10 +856,12 @@ function databaseChildren(
         label: KINDS[kind].plural,
         count,
         mark: 'folder',
-        expanded: isOpen(node)
+        expanded: isOpen(node),
+        filterable: true,
+        filtering: needleOf(filter) !== ''
       });
       if (isOpen(node)) {
-        objects(row, input, items, wanted, database, node, kind, undefined, level + 1, pins);
+        objects(row, input, items, wanted, database, node, kind, undefined, level + 1, pins, filter);
       }
     }
     return;
@@ -821,6 +888,7 @@ function databaseChildren(
         continue;
       }
       const child = at(schemaKindNode(schema.name, kind));
+      const filter = input.filters[gkey(row.id, child)];
       items.push({
         kind: 'folder',
         key: gkey(row.id, child),
@@ -830,16 +898,50 @@ function databaseChildren(
         label: KINDS[kind].plural,
         count,
         mark: 'folder',
-        expanded: isOpen(child)
+        expanded: isOpen(child),
+        filterable: true,
+        filtering: needleOf(filter) !== ''
       });
       if (isOpen(child)) {
-        objects(row, input, items, wanted, database, child, kind, schema.name, level + 2, pins);
+        objects(row, input, items, wanted, database, child, kind, schema.name, level + 2, pins, filter);
       }
     }
   }
 }
 
-/** One folder's rows, plus whatever it is still waiting for. */
+type FilterItem = Extract<FlatItem, { kind: 'filter' }>;
+
+/** A filter's name part, trimmed and lower-cased the way `segments` wants it. */
+function needleOf(filter: FolderFilter | undefined): string {
+  return filter ? filter.text.trim().toLowerCase() : '';
+}
+
+function filterItem(folderKey: string, level: number, label: string, filter: FolderFilter, summary: string): FilterItem {
+  return { kind: 'filter', key: `${folderKey}${SEP}filter`, folderKey, level, label, text: filter.text, summary };
+}
+
+function moreNote(profileId: string, node: string, level: number, loaded: number, total: number): FlatItem {
+  return {
+    kind: 'note',
+    key: `${gkey(profileId, node)}${SEP}more`,
+    profileId,
+    node,
+    level,
+    tone: 'more',
+    text: `Load ${Math.min(total - loaded, PAGE)} more of ${total.toLocaleString()}`,
+    offset: loaded
+  };
+}
+
+/**
+ * One folder's rows, plus whatever it is still waiting for.
+ *
+ * With a filter typed, the folder is narrowed to the objects whose name
+ * contains it. A folder read whole is narrowed right here, on every keystroke.
+ * A folder that has only its first pages narrows what it holds at once and,
+ * once typing pauses, asks the server for the rest — so a filter never quietly
+ * answers "nothing" about the eight hundred tables that were never loaded.
+ */
 function objects(
   row: ConnectionRow,
   input: FlattenInput,
@@ -850,14 +952,30 @@ function objects(
   kind: ObjectKind,
   schema: string | undefined,
   level: number,
-  pins: ReadonlySet<string>
+  pins: ReadonlySet<string>,
+  filter: FolderFilter | undefined
 ): void {
   const catalog = input.catalog[catalogKey(row.id, database)] ?? EMPTY_CATALOG;
   const held = catalog.nodes[node];
+  const plural = KINDS[kind].plural.toLowerCase();
+  const qualify = schema === undefined;
+  const needle = needleOf(filter);
+
+  // The box is the folder's first child in every state, so it does not jump
+  // when the first page lands underneath it.
+  const box = filter ? filterItem(gkey(row.id, node), level, KINDS[kind].plural, filter, '') : null;
+  const say = (summary: string): void => {
+    if (box) {
+      box.summary = summary;
+    }
+  };
+  if (box) {
+    items.push(box);
+  }
 
   if (!held) {
     wanted.push({ what: 'node', profileId: row.id, database, node, kind, schema, offset: 0 });
-    items.push(note(row.id, node, level, 'loading', `Reading ${KINDS[kind].plural.toLowerCase()}`));
+    items.push(note(row.id, node, level, 'loading', `Reading ${plural}`));
     return;
   }
   if (held.error) {
@@ -869,23 +987,63 @@ function objects(
     return;
   }
 
-  for (const object of held.objects) {
-    emitObject(object, row, input, items, wanted, database, level, schema === undefined, pins);
+  if (!needle) {
+    for (const object of held.objects) {
+      emitObject(object, row, input, items, wanted, database, level, qualify, pins);
+    }
+    if (held.total > held.objects.length) {
+      items.push(moreNote(row.id, node, level, held.objects.length, held.total));
+    }
+    return;
   }
 
-  const remaining = held.total - held.objects.length;
-  if (remaining > 0) {
-    items.push({
-      kind: 'note',
-      key: `${gkey(row.id, node)}${SEP}more`,
-      profileId: row.id,
-      node,
-      level,
-      tone: 'more',
-      text: `Load ${Math.min(remaining, PAGE)} more of ${held.total.toLocaleString()}`,
-      offset: held.objects.length
-    });
+  const total = held.total.toLocaleString();
+  const local = held.objects.filter((object) => object.name.toLowerCase().includes(needle));
+
+  if (held.objects.length >= held.total) {
+    say(`${local.length.toLocaleString()} of ${total}`);
+    if (local.length === 0) {
+      items.push(note(row.id, node, level, 'empty', `No ${plural} match`));
+    }
+    for (const object of local) {
+      emitObject(object, row, input, items, wanted, database, level, qualify, pins, needle);
+    }
+    return;
   }
+
+  // The server is asked only for the text typing has paused on.
+  const committed = filter ? filter.committed.trim() : '';
+  const settled = committed !== '' && committed.toLowerCase() === needle;
+  const answer = catalog.filtered?.[node];
+
+  if (settled && answer && answer.filter === committed) {
+    if (answer.error) {
+      items.push(note(row.id, node, level, 'error', answer.error));
+      return;
+    }
+    say(`${answer.total.toLocaleString()} of ${total}`);
+    if (answer.objects.length === 0) {
+      items.push(note(row.id, node, level, 'empty', `No ${plural} match`));
+      return;
+    }
+    for (const object of answer.objects) {
+      emitObject(object, row, input, items, wanted, database, level, qualify, pins, needle);
+    }
+    if (answer.total > answer.objects.length) {
+      items.push(moreNote(row.id, node, level, answer.objects.length, answer.total));
+    }
+    return;
+  }
+
+  // Still typing, or the answer is on its way: what is loaded matches now.
+  if (settled) {
+    wanted.push({ what: 'node', profileId: row.id, database, node, kind, schema, offset: 0, filter: committed });
+  }
+  say(`${local.length.toLocaleString()}+ of ${total}`);
+  for (const object of local) {
+    emitObject(object, row, input, items, wanted, database, level, qualify, pins, needle);
+  }
+  items.push(note(row.id, node, level, 'loading', `Searching all ${total} ${plural}`));
 }
 
 /** One object, and its columns or parameters when it is open. */
@@ -898,7 +1056,9 @@ function emitObject(
   database: string,
   level: number,
   qualify: boolean,
-  pins: ReadonlySet<string>
+  pins: ReadonlySet<string>,
+  /** A folder filter to mark in the name, when the object is shown because of one. */
+  needle = ''
 ): void {
   const ref: FavouriteRef = { kind: object.kind, schema: object.schema, name: object.name, database };
   const node = inDatabase(database, memberNode(ref));
@@ -919,7 +1079,8 @@ function emitObject(
     qualify,
     expandable,
     expanded,
-    favourite: pins.has(favouriteKey(ref))
+    favourite: pins.has(favouriteKey(ref)),
+    needle
   });
 
   if (!expanded) {
