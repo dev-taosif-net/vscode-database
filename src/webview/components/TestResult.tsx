@@ -79,17 +79,17 @@ export function TestResult() {
       <Codicon name="error" />
       <div className="result-body">
         <strong>{failure.title}</strong>
-        <p className="what">
-          <span className="tag">What happened</span>
+        {/* One line only: the detail is clipped, and the tooltip carries all of it. */}
+        <span className="what" title={failure.detail}>
           {failure.detail}
-        </p>
+        </span>
         {failure.actions.length ? (
           <div className="result-actions">
             {failure.actions.map((action) => (
               <button
                 key={action.id}
                 type="button"
-                className={action.weakening ? 'btn ghost weakening' : 'btn outline'}
+                className={action.weakening ? 'link-btn weakening' : 'link-btn'}
                 onClick={() => {
                   const id = store.getState().draft?.id;
                   if (id) {
