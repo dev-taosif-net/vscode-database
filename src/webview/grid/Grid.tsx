@@ -183,7 +183,19 @@ export function Grid(props: GridProps): JSX.Element {
   return (
     <div className="grid" onKeyDown={onKeyDown} tabIndex={0} role="grid" aria-rowcount={count}>
       <div className="grid-header" style={{ transform: `translateX(${-scroll.left}px)`, width: total + GUTTER }}>
-        <div className="grid-hcell grid-gutter" style={{ width: GUTTER }} />
+        {/* The corner's right-click menu is the workbench's, so its items are
+            commands; `gridCorner` is what their `when` clauses read. */}
+        <div
+          className="grid-hcell grid-gutter grid-corner"
+          style={{ width: GUTTER }}
+          title="Right-click to copy headers"
+          data-vscode-context={JSON.stringify({
+            webviewSection: 'gridCorner',
+            executionId,
+            setIndex: set.index,
+            preventDefaultContextMenuItems: true
+          })}
+        />
         <div style={{ width: columns.before }} />
         {visibleColumns.map(({ column, index }) => {
           const sorted = set.sort?.column === index ? set.sort : undefined;

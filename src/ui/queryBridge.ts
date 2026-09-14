@@ -362,4 +362,29 @@ export class QueryBridge {
     await vscode.env.clipboard.writeText(text);
     post({ type: 'copied', cells: sliced.length * columns.length });
   }
+
+  /**
+   * A whole result set, from the grid's corner menu: its headers alone, or its
+   * headers over every row the grid is showing. Returns what to tell the user,
+   * or undefined when the set is gone.
+   */
+  async copySet(executionId: string, setIndex: number, withRows: boolean): Promise<string | undefined> {
+    const record = this.results.get(executionId);
+    const set = record?.sets[setIndex];
+    if (!record || !set) {
+      return undefined;
+    }
+    const profile = this.store.get(record.profileId);
+    const rows = withRows ? await this.results.read(set, 0, this.results.visibleCount(set)) : [];
+    const text = renderCopy(
+      set.columns,
+      rows,
+      withRows ? 'tsv-headers' : 'headers',
+      record.table?.ref,
+      profile?.driver ?? 'mssql'
+    );
+    await vscode.env.clipboard.writeText(text);
+    const headers = `${set.columns.length.toLocaleString('en-US')} headers`;
+    return withRows ? `Copied ${headers} and ${rows.length.toLocaleString('en-US')} rows.` : `Copied ${headers}.`;
+  }
 }

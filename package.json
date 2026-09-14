@@ -137,6 +137,18 @@
         "icon": "$(copy)"
       },
       {
+        "command": "databaseTools.copyHeaders",
+        "title": "Copy Headers",
+        "category": "Database",
+        "icon": "$(copy)"
+      },
+      {
+        "command": "databaseTools.copyHeadersWithData",
+        "title": "Copy Headers with Data",
+        "category": "Database",
+        "icon": "$(copy)"
+      },
+      {
         "command": "databaseTools.refreshCatalog",
         "title": "Refresh Objects",
         "category": "Database",
@@ -595,6 +607,14 @@
           "when": "false"
         },
         {
+          "command": "databaseTools.copyHeaders",
+          "when": "false"
+        },
+        {
+          "command": "databaseTools.copyHeadersWithData",
+          "when": "false"
+        },
+        {
           "command": "databaseTools.enableSchemaMode",
           "when": "false"
         },
@@ -844,6 +864,16 @@
           "command": "databaseTools.copyServerAddress",
           "when": "webviewSection == 'connection'",
           "group": "4_copy@1"
+        },
+        {
+          "command": "databaseTools.copyHeaders",
+          "when": "webviewSection == 'gridCorner'",
+          "group": "1_copy@1"
+        },
+        {
+          "command": "databaseTools.copyHeadersWithData",
+          "when": "webviewSection == 'gridCorner'",
+          "group": "1_copy@2"
         },
         {
           "command": "databaseTools.deleteConnection",

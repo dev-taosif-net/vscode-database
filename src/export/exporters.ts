@@ -216,6 +216,8 @@ export function renderCopy(
   driver: DriverKind
 ): string {
   switch (shape) {
+    case 'headers':
+      return columns.map((column) => column.name).join('\t');
     case 'tsv':
       return rows.map((row) => row.map((cell) => cellText(cell).replace(/[\t\r\n]+/g, ' ')).join('\t')).join('\n');
     case 'tsv-headers':

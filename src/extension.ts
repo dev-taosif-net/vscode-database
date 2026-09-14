@@ -27,7 +27,7 @@ import { ActiveConnectionContext } from './ui/activeConnectionContext';
 import { WorkspacePanels } from './ui/workspacePanels';
 import { WorkspaceStatusBar } from './ui/workspaceStatusBar';
 import { DetailsAction } from './shared/details';
-import { ConnectionProfile, effectiveDatabase, environmentLabel, homeDatabase } from './types';
+import { ConnectionProfile, effectiveDatabase, environmentLabel, errorMessage, homeDatabase } from './types';
 
 /**
  * A command arrives from the palette with nothing, from the sidebar with a
@@ -35,6 +35,9 @@ import { ConnectionProfile, effectiveDatabase, environmentLabel, homeDatabase } 
  * put in its `data-vscode-context`.
  */
 type CommandTarget = string | { connectionId?: unknown } | undefined;
+
+/** What the grid's corner cell puts in its `data-vscode-context`. */
+type GridCornerTarget = { executionId?: unknown; setIndex?: unknown };
 
 /**
  * The details panel's quick actions, as the commands that already do them.
@@ -283,6 +286,22 @@ export function activate(context: vscode.ExtensionContext): void {
     ConnectionsPanel.current?.forget(profile.id);
   }
 
+  async function copyFromCorner(target: GridCornerTarget | undefined, withRows: boolean): Promise<void> {
+    const executionId = target?.executionId;
+    const setIndex = target?.setIndex;
+    if (typeof executionId !== 'string' || typeof setIndex !== 'number') {
+      return;
+    }
+    try {
+      const note = await bridge.copySet(executionId, setIndex, withRows);
+      if (note) {
+        vscode.window.setStatusBarMessage(note, 3000);
+      }
+    } catch (error) {
+      void vscode.window.showErrorMessage(errorMessage(error));
+    }
+  }
+
   context.subscriptions.push(
     vscode.commands.registerCommand('databaseTools.openConnections', (target?: CommandTarget) => {
       ConnectionsPanel.show(context, store, manager, targetId(target));
@@ -412,6 +431,15 @@ export function activate(context: vscode.ExtensionContext): void {
      * commands rather than one that flips, because a menu item has to say what
      * it will do before you click it.
      */
+    // The grid corner's menu. The attribute carries which result set it sits
+    // over, and the copy runs through the bridge like every other grid copy.
+    vscode.commands.registerCommand('databaseTools.copyHeaders', (target?: GridCornerTarget) =>
+      copyFromCorner(target, false)
+    ),
+    vscode.commands.registerCommand('databaseTools.copyHeadersWithData', (target?: GridCornerTarget) =>
+      copyFromCorner(target, true)
+    ),
+
     vscode.commands.registerCommand('databaseTools.enableSchemaMode', async (target?: CommandTarget) => {
       const id = targetId(target);
       if (id) {

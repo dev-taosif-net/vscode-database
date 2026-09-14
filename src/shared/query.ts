@@ -217,7 +217,7 @@ export interface CellRange {
   right: number;
 }
 
-export type CopyShape = 'tsv' | 'tsv-headers' | 'csv' | 'json' | 'insert' | 'markdown';
+export type CopyShape = 'headers' | 'tsv' | 'tsv-headers' | 'csv' | 'json' | 'insert' | 'markdown';
 export type ExportFormat = 'csv' | 'tsv' | 'json' | 'sql' | 'markdown' | 'xlsx';
 
 /* ------------------------------------------------------------------ wire */

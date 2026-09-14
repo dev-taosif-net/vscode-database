@@ -394,6 +394,14 @@ body {
   z-index: 1;
 }
 
+.grid-corner {
+  cursor: context-menu;
+}
+
+.grid-corner:hover {
+  background: var(--hover);
+}
+
 .grid-cell.is-selected {
   background: var(--sel);
 }
