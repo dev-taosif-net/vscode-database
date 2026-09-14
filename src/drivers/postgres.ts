@@ -299,6 +299,14 @@ class PostgresSession implements DriverSession {
       /** The result object the rows arriving now belong to. */
       let openResult: unknown;
       const seen = new Set<unknown>();
+      /** Every column announced, with where it came from, for the nullability read. */
+      const described: Described[] = [];
+      const describe = (fields: FieldDef[]): ColumnMeta[] =>
+        fields.map((field) => {
+          const meta = toColumnMeta(field);
+          described.push({ meta, field });
+          return meta;
+        });
 
       const flush = () => {
         if (buffer.length) {
@@ -328,7 +336,7 @@ class PostgresSession implements DriverSession {
           }
           openResult = result;
           seen.add(result);
-          sink.columns(fieldsOf(result).map(toColumnMeta));
+          sink.columns(describe(fieldsOf(result)));
         }
         if (sink.wants() <= 0) {
           truncated = true;
@@ -382,13 +390,15 @@ class PostgresSession implements DriverSession {
           }
           const fields = fieldsOf(result);
           if (fields.length) {
-            sink.columns(fields.map(toColumnMeta));
+            sink.columns(describe(fields));
             sink.complete();
           } else {
             sink.complete((result as QueryResult | undefined)?.rowCount ?? 0);
           }
         }
-        resolve({ cancelled, truncated });
+        // Read once the statement is done, on the same session: the grid has
+        // its rows already, and the finished record carries the answer to it.
+        void fillNullability(this.client, described).finally(() => resolve({ cancelled, truncated }));
       });
 
       this.current = query;
@@ -514,6 +524,57 @@ const FRIENDLY: Record<string, string> = {
 function toColumnMeta(field: FieldDef): ColumnMeta {
   const type = pgTypeName(field);
   return { name: field.name, type, kind: kindOfSqlType(type) };
+}
+
+interface Described {
+  meta: ColumnMeta;
+  field: FieldDef;
+}
+
+/** `attnotnull` per `table oid:column number`, per client. A column's nullability rarely changes mid-session. */
+const NULLABILITY = new WeakMap<Client, Map<string, boolean>>();
+
+/**
+ * Fills in `nullable` on columns read straight from a table.
+ *
+ * The row description names the source table and column but not whether it
+ * admits NULL, so that is one catalog read, after the statement and cached.
+ * A computed column has no source and stays unknown. A failure is not worth
+ * reporting: the grid simply draws no badge.
+ */
+async function fillNullability(client: Client, described: Described[]): Promise<void> {
+  const sourced = described.filter(({ field }) => field.tableID > 0 && field.columnID > 0);
+  if (sourced.length === 0) {
+    return;
+  }
+  let cache = NULLABILITY.get(client);
+  if (!cache) {
+    cache = new Map();
+    NULLABILITY.set(client, cache);
+  }
+  const key = (field: FieldDef) => `${field.tableID}:${field.columnID}`;
+  const missing = [...new Map(sourced.filter(({ field }) => !cache!.has(key(field))).map(({ field }) => [key(field), field])).values()];
+  if (missing.length > 0) {
+    try {
+      const result = await client.query<{ t: string; c: number; nn: boolean }>(
+        `SELECT a.attrelid::bigint::text AS t, a.attnum::int AS c, a.attnotnull AS nn
+           FROM pg_catalog.pg_attribute a
+           JOIN unnest($1::oid[], $2::int2[]) AS k(t, c) ON a.attrelid = k.t AND a.attnum = k.c`,
+        [missing.map((field) => field.tableID), missing.map((field) => field.columnID)]
+      );
+      for (const row of result.rows) {
+        cache.set(`${row.t}:${row.c}`, !row.nn);
+      }
+    } catch {
+      return;
+    }
+  }
+  for (const { meta, field } of sourced) {
+    const nullable = cache.get(key(field));
+    if (nullable !== undefined) {
+      meta.nullable = nullable;
+    }
+  }
 }
 
 function fieldsOf(result: unknown): FieldDef[] {

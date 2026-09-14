@@ -712,7 +712,7 @@ export class SqlLanguageProviders implements vscode.Disposable {
         continue;
       }
       const item = new vscode.CompletionItem(word, vscode.CompletionItemKind.Keyword);
-      item.sortText = `${BAND.keyword}${rank(word, context.prefix)}`;
+      item.sortText = `${BAND.keyword}${keywordTier(word, context)}${rank(word, context.prefix)}`;
       if (prefs.space) {
         const insert = follow(word);
         item.insertText = insert;
@@ -956,6 +956,27 @@ function aliasesInScope(context: SqlContext): string[] {
  */
 function aliasWanted(kind: ObjectKind, context: SqlContext, prefs: Prefs): boolean {
   return prefs.alias && ALIASABLE.has(kind) && (context.clause === 'from' || context.clause === 'join');
+}
+
+/**
+ * Which keywords belong where the caret is, as a one-digit prefix inside the
+ * keyword band.
+ *
+ * The matcher alone scores `WHEN` and `WHERE` the same for `whe`, and the
+ * editor then breaks the tie alphabetically — so `WHEN`, which is only ever
+ * legal inside a `CASE`, used to sit above the keyword nearly everybody meant.
+ * Outside a `CASE` the `CASE` words step down; inside one they step up.
+ */
+const CASE_WORDS = new Set(['WHEN', 'THEN', 'ELSE', 'END']);
+
+function keywordTier(word: string, context: SqlContext): string {
+  if (context.inCase) {
+    return CASE_WORDS.has(word) ? '0' : '1';
+  }
+  if (CASE_WORDS.has(word)) {
+    return '2';
+  }
+  return word === 'WHERE' ? '0' : '1';
 }
 
 /** What goes in after a keyword, so the space bar is one less thing to press. */

@@ -26,6 +26,13 @@ export interface ColumnMeta {
   /** The engine's own type name, rendered: `nvarchar(200)`, `numeric(18,2)`. */
   type: string;
   kind: ColumnKind;
+  /**
+   * Whether the column admits `NULL`, where the engine says so. SQL Server
+   * reports it with the column; PostgreSQL only knows it for a column read
+   * straight from a table, and fills it in once the statement has finished.
+   * Absent means unknown, which is drawn as neither.
+   */
+  nullable?: boolean;
 }
 
 /**

@@ -46,7 +46,8 @@ function measure(text: string, bold = false): number {
  */
 export function measureColumns(columns: ColumnMeta[], sample: CellValue[][]): number[] {
   return columns.map((column, index) => {
-    let width = measure(column.name, true) + PADDING + 14;
+    // The NULL badge in a nullable column's header takes about 30px.
+    let width = measure(column.name, true) + PADDING + 14 + (column.nullable ? 30 : 0);
     const rows = Math.min(sample.length, 200);
     for (let i = 0; i < rows; i++) {
       const text = cellText(sample[i]?.[index] ?? null);

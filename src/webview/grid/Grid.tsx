@@ -190,9 +190,11 @@ export function Grid(props: GridProps): JSX.Element {
           return (
             <div
               key={index}
-              className={`grid-hcell${sorted ? ' is-sorted' : ''}`}
+              className={`grid-hcell${sorted ? ' is-sorted' : ''}${column.nullable ? ' is-nullable' : ''}`}
               style={{ width: widths[index] ?? 120 }}
-              title={`${column.name}  ${column.type}`}
+              title={`${column.name}  ${column.type}${
+                column.nullable === true ? '  NULL' : column.nullable === false ? '  NOT NULL' : ''
+              }`}
               role="columnheader"
               aria-sort={sorted ? (sorted.direction === 'asc' ? 'ascending' : 'descending') : 'none'}
               onClick={() =>
@@ -200,6 +202,11 @@ export function Grid(props: GridProps): JSX.Element {
               }
             >
               <span className="grid-hname">{column.name}</span>
+              {column.nullable ? (
+                <span className="grid-nullable" aria-label="nullable">
+                  NULL
+                </span>
+              ) : null}
               {sorted ? (
                 <span className={`grid-sort${sorted.server ? '' : ' is-partial'}`} aria-hidden="true">
                   {sorted.direction === 'asc' ? '▲' : '▼'}

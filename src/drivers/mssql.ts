@@ -39,6 +39,8 @@ interface TediousColumn {
   dataLength?: number;
   precision?: number;
   scale?: number;
+  /** TDS column flags. Bit 0 is `fNullable`. */
+  flags?: number;
 }
 
 /**
@@ -604,7 +606,12 @@ function mssqlTypeName(meta: TediousColumn): string {
 
 function toColumnMeta(meta: TediousColumn): ColumnMeta {
   const type = mssqlTypeName(meta);
-  return { name: String(meta.colName ?? ''), type, kind: kindOfSqlType(type) };
+  return {
+    name: String(meta.colName ?? ''),
+    type,
+    kind: kindOfSqlType(type),
+    nullable: meta.flags === undefined ? undefined : (meta.flags & 0x01) === 0x01
+  };
 }
 
 /**

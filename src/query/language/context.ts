@@ -61,6 +61,8 @@ export interface SqlContext {
    * `EXEC`, `EXECUTE` or `CALL`, or partway through the name written there.
    */
   wantsRoutine: boolean;
+  /** True when the caret is inside a `CASE` that has not reached its `END`. */
+  inCase: boolean;
   /** Where the `EXEC`, `EXECUTE` or `CALL` keyword starts, on its name or in its arguments. */
   callStart?: number;
   /** The routine being called, when the caret is in its argument list. */
@@ -160,7 +162,8 @@ export function analyse(text: string, offset: number): SqlContext {
     prefix: '',
     wantsObject: false,
     wantsDatabase: false,
-    wantsRoutine: false
+    wantsRoutine: false,
+    inCase: false
   };
 
   // Everything before the caret in this statement. Statement boundaries are
@@ -174,11 +177,19 @@ export function analyse(text: string, offset: number): SqlContext {
     }
   }
   const scope = tokens.slice(start);
+  // `CASE` and `BEGIN` both close with `END`, so both go on the stack; only a
+  // `CASE` on top means the caret is inside one.
+  const blocks: string[] = [];
 
   for (let i = 0; i < scope.length; i++) {
     const token = scope[i];
     if (token.kind !== 'word') {
       continue;
+    }
+    if (token.upper === 'CASE' || token.upper === 'BEGIN') {
+      blocks.push(token.upper);
+    } else if (token.upper === 'END' && !(token.end === offset && i === scope.length - 1)) {
+      blocks.pop();
     }
     const clause = CLAUSE_WORDS[token.upper];
     if (clause) {
@@ -202,6 +213,8 @@ export function analyse(text: string, offset: number): SqlContext {
       context.callStart = call.wantsName || call.routine ? token.start : undefined;
     }
   }
+
+  context.inCase = blocks[blocks.length - 1] === 'CASE';
 
   const last = scope[scope.length - 1];
   const penultimate = scope[scope.length - 2];
