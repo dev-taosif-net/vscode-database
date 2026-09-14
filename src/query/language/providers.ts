@@ -1,12 +1,37 @@
 import * as vscode from 'vscode';
 import { BindingStore, OBJECT_SCHEME, objectAddress } from '../bindingStore';
 import { ConnectionStore } from '../../store/connectionStore';
-import { DbMember, KINDS, ObjectKind } from '../../shared/catalog';
+import { DbMember, DbObject, KINDS, ObjectKind } from '../../shared/catalog';
 import { fuzzy } from '../../shared/fuzzy';
 import { DriverKind, switchesDatabase } from '../../types';
 import { Indexed, MetadataIndex } from './index';
-import { Clause, SqlContext, analyse, strip } from './context';
+import { Clause, RoutineCall, SqlContext, analyse, strip } from './context';
 import { aliasFor } from './alias';
+import {
+  ArgumentMode,
+  argumentText,
+  callText,
+  declaration,
+  declaredVariables,
+  isOutput,
+  parameterNote,
+  parameterText,
+  parametersOf,
+  signatureText
+} from './routineCall';
+
+/** Writes a procedure's arguments after its name has been accepted. */
+const EXPAND_CALL = 'databaseTools.completeRoutineCall';
+
+/** Everything the expansion needs to find a procedure again once it is accepted. */
+interface RoutineTarget {
+  uri: string;
+  profileId: string;
+  database?: string;
+  driver: DriverKind;
+  schema: string;
+  name: string;
+}
 
 /**
  * Keywords, per engine.
@@ -27,14 +52,14 @@ const COMMON = [
 
 const MSSQL_ONLY = [
   'TOP', 'ISNULL', 'GETDATE', 'NEWID', 'IDENTITY', 'OUTPUT', 'MERGE', 'APPLY', 'NOLOCK', 'OFFSET',
-  'FETCH NEXT',
+  'FETCH NEXT', 'EXEC',
   // `USE` earns its place on a list that is otherwise about writing queries,
   // because it is the only keyword here that changes what every keyword after
   // it means — and because typing it is how most people discover that this
   // editor follows them into the other database.
   'USE'
 ];
-const POSTGRES_ONLY = ['LIMIT', 'OFFSET', 'ILIKE', 'RETURNING', 'ON CONFLICT', 'NOW()', 'COALESCE', 'ARRAY', 'JSONB_AGG', 'GENERATE_SERIES'];
+const POSTGRES_ONLY = ['LIMIT', 'OFFSET', 'ILIKE', 'RETURNING', 'ON CONFLICT', 'NOW()', 'COALESCE', 'ARRAY', 'JSONB_AGG', 'GENERATE_SERIES', 'CALL'];
 
 /**
  * What a keyword leaves behind it.
@@ -86,6 +111,12 @@ interface Prefs {
   alias: boolean;
 }
 
+function argumentMode(document: vscode.TextDocument): ArgumentMode {
+  return vscode.workspace
+    .getConfiguration('databaseTools', document)
+    .get<ArgumentMode>('completion.procedureArguments', 'required');
+}
+
 function prefsFor(document: vscode.TextDocument): Prefs {
   const config = vscode.workspace.getConfiguration('databaseTools', document);
   return {
@@ -99,6 +130,8 @@ const ALIASABLE = new Set<ObjectKind>(['table', 'view', 'synonym']);
 
 export class SqlLanguageProviders implements vscode.Disposable {
   private readonly disposables: vscode.Disposable[] = [];
+  /** The procedure behind each procedure row, for the documentation pane. */
+  private readonly routineItems = new WeakMap<vscode.CompletionItem, RoutineTarget>();
 
   constructor(
     private readonly store: ConnectionStore,
@@ -117,13 +150,21 @@ export class SqlLanguageProviders implements vscode.Disposable {
     return [
       vscode.languages.registerCompletionItemProvider(
         selector,
-        { provideCompletionItems: (d, p) => this.complete(d, p) },
-        // A dot is the only trigger character. Space was one too, which meant
+        {
+          provideCompletionItems: (d, p, _t, c) => this.complete(d, p, c),
+          resolveCompletionItem: (item) => this.resolveItem(item)
+        },
+        // A dot is the main trigger character. Space was one too, which meant
         // every space in the file opened the list with something preselected,
         // so Enter — meant for a new line — accepted a table instead. Typing a
         // letter still opens the list through `editor.quickSuggestions`.
-        '.'
+        '.',
+        // `@` opens a procedure's remaining parameters inside an `EXEC`, and
+        // answers nothing anywhere else. It is not a word character to the
+        // editor, so without this the list would wait for the letter after it.
+        '@'
       ),
+      vscode.commands.registerCommand(EXPAND_CALL, (target: RoutineTarget) => this.expandCall(target)),
       vscode.languages.registerHoverProvider(selector, {
         provideHover: (d, p) => this.hover(d, p)
       }),
@@ -144,7 +185,8 @@ export class SqlLanguageProviders implements vscode.Disposable {
 
   private async complete(
     document: vscode.TextDocument,
-    position: vscode.Position
+    position: vscode.Position,
+    completion?: vscode.CompletionContext
   ): Promise<vscode.CompletionItem[] | undefined> {
     const profileId = this.bindings.get(document.uri);
     const profile = profileId ? this.store.get(profileId) : undefined;
@@ -162,6 +204,13 @@ export class SqlLanguageProviders implements vscode.Disposable {
     // completed out of Reporting and the file beside it is not.
     const database = this.databaseOf(document);
 
+    if (completion?.triggerCharacter === '@' && context.routine?.slot !== 'argument') {
+      // An `@` outside a call is a variable being written, which this has no
+      // list for — and the editor's own words from the document are the
+      // better answer there.
+      return undefined;
+    }
+
     if (context.wantsDatabase && switchesDatabase(profile.driver)) {
       return this.databases(document, context, profileId, database);
     }
@@ -173,6 +222,20 @@ export class SqlLanguageProviders implements vscode.Disposable {
 
     const items: vscode.CompletionItem[] = [];
     const prefs = prefsFor(document);
+
+    if (context.wantsRoutine) {
+      // Only procedures go after `EXEC` and `CALL`. Keywords, columns and
+      // tables would all be a list of things that cannot be written there.
+      this.routines(items, document, index, context, profileId, profile.driver, database);
+      return items;
+    }
+
+    if (context.routine?.slot === 'argument') {
+      const parameters = await this.parameters(document, index, context, context.routine, profileId, profile.driver, database);
+      if (parameters.length > 0 || completion?.triggerCharacter === '@') {
+        return parameters;
+      }
+    }
 
     if (context.qualifier) {
       await this.qualified(items, profileId, index, context, profile.driver, prefs, database);
@@ -245,6 +308,220 @@ export class SqlLanguageProviders implements vscode.Disposable {
         }
         return item;
       });
+  }
+
+  /**
+   * The procedures behind `EXEC ` and `CALL `, each of which writes its own
+   * arguments when it is accepted.
+   *
+   * The arguments are written by a command that runs after the name lands,
+   * not by the item's own text, because the item's text has to be decided
+   * before anybody has chosen it — and reading the parameters of every
+   * procedure in the list to build it would be a round trip per row.
+   */
+  private routines(
+    items: vscode.CompletionItem[],
+    document: vscode.TextDocument,
+    index: Indexed,
+    context: SqlContext,
+    profileId: string,
+    driver: DriverKind,
+    database: string | undefined
+  ): void {
+    const qualifier = context.qualifier?.toLowerCase();
+    if (qualifier === undefined) {
+      this.schemas(items, index, context);
+    }
+    const mode = argumentMode(document);
+    for (const object of index.objects) {
+      if (object.kind !== 'procedure') {
+        continue;
+      }
+      if (qualifier !== undefined && object.schema.toLowerCase() !== qualifier) {
+        continue;
+      }
+      if (context.prefix && !fuzzy(object.name, context.prefix)) {
+        continue;
+      }
+      // SQL Server resolves an unqualified procedure against the caller's
+      // default schema before `dbo`, which is both a plan-cache miss and a way
+      // to call the wrong procedure. A call says `dbo.` even when it could
+      // leave it out. PostgreSQL has a search path, and `public` is on it.
+      const qualify =
+        qualifier === undefined &&
+        (driver === 'mssql' || (index.schemas.size > 1 && object.schema !== defaultSchema(driver)));
+      const item = objectItem(object.kind, object.schema, object.name, object.detail, driver, qualify);
+      item.sortText = `${BAND.object}${rank(object.name, context.prefix)}`;
+      const target: RoutineTarget = {
+        uri: document.uri.toString(),
+        profileId,
+        database,
+        driver,
+        schema: object.schema,
+        name: object.name
+      };
+      if (mode !== 'none') {
+        item.command = { command: EXPAND_CALL, title: 'Write the arguments', arguments: [target] };
+      }
+      this.routineItems.set(item, target);
+      items.push(item);
+    }
+  }
+
+  /**
+   * A procedure's full signature, in the pane beside its row.
+   *
+   * Read when the row is focused rather than when the list is built, so an
+   * arrow key down a list of three hundred procedures reads the parameters of
+   * the ones actually looked at. The read is cached, which also means the
+   * accepted procedure's arguments are usually written without a round trip.
+   */
+  private async resolveItem(item: vscode.CompletionItem): Promise<vscode.CompletionItem> {
+    const target = this.routineItems.get(item);
+    if (!target) {
+      return item;
+    }
+    const members = await this.index.columnsOf(target.profileId, target.schema, target.name, target.database);
+    const markdown = new vscode.MarkdownString();
+    describeRoutine(markdown, target.driver, `${target.schema}.${target.name}`, members);
+    item.documentation = markdown;
+    return item;
+  }
+
+  /**
+   * The parameters not yet given an argument, where the next argument begins.
+   *
+   * Required ones rank above optional ones, and each keeps its declared order
+   * within that, so the first row is always the next thing the call cannot run
+   * without.
+   */
+  private async parameters(
+    document: vscode.TextDocument,
+    index: Indexed,
+    context: SqlContext,
+    call: RoutineCall,
+    profileId: string,
+    driver: DriverKind,
+    database: string | undefined
+  ): Promise<vscode.CompletionItem[]> {
+    // PostgreSQL's arguments live inside parentheses, and before the `(` is
+    // typed there is nowhere for one to go.
+    if (driver === 'postgres' && !call.parenthesised) {
+      return [];
+    }
+    const object = resolveRoutine(index, call.schema, call.name);
+    if (!object) {
+      return [];
+    }
+    const parameters = parametersOf(await this.index.columnsOf(profileId, object.schema, object.name, database));
+    const named = new Set(call.named);
+    // Positional arguments come first in both engines, so everything before
+    // the first named one has been passed by position.
+    const positional = call.argument - call.named.length;
+    const remaining = parameters.filter(
+      (parameter, i) => i >= positional && parameter.name && !named.has(parameter.name.toLowerCase())
+    );
+    if (remaining.length === 0) {
+      return [];
+    }
+
+    const range =
+      context.prefixStart !== undefined
+        ? new vscode.Range(
+            document.positionAt(context.prefixStart),
+            document.positionAt(context.prefixStart + context.prefix.length)
+          )
+        : undefined;
+    const text = document.getText();
+    const declared = driver === 'mssql' ? declaredVariables(text) : new Set<string>();
+    const callLine = context.callStart !== undefined ? document.positionAt(context.callStart).line : undefined;
+    const first = remaining.find((parameter) => parameter.default === undefined) ?? remaining[0];
+
+    return remaining.map((parameter) => {
+      const item = new vscode.CompletionItem(parameter.name, vscode.CompletionItemKind.Property);
+      item.label = {
+        label: parameter.name,
+        detail: `  ${parameter.type}`,
+        description: parameterNote(driver, parameter)
+      };
+      item.detail = parameterText(driver, parameter);
+      // The name, `@` and all: `@` is not part of the editor's word, so the
+      // range below is what lets `@Cu` be replaced rather than doubled.
+      item.filterText = parameter.name;
+      item.insertText = new vscode.SnippetString(argumentText(driver, parameter, 1));
+      const order = String(parameters.indexOf(parameter)).padStart(3, '0');
+      item.sortText = `${BAND.predicate}${parameter.default === undefined ? 0 : 1}${order}`;
+      item.preselect = parameter === first;
+      if (range) {
+        item.range = range;
+      }
+      if (driver === 'mssql' && isOutput(parameter) && callLine !== undefined && !declared.has(parameter.name.toLowerCase())) {
+        const indent = /^\s*/.exec(document.lineAt(callLine).text)?.[0] ?? '';
+        item.additionalTextEdits = [
+          vscode.TextEdit.insert(new vscode.Position(callLine, 0), `${indent}${declaration(parameter)}\n`)
+        ];
+      }
+      return item;
+    });
+  }
+
+  /**
+   * Writes an accepted procedure's arguments after its name.
+   *
+   * It gives way to anything that happened in the meantime. A keystroke typed
+   * while the parameters were being read, a name accepted in front of an
+   * argument list that is already there, a caret that has moved to another
+   * editor: each of those is somebody doing something else, and text inserted
+   * over the top of it would be text they then have to delete.
+   */
+  private async expandCall(target: RoutineTarget): Promise<void> {
+    const editor = vscode.window.activeTextEditor;
+    if (!editor || editor.document.uri.toString() !== target.uri) {
+      return;
+    }
+    const document = editor.document;
+    const version = document.version;
+    const members = await this.index.columnsOf(target.profileId, target.schema, target.name, target.database);
+    if (vscode.window.activeTextEditor !== editor || document.version !== version || !editor.selection.isEmpty) {
+      return;
+    }
+
+    const position = editor.selection.active;
+    const rest = document.lineAt(position.line).text.slice(position.character).trim();
+    if (rest && !rest.startsWith(';')) {
+      return;
+    }
+    const next = position.line + 1 < document.lineCount ? document.lineAt(position.line + 1).text.trim() : '';
+    if (/^[@(,]/.test(next)) {
+      // A multi-line call whose name was just swapped for another.
+      return;
+    }
+
+    const text = document.getText();
+    const call = callText(target.driver, members, argumentMode(document), declaredVariables(text));
+    if (!call.snippet) {
+      return;
+    }
+
+    const start = analyse(text, document.offsetAt(position)).callStart;
+    if (call.declarations.length > 0 && start !== undefined) {
+      const line = document.positionAt(start).line;
+      const indent = /^\s*/.exec(document.lineAt(line).text)?.[0] ?? '';
+      await editor.edit(
+        (builder) =>
+          builder.insert(
+            new vscode.Position(line, 0),
+            call.declarations.map((statement) => `${indent}${statement}\n`).join('')
+          ),
+        { undoStopBefore: false, undoStopAfter: false }
+      );
+    }
+
+    await editor.insertSnippet(new vscode.SnippetString(call.snippet), editor.selection.active, {
+      undoStopBefore: false,
+      undoStopAfter: true
+    });
+    void vscode.commands.executeCommand('editor.action.triggerParameterHints');
   }
 
   /** After `c.` or after `dbo.`: columns of that alias, or objects in that schema. */
@@ -470,6 +747,12 @@ export class SqlLanguageProviders implements vscode.Disposable {
       const markdown = new vscode.MarkdownString();
       markdown.appendMarkdown(`**${object.schema}.${object.name}**\n\n`);
       markdown.appendMarkdown(`${KINDS[object.kind].singular} · ${object.detail}`);
+      const profile = this.store.get(profileId);
+      if (profile && (object.kind === 'procedure' || object.kind === 'function')) {
+        const members = await this.index.columnsOf(profileId, object.schema, object.name, database);
+        markdown.appendMarkdown('\n\n');
+        describeRoutine(markdown, profile.driver, `${object.schema}.${object.name}`, members);
+      }
       return new vscode.Hover(markdown, range);
     }
 
@@ -502,11 +785,12 @@ export class SqlLanguageProviders implements vscode.Disposable {
     position: vscode.Position
   ): Promise<vscode.SignatureHelp | undefined> {
     const profileId = this.bindings.get(document.uri);
-    if (!profileId) {
+    const profile = profileId ? this.store.get(profileId) : undefined;
+    if (!profileId || !profile) {
       return undefined;
     }
-    const context = analyse(document.getText(), document.offsetAt(position));
-    if (!context.routine) {
+    const call = analyse(document.getText(), document.offsetAt(position)).routine;
+    if (!call || (profile.driver === 'postgres' && !call.parenthesised)) {
       return undefined;
     }
     const database = this.databaseOf(document);
@@ -514,28 +798,27 @@ export class SqlLanguageProviders implements vscode.Disposable {
     if (!index) {
       return undefined;
     }
-    const object = this.index.resolve(index, context.routine.schema, context.routine.name);
-    if (!object || (object.kind !== 'procedure' && object.kind !== 'function')) {
+    const object = resolveRoutine(index, call.schema, call.name);
+    if (!object) {
       return undefined;
     }
-    const parameters = (await this.index.columnsOf(profileId, object.schema, object.name, database)).filter(
-      (member) => member.direction !== 'returns'
+    const members = await this.index.columnsOf(profileId, object.schema, object.name, database);
+    const parameters = parametersOf(members);
+
+    // Offsets into the label rather than repeated text, so two parameters of
+    // the same type are never highlighted as each other.
+    const text = signatureText(profile.driver, `${object.schema}.${object.name}`, members);
+    const signature = new vscode.SignatureInformation(text.label);
+    signature.parameters = parameters.map(
+      (parameter, i) => new vscode.ParameterInformation(text.spans[i], parameterNote(profile.driver, parameter))
     );
     if (parameters.length === 0) {
-      return undefined;
+      signature.documentation = 'Takes no parameters.';
     }
-
-    const label = `${object.schema}.${object.name}(${parameters
-      .map((p) => `${p.name} ${p.type}`)
-      .join(', ')})`;
-    const signature = new vscode.SignatureInformation(label);
-    signature.parameters = parameters.map(
-      (p) => new vscode.ParameterInformation(`${p.name} ${p.type}`, p.direction === 'out' ? 'output' : undefined)
-    );
     const help = new vscode.SignatureHelp();
     help.signatures = [signature];
     help.activeSignature = 0;
-    help.activeParameter = Math.min(context.routine.argument, parameters.length - 1);
+    help.activeParameter = activeParameter(parameters, call);
     return help;
   }
 
@@ -586,6 +869,73 @@ function kindsForClause(clause: Clause): Set<ObjectKind> | null {
     return new Set<ObjectKind>(['procedure', 'function']);
   }
   return null;
+}
+
+/** A procedure or function by name, never the table that happens to share it. */
+function resolveRoutine(index: Indexed, schema: string | undefined, name: string): DbObject | undefined {
+  const lower = name.toLowerCase();
+  return index.objects.find(
+    (object) =>
+      (object.kind === 'procedure' || object.kind === 'function') &&
+      object.name.toLowerCase() === lower &&
+      (!schema || object.schema.toLowerCase() === schema.toLowerCase())
+  );
+}
+
+/**
+ * The parameter signature help highlights.
+ *
+ * By name first, because that is how SQL Server calls are written and the
+ * written order need not be the declared one. Then, at the start of an
+ * argument in a call that has named some already, the first one still owed.
+ * Then by position, which is all a positional call has.
+ */
+function activeParameter(parameters: DbMember[], call: RoutineCall): number {
+  const at = (name: string) => parameters.findIndex((parameter) => parameter.name.toLowerCase() === name);
+  if (call.current) {
+    const i = at(call.current);
+    if (i >= 0) {
+      return i;
+    }
+  }
+  if (call.named.length > 0 && call.slot === 'argument') {
+    const i = parameters.findIndex((parameter) => !call.named.includes(parameter.name.toLowerCase()));
+    if (i >= 0) {
+      return i;
+    }
+  }
+  return Math.max(0, Math.min(call.argument, parameters.length - 1));
+}
+
+/**
+ * A routine's signature and a line per parameter, for hover and the
+ * completion list's documentation pane alike.
+ */
+function describeRoutine(
+  markdown: vscode.MarkdownString,
+  driver: DriverKind,
+  qualifiedName: string,
+  members: DbMember[]
+): void {
+  const parameters = parametersOf(members);
+  markdown.appendCodeblock(signatureText(driver, qualifiedName, members).label, 'sql');
+  if (parameters.length === 0) {
+    markdown.appendMarkdown('Takes no parameters.');
+  } else {
+    const required = parameters.filter((parameter) => parameter.default === undefined).length;
+    markdown.appendMarkdown(
+      `${parameters.length === 1 ? '1 parameter' : `${parameters.length} parameters`} · ${required} required\n\n`
+    );
+    for (const parameter of parameters) {
+      markdown.appendMarkdown(`- \`${parameter.name || '(unnamed)'}\` \`${parameter.type}\` · `);
+      markdown.appendText(parameterNote(driver, parameter));
+      markdown.appendMarkdown('\n');
+    }
+  }
+  const returns = members.find((member) => member.direction === 'returns');
+  if (returns) {
+    markdown.appendMarkdown(`\n\nReturns \`${returns.type}\``);
+  }
 }
 
 function defaultSchema(driver: DriverKind): string {

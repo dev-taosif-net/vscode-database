@@ -1077,9 +1077,51 @@ targets and their aliases even when the statement around them is incomplete.
 | `FROM ▏` | schemas, then tables and views, then table functions |
 | `FROM dbo.▏` | objects in `dbo` |
 | `WHERE c.Cust▏` | columns of `c` matching, fuzzy |
-| `EXEC dbo.usp_▏` | procedures, with signature help behind them |
+| `EXEC ▏`, `CALL ▏` | schemas, then procedures only, each writing its own arguments when accepted |
+| `EXEC dbo.usp_▏` | procedures in `dbo`, the full signature in the documentation pane |
+| `EXEC dbo.usp_GetCustomer @Name = N'Ada', ▏` | the parameters not yet given an argument, required first |
 | `JOIN Orders o ON ▏` | the foreign-key join predicate, pre-written, ranked first |
 | anywhere | keywords for the engine, snippets, last |
+
+### Calling a procedure
+
+Accepting a procedure after `EXEC` or `CALL` writes the call, not just the name:
+
+```
+EXEC dbo.usp_GetCustomer @CustomerId = NULL, @Total = @Total OUTPUT
+CALL public.get_customer(p_customer_id => NULL, p_out => NULL)
+```
+
+- **Which arguments** is `databaseTools.completion.procedureArguments`:
+  `required` (the default) writes those without a default, `all` writes every
+  one — optional ones on `DEFAULT` in SQL Server, on their declared default in
+  PostgreSQL — and `none` writes the name alone. The optional ones are still a
+  keystroke away: `@` or `Ctrl+Space` inside the call lists what is left.
+- **Placeholders.** Text, date and uuid parameters arrive quoted with the caret
+  inside; everything else is a selected `NULL`, so a call run untouched passes
+  nothing rather than a zero that looks real. `Tab` walks the arguments.
+- **Output parameters** in SQL Server are passed a variable of their own name,
+  and a `DECLARE` for it goes above the call unless the script already has one.
+- **Layout.** Up to three arguments on the name's line; more go one per line.
+- **Named notation** in PostgreSQL whenever every parameter has a name, because
+  it is the only way to skip an optional argument in the middle.
+- **Procedures are always schema-qualified** in SQL Server, `dbo` included: an
+  unqualified name is resolved against the caller's default schema first.
+- **It gives way.** Nothing is written if the name was accepted in front of an
+  argument list that already exists, or if anything was typed while the
+  parameters were being read.
+
+Defaults come from `pg_get_function_arguments` in PostgreSQL. SQL Server keeps
+no record of a T-SQL parameter's default outside the procedure's own text, so
+`catalog/routineHeader.ts` reads it out of `OBJECT_DEFINITION` — the header
+only, from the name to the first `AS`. A procedure whose text cannot be read
+reports every parameter as required.
+
+Signature help highlights by name before position, so
+`@Name = N'Ada', @CustomerId = ▏` highlights `@CustomerId` even though it is
+declared first. A call ends at a semicolon or at the next statement's first
+word, so signature help does not follow the caret into the `SELECT` below an
+`EXEC` that has no semicolon.
 
 That last row before "anywhere" is the one that wins people over. When the
 caret is after `ON` and the two relations in scope have a foreign key between

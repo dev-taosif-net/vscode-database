@@ -113,6 +113,15 @@ export interface DbMember {
   auto?: boolean;
   /** For a parameter: its direction, or `returns` for a return value. */
   direction?: 'in' | 'out' | 'inout' | 'returns';
+  /**
+   * For a parameter: its default expression as declared, `NULL` included.
+   *
+   * Absent means either that there is no default or that the server would not
+   * say — an encrypted SQL Server procedure has no readable header. Both read
+   * as required, which is the safe way to be wrong: a call that names one
+   * argument too many still runs.
+   */
+  default?: string;
 }
 
 /** Per-schema counts, so schema-focused mode can label its folders. */

@@ -56,8 +56,43 @@ export interface SqlContext {
   wantsDatabase: boolean;
   /** Where `prefix` starts, so a bracketed name can be replaced whole. */
   prefixStart?: number;
-  /** The routine being called, when the caret is inside an EXEC or CALL. */
-  routine?: { schema?: string; name: string; argument: number };
+  /**
+   * True when the caret sits where a routine's name belongs: straight after
+   * `EXEC`, `EXECUTE` or `CALL`, or partway through the name written there.
+   */
+  wantsRoutine: boolean;
+  /** Where the `EXEC`, `EXECUTE` or `CALL` keyword starts, on its name or in its arguments. */
+  callStart?: number;
+  /** The routine being called, when the caret is in its argument list. */
+  routine?: RoutineCall;
+}
+
+/**
+ * A call the caret is inside, past the routine's name.
+ *
+ * It says where in the argument list the caret is, in both of the ways an
+ * argument can be identified: by position, which is all PostgreSQL's default
+ * notation has, and by name, which is how nearly every SQL Server call is
+ * written. Signature help needs the second to highlight the right parameter in
+ * `@Name = N'Ada', @CustomerId = 1`, where the positions and the declaration
+ * disagree.
+ */
+export interface RoutineCall {
+  schema?: string;
+  name: string;
+  /** True for `CALL name(`, whose arguments sit inside parentheses. */
+  parenthesised: boolean;
+  /** Which argument the caret is on, counting from zero. */
+  argument: number;
+  /** Lower-cased parameter names already given an argument, as written. */
+  named: string[];
+  /** The parameter the argument under the caret names, lower-cased. */
+  current?: string;
+  /**
+   * `argument` where a new argument begins, so a parameter name can go there;
+   * `value` once the argument has anything in it besides the word being typed.
+   */
+  slot: 'argument' | 'value';
 }
 
 interface Token {
@@ -124,7 +159,8 @@ export function analyse(text: string, offset: number): SqlContext {
     relations: [],
     prefix: '',
     wantsObject: false,
-    wantsDatabase: false
+    wantsDatabase: false,
+    wantsRoutine: false
   };
 
   // Everything before the caret in this statement. Statement boundaries are
@@ -155,15 +191,15 @@ export function analyse(text: string, offset: number): SqlContext {
         i = relation.next - 1;
       }
     }
-    if (token.upper === 'EXEC' || token.upper === 'EXECUTE' || token.upper === 'CALL') {
-      const routine = readRelation(scope, i + 1);
-      if (routine) {
-        context.routine = {
-          schema: routine.relation.schema,
-          name: routine.relation.name,
-          argument: countArguments(scope, routine.next)
-        };
-      }
+    if (CALL_WORDS.has(token.upper)) {
+      // Each call replaces the last: a batch of three `EXEC`s is in the third.
+      const call = readCall(
+        scope.slice(i).filter((t) => t.kind !== 'comment'),
+        offset
+      );
+      context.wantsRoutine = call.wantsName;
+      context.routine = call.routine;
+      context.callStart = call.wantsName || call.routine ? token.start : undefined;
     }
   }
 
@@ -239,24 +275,125 @@ function readRelation(tokens: Token[], from: number): { relation: Relation; next
   return { relation: { schema, name, as }, next: i };
 }
 
-/** Which argument the caret is on, by counting commas at depth zero. */
-function countArguments(tokens: Token[], from: number): number {
+const CALL_WORDS = new Set(['EXEC', 'EXECUTE', 'CALL']);
+
+/**
+ * Words that begin a statement of their own, and so end a call that has no
+ * semicolon after it.
+ *
+ * T-SQL does not require the semicolon, and a script of `EXEC` lines followed
+ * by a `SELECT` is the ordinary case. Without this, signature help for the last
+ * procedure would follow the caret into every query written below it.
+ */
+const ENDS_CALL = new Set([
+  'SELECT', 'INSERT', 'UPDATE', 'DELETE', 'MERGE', 'TRUNCATE', 'EXEC', 'EXECUTE', 'CALL', 'USE', 'GO',
+  'DECLARE', 'SET', 'IF', 'ELSE', 'WHILE', 'BEGIN', 'END', 'PRINT', 'RETURN', 'RAISERROR', 'THROW', 'WITH',
+  'CREATE', 'ALTER', 'DROP', 'FROM', 'WHERE'
+]);
+
+function punct(token: Token | undefined, text: string): boolean {
+  return token?.kind === 'punct' && token.text === text;
+}
+
+/**
+ * Everything after one `EXEC`, `EXECUTE` or `CALL`, up to the caret.
+ *
+ * `tokens[0]` is the keyword and comments have already been taken out. The
+ * caret is either on the name — nothing after the keyword yet, a name being
+ * typed, a schema and a dot — or past it in the arguments, or past the end of
+ * the call altogether, which answers nothing.
+ */
+function readCall(tokens: Token[], offset: number): { wantsName: boolean; routine?: RoutineCall } {
+  const none = { wantsName: false };
+  const last = tokens.length - 1;
+  const typing = tokens[last]?.kind === 'word' && tokens[last].end === offset;
+  if (last === 0 && typing) {
+    // `EXEC▏` — the keyword itself is what is being typed.
+    return none;
+  }
+
+  let i = 1;
+  // `EXEC @rc = dbo.usp_Save`: the return code is captured ahead of the name.
+  if (tokens[i]?.kind === 'word' && tokens[i].text.startsWith('@') && punct(tokens[i + 1], '=')) {
+    i += 2;
+  }
+  if (i > last) {
+    return { wantsName: true };
+  }
+
+  // One to three dotted parts. A variable or a parenthesis in the name's place
+  // is dynamic SQL, which has no parameters to offer.
+  const parts: Token[] = [];
+  while (tokens[i]?.kind === 'word' && !tokens[i].text.startsWith('@')) {
+    parts.push(tokens[i]);
+    if (!punct(tokens[i + 1], '.')) {
+      i++;
+      break;
+    }
+    i += 2;
+    if (i > last) {
+      return { wantsName: true };
+    }
+  }
+  if (parts.length === 0) {
+    return none;
+  }
+  if (i > last && typing) {
+    return { wantsName: true };
+  }
+
+  const name = strip(parts[parts.length - 1].text);
+  const schema = parts.length > 1 ? strip(parts[parts.length - 2].text) : undefined;
+  const parenthesised = punct(tokens[i], '(');
+  const base = parenthesised ? 1 : 0;
   let depth = 0;
-  let count = 0;
-  for (let i = from; i < tokens.length; i++) {
-    const token = tokens[i];
+  let argument = 0;
+  let segmentStart = parenthesised ? i + 1 : i;
+  const named: string[] = [];
+
+  for (let k = i; k <= last; k++) {
+    const token = tokens[k];
+    if (token.kind === 'word' && depth === 0 && ENDS_CALL.has(token.upper) && !(typing && k === last)) {
+      return none;
+    }
     if (token.kind !== 'punct') {
       continue;
     }
     if (token.text === '(') {
       depth++;
     } else if (token.text === ')') {
-      depth = Math.max(0, depth - 1);
-    } else if (token.text === ',' && depth <= 1) {
-      count++;
+      if (--depth < base) {
+        return none;
+      }
+    } else if (token.text === ';') {
+      return none;
+    } else if (token.text === ',' && depth === base) {
+      argument++;
+      segmentStart = k + 1;
+    } else if (token.text === '=' && depth === base) {
+      // `@Name =` in SQL Server, `name =>` in PostgreSQL, and its older `name :=`.
+      const at = punct(tokens[k - 1], ':') ? k - 2 : k - 1;
+      if (at === segmentStart && tokens[at]?.kind === 'word') {
+        named.push(strip(tokens[at].text).toLowerCase());
+      }
     }
   }
-  return count;
+
+  const segment = tokens.slice(segmentStart, typing ? last : last + 1);
+  const opener = segment[0];
+  const assigns = punct(segment[1], '=') || (punct(segment[1], ':') && punct(segment[2], '='));
+  return {
+    wantsName: false,
+    routine: {
+      schema,
+      name,
+      parenthesised,
+      argument,
+      named,
+      current: opener?.kind === 'word' && assigns ? strip(opener.text).toLowerCase() : undefined,
+      slot: segment.length === 0 ? 'argument' : 'value'
+    }
+  };
 }
 
 /** `[Order]`, `"user"` and `Order` all name the same thing to a completion list. */

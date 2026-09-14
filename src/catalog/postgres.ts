@@ -566,14 +566,19 @@ function splitArguments(text: string): DbMember[] {
         direction = word === 'OUT' ? 'out' : word === 'INOUT' ? 'inout' : 'in';
         rest = rest.slice(mode[0].length);
       }
-      // A default is a value, not a type, and it does not belong on the row.
-      rest = rest.replace(/\s+DEFAULT\s+.*$/i, '');
+      // A default is a value, not a type, so it comes off the type and is kept
+      // beside it: it is what makes the argument optional in a call.
+      const declared = /\s+DEFAULT\s+(.*)$/is.exec(rest);
+      const fallback = declared ? { default: declared[1].trim() } : {};
+      if (declared) {
+        rest = rest.slice(0, declared.index);
+      }
 
       // An unnamed argument is legal, and then the whole remainder is the type.
       const space = rest.indexOf(' ');
       if (space < 0) {
-        return { name: '', type: rest, direction };
+        return { name: '', type: rest, direction, ...fallback };
       }
-      return { name: rest.slice(0, space), type: rest.slice(space + 1).trim(), direction };
+      return { name: rest.slice(0, space), type: rest.slice(space + 1).trim(), direction, ...fallback };
     });
 }

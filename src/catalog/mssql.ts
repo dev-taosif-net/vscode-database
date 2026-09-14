@@ -3,6 +3,7 @@ import { CatalogSummary, DbMember, FavouriteRef, ObjectKind } from '../shared/ca
 import { CatalogQueries, PageArgs, PageResult, SearchResult } from './types';
 import { escapeLike, foldSummary } from './fold';
 import { plural, qualified, tableScript } from './script';
+import { parameterDefaults } from './routineHeader';
 
 /**
  * SQL Server's catalog, read through `sys.*` rather than
@@ -160,14 +161,45 @@ export class MssqlCatalog implements CatalogQueries {
     `,
       [ref.schema, ref.name]
     );
-    return rows.map((row) => ({
-      // Parameter zero is the return value of a scalar function, and SQL
-      // Server gives it an empty name. Calling it `returns` is what stops it
-      // rendering as a nameless first parameter.
-      name: Number(row.ord) === 0 ? 'returns' : String(row.nm),
-      type: renderType(row),
-      direction: Number(row.ord) === 0 ? 'returns' : row.isout ? 'inout' : 'in'
-    }));
+    const defaults = rows.some((row) => Number(row.ord) > 0) ? await this.defaults(session, ref) : new Map();
+    return rows.map((row) => {
+      const name = String(row.nm);
+      const fallback = defaults.get(name.toLowerCase());
+      return {
+        // Parameter zero is the return value of a scalar function, and SQL
+        // Server gives it an empty name. Calling it `returns` is what stops it
+        // rendering as a nameless first parameter.
+        name: Number(row.ord) === 0 ? 'returns' : name,
+        type: renderType(row),
+        direction: Number(row.ord) === 0 ? 'returns' : row.isout ? 'inout' : 'in',
+        ...(fallback !== undefined && Number(row.ord) > 0 ? { default: fallback } : {})
+      };
+    });
+  }
+
+  /**
+   * Which parameters are optional, from the routine's own header.
+   *
+   * SQL Server records a T-SQL parameter's default nowhere but the text of the
+   * `CREATE`. A routine whose text cannot be read — encrypted, or a login
+   * without `VIEW DEFINITION` — reports every parameter as required, which is
+   * the direction in which being wrong costs nothing.
+   */
+  private async defaults(session: DriverSession, ref: FavouriteRef): Promise<Map<string, string>> {
+    try {
+      const rows = await session.query<{ def: string | null }>(
+        `
+        SELECT OBJECT_DEFINITION(o.object_id) AS def
+        FROM sys.objects o
+        JOIN sys.schemas s ON s.schema_id = o.schema_id
+        WHERE s.name = @p0 AND o.name = @p1
+      `,
+        [ref.schema, ref.name]
+      );
+      return rows[0]?.def ? parameterDefaults(String(rows[0].def)) : new Map();
+    } catch {
+      return new Map();
+    }
   }
 
   async search(session: DriverSession, needle: string, limit: number): Promise<SearchResult> {

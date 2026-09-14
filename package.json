@@ -473,6 +473,21 @@
           "default": true,
           "description": "Give a table an alias when it is accepted in FROM or JOIN, taken from the capitals in its name: empManualAttendanceSummary becomes mas. A second copy of the same table in one statement is numbered. Aliases already in scope are then offered first in the list."
         },
+        "databaseTools.completion.procedureArguments": {
+          "type": "string",
+          "enum": [
+            "required",
+            "all",
+            "none"
+          ],
+          "enumDescriptions": [
+            "Write the parameters that have no default. The optional ones are offered by name as you type the call.",
+            "Write every parameter. Optional ones stand on DEFAULT in SQL Server and on their declared default in PostgreSQL.",
+            "Insert the procedure's name only."
+          ],
+          "default": "required",
+          "description": "What a procedure accepted after EXEC or CALL brings with it. Text parameters arrive quoted with the cursor inside, the rest as a NULL to type over, and a SQL Server OUTPUT parameter is passed a variable that is declared above the call. More than three arguments are written one per line."
+        },
         "databaseTools.editor.uppercaseKeywords": {
           "type": "boolean",
           "default": true,
