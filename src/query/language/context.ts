@@ -97,7 +97,7 @@ export interface RoutineCall {
   slot: 'argument' | 'value';
 }
 
-interface Token {
+export interface Token {
   text: string;
   upper: string;
   start: number;
@@ -422,7 +422,7 @@ export function strip(name: string): string {
   return name;
 }
 
-function tokenize(text: string): Token[] {
+export function tokenize(text: string): Token[] {
   const tokens: Token[] = [];
   let i = 0;
 

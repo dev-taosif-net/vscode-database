@@ -7,6 +7,7 @@ import { DriverKind, switchesDatabase } from '../../types';
 import { Indexed, MetadataIndex } from './index';
 import { Clause, RoutineCall, SqlContext, analyse, strip } from './context';
 import { aliasFor } from './alias';
+import { InsertHighlightProvider } from './insertHighlight';
 import {
   ArgumentMode,
   argumentText,
@@ -177,7 +178,10 @@ export class SqlLanguageProviders implements vscode.Disposable {
       ),
       vscode.languages.registerDefinitionProvider(selector, {
         provideDefinition: (d, p) => this.definition(d, p)
-      })
+      }),
+      // Textual, so it does not wait for a binding: pairing a column with its
+      // value needs the statement and nothing from the server.
+      vscode.languages.registerDocumentHighlightProvider(selector, new InsertHighlightProvider())
     ];
   }
 
