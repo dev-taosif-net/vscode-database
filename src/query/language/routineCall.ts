@@ -146,16 +146,53 @@ export function declaration(parameter: DbMember): string {
  * so, on the line that did it.
  */
 export function declaredVariables(text: string): Set<string> {
-  const names = new Set<string>();
+  return new Set(declaredVariableTypes(text).keys());
+}
+
+/** A variable the document declares, as written. */
+export interface DeclaredVariable {
+  name: string;
+  type: string;
+}
+
+/**
+ * The variables a script declares, by lower-cased name, each with its type.
+ *
+ * `DECLARE @Id int, @Name nvarchar(50) = N'x', @Amount decimal(18, 2)`: the
+ * pieces are split on the commas outside parentheses, so the precision of a
+ * decimal stays with its type, and a default is left off.
+ */
+export function declaredVariableTypes(text: string): Map<string, DeclaredVariable> {
+  const variables = new Map<string, DeclaredVariable>();
   for (const match of text.matchAll(/\bDECLARE\s+((?:[^;\n]|\n(?=\s*[@,]))*)/gi)) {
-    for (const piece of match[1].split(',')) {
-      const variable = /^(@[\w@#$]+)\s+(?![=\s])/.exec(piece.trim());
+    for (const piece of splitOutsideParentheses(match[1])) {
+      const variable = /^(@[\w@#$]+)\s+(?![=\s])([^=]*)/.exec(piece.trim());
       if (variable) {
-        names.add(variable[1].toLowerCase());
+        const type = variable[2].trim().replace(/\s+/g, ' ');
+        variables.set(variable[1].toLowerCase(), { name: variable[1], type });
       }
     }
   }
-  return names;
+  return variables;
+}
+
+function splitOutsideParentheses(text: string): string[] {
+  const pieces: string[] = [];
+  let depth = 0;
+  let from = 0;
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+    if (ch === '(') {
+      depth++;
+    } else if (ch === ')') {
+      depth = Math.max(0, depth - 1);
+    } else if (ch === ',' && depth === 0) {
+      pieces.push(text.slice(from, i));
+      from = i + 1;
+    }
+  }
+  pieces.push(text.slice(from));
+  return pieces;
 }
 
 /**

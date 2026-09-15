@@ -19,10 +19,26 @@ const PER_KIND = 5000;
 interface Indexed {
   schemas: Set<string>;
   objects: DbObject[];
+  /**
+   * Lower-cased name to every object called that, across schemas.
+   *
+   * Resolving a name is done on every keystroke after a dot and on every
+   * hover, and a scan of forty thousand objects each time is a scan that is
+   * felt. A map is the difference between a list that appears and one that
+   * arrives.
+   */
+  byName: Map<string, DbObject[]>;
   /** Lower-cased `schema.name` to its columns, filled on demand. */
   columns: Map<string, DbMember[]>;
   foreignKeys: ForeignKeyColumn[];
   builtAt: number;
+}
+
+/** What a relation in a statement has to say for the index to find it. */
+export interface RelationRef {
+  schema?: string;
+  name: string;
+  as: string;
 }
 
 /**
@@ -157,6 +173,7 @@ export class MetadataIndex implements vscode.Disposable {
     const index: Indexed = {
       schemas: new Set(),
       objects: [],
+      byName: new Map(),
       columns: new Map(),
       foreignKeys: [],
       builtAt: Date.now()
@@ -165,38 +182,73 @@ export class MetadataIndex implements vscode.Disposable {
       return index;
     }
 
-    try {
-      const summary = await this.catalog.summary(profileId, database);
-      for (const schema of summary.schemas) {
-        index.schemas.add(schema.name);
-      }
-    } catch {
+    // Every read at once. The catalog keeps a session of its own for these,
+    // and the first list in a fresh tab waits for the slowest of them rather
+    // than the sum.
+    const schemas = this.catalog.summary(profileId, database).then(
+      (summary) => summary.schemas.map((schema) => schema.name),
       // A connection that cannot read its own schema list still gets keyword
       // completion, which is better than an editor that offers nothing.
-    }
-
-    for (const kind of kindsFor(profile.driver)) {
-      try {
-        const page = await this.catalog.page({
+      () => [] as string[]
+    );
+    const pages = kindsFor(profile.driver).map((kind) =>
+      this.catalog
+        .page({
           profileId,
           node: `index:${kind}`,
           kind: kind as ObjectKind,
           database,
           offset: 0,
           limit: PER_KIND
-        });
-        index.objects.push(...page.objects);
-        for (const object of page.objects) {
-          index.schemas.add(object.schema);
+        })
+        .then(
+          (page) => page.objects,
+          // One unreadable folder costs that folder's completions and nothing else.
+          () => [] as DbObject[]
+        )
+    );
+    const foreignKeys = this.details.allForeignKeys(profileId, database).catch(() => [] as ForeignKeyColumn[]);
+
+    const [schemaNames, objectPages, keys] = await Promise.all([schemas, Promise.all(pages), foreignKeys]);
+    for (const schema of schemaNames) {
+      index.schemas.add(schema);
+    }
+    for (const objects of objectPages) {
+      for (const object of objects) {
+        index.objects.push(object);
+        index.schemas.add(object.schema);
+        const lower = object.name.toLowerCase();
+        const named = index.byName.get(lower);
+        if (named) {
+          named.push(object);
+        } else {
+          index.byName.set(lower, [object]);
         }
-      } catch {
-        // One unreadable folder costs that folder's completions and nothing else.
       }
     }
-
-    index.foreignKeys = await this.details.allForeignKeys(profileId, database);
+    index.foreignKeys = keys;
     this.indexes.set(key, index);
     return index;
+  }
+
+  /**
+   * Starts reading the columns of the relations a statement names, without
+   * waiting for them.
+   *
+   * Called as soon as a `FROM` puts a table in scope, so that by the time the
+   * first `c.` is typed its columns are already here. The read is the same one
+   * `columnsOf` would make, so nothing is fetched twice.
+   */
+  warm(profileId: string, relations: RelationRef[], database?: string): void {
+    const index = this.peek(profileId, database);
+    if (!index) {
+      return;
+    }
+    for (const relation of relations.slice(0, 8)) {
+      if (!index.columns.has(`${(relation.schema ?? '').toLowerCase()}.${relation.name.toLowerCase()}`)) {
+        void this.columnsOf(profileId, relation.schema ?? '', relation.name, database);
+      }
+    }
   }
 
   /**
@@ -216,11 +268,7 @@ export class MetadataIndex implements vscode.Disposable {
     if (cached) {
       return cached;
     }
-    const object = index.objects.find(
-      (candidate) =>
-        candidate.name.toLowerCase() === name.toLowerCase() &&
-        (schema === '' || candidate.schema.toLowerCase() === schema.toLowerCase())
-    );
+    const object = this.resolve(index, schema || undefined, name);
     if (!object) {
       return [];
     }
@@ -240,12 +288,39 @@ export class MetadataIndex implements vscode.Disposable {
 
   /** The object a name resolves to, with or without a schema. */
   resolve(index: Indexed, schema: string | undefined, name: string): DbObject | undefined {
-    const lower = name.toLowerCase();
-    return index.objects.find(
-      (object) =>
-        object.name.toLowerCase() === lower &&
-        (!schema || object.schema.toLowerCase() === schema.toLowerCase())
-    );
+    const named = index.byName.get(name.toLowerCase());
+    if (!named) {
+      return undefined;
+    }
+    if (!schema) {
+      return named[0];
+    }
+    const lower = schema.toLowerCase();
+    return named.find((object) => object.schema.toLowerCase() === lower);
+  }
+
+  /**
+   * The tables a foreign key ties to any relation already in scope, keyed by
+   * lower-cased `schema.name`, each to the relation it joins.
+   *
+   * Read once per list rather than once per candidate: after `JOIN`, every
+   * object in the index is a candidate, and asking each one for its predicate
+   * would walk the foreign keys forty thousand times.
+   */
+  joinCandidates(index: Indexed, relations: RelationRef[]): Map<string, RelationRef> {
+    const candidates = new Map<string, RelationRef>();
+    // Later relations overwrite earlier ones, so the table just joined wins
+    // when two in scope both relate to the same candidate.
+    for (const relation of relations) {
+      for (const fk of index.foreignKeys) {
+        if (matches(fk.fromSchema, fk.fromTable, relation)) {
+          candidates.set(`${fk.toSchema.toLowerCase()}.${fk.toTable.toLowerCase()}`, relation);
+        } else if (matches(fk.toSchema, fk.toTable, relation)) {
+          candidates.set(`${fk.fromSchema.toLowerCase()}.${fk.fromTable.toLowerCase()}`, relation);
+        }
+      }
+    }
+    return candidates;
   }
 
   /**
@@ -256,11 +331,7 @@ export class MetadataIndex implements vscode.Disposable {
    * suggestion is the whole predicate, because the index already knows the
    * constraint and writing it out is the most tedious keystroke in SQL.
    */
-  joinPredicate(
-    index: Indexed,
-    left: { schema?: string; name: string; as: string },
-    right: { schema?: string; name: string; as: string }
-  ): string | undefined {
+  joinPredicate(index: Indexed, left: RelationRef, right: RelationRef): string | undefined {
     const pairs = index.foreignKeys.filter(
       (fk) =>
         (matches(fk.fromSchema, fk.fromTable, left) && matches(fk.toSchema, fk.toTable, right)) ||

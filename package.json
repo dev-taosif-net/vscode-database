@@ -493,7 +493,7 @@
         "databaseTools.completion.tableAlias": {
           "type": "boolean",
           "default": true,
-          "description": "Give a table an alias when it is accepted in FROM or JOIN, taken from the capitals in its name: empManualAttendanceSummary becomes mas. A second copy of the same table in one statement is numbered. Aliases already in scope are then offered first in the list."
+          "description": "Give a table an alias when it is accepted in FROM or JOIN, taken from the capitals in its name: empManualAttendanceSummary becomes mas. An alias that would be a keyword takes the next reading of the name instead, so Users is usr rather than use. A second copy of the same table in one statement is numbered. Aliases already in scope are then offered first in the list."
         },
         "databaseTools.completion.procedureArguments": {
           "type": "string",
@@ -1116,7 +1116,8 @@
     "vscode:prepublish": "npm run build",
     "build": "node esbuild.mjs --production",
     "watch": "node esbuild.mjs --watch",
-    "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.webview.json"
+    "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.webview.json",
+    "test": "esbuild src/**/*.test.ts --bundle --platform=node --format=cjs --outdir=out/test --log-level=warning && node --test \"out/test/**/*.test.js\""
   },
   "dependencies": {
     "pg": "^8.13.1",

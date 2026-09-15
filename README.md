@@ -54,11 +54,18 @@ See [docs/query-workspace.md](docs/query-workspace.md).
   with a NULL checkbox on every nullable parameter, values bound rather than
   concatenated, and output parameters and the return value in their own tabs.
 - IntelliSense over the live catalog: schemas, objects, columns, aliases and
-  keywords, ranked by what the caret is inside. After `ON`, the first
-  suggestion is the whole foreign-key predicate. Accepting a keyword leaves the
-  space after it, and accepting a table in `FROM` or `JOIN` names it — the
-  capitals in `empManualAttendanceSummary` make it `mas` — so the aliases in
-  scope are then the first thing the list offers.
+  keywords, ranked by what the caret is inside. After `JOIN`, the tables a
+  foreign key ties to something already in scope come first, each with its
+  `ON` written; after `ON`, the first suggestion is the whole predicate.
+  Accepting a keyword leaves the space after it, and accepting a table in
+  `FROM` or `JOIN` names it — the capitals in `empManualAttendanceSummary`
+  make it `mas`, and never a keyword — so the aliases in scope are then the
+  first thing the list offers. Scope is the statement the caret is in, with or
+  without semicolons, and it includes what the script itself declares: CTEs,
+  derived tables, `#temp` tables, `@table` variables and `DECLARE`d variables.
+  `INSERT INTO t (` offers the column list whole, `VALUES (` a typed
+  placeholder per column, and `DATEADD(` shows its parameters as a procedure
+  call would.
 - Click a column name in an `INSERT` list and the value written for it lights
   up in every `VALUES` row; click a value and its column lights up. Counting
   commas across two lists is the one thing the editor should do for you.

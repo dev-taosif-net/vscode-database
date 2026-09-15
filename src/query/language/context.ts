@@ -28,11 +28,43 @@ export type Clause =
   | 'use'
   | 'none';
 
+/** A column the document itself declares, with its type when the text says one. */
+export interface LocalColumn {
+  name: string;
+  type?: string;
+}
+
 export interface Relation {
   schema?: string;
   name: string;
   /** The alias, or the name when there is none. */
   as: string;
+  /**
+   * The columns, for a relation the document itself defines: a CTE, a derived
+   * table, a temp table or a table variable. The catalog has never heard of
+   * these, and the text is the only place their columns are written down.
+   */
+  columns?: LocalColumn[];
+  /** The offset just past the relation's last token, for the one being typed. */
+  end?: number;
+}
+
+/** An `INSERT` the caret is in, past its target. */
+export interface InsertShape {
+  /** The column names written in the list so far, as typed. */
+  columns: string[];
+  /** True while the caret is inside the column list. */
+  inColumns: boolean;
+  /** True at the start of a `VALUES` row with nothing in it yet. */
+  atRow: boolean;
+}
+
+/** The innermost unclosed call the caret is inside. */
+export interface FunctionCall {
+  /** The word before the parenthesis, upper-cased. */
+  name: string;
+  /** Which argument the caret is on, counting from zero. */
+  argument: number;
 }
 
 export interface SqlContext {
@@ -67,6 +99,17 @@ export interface SqlContext {
   callStart?: number;
   /** The routine being called, when the caret is in its argument list. */
   routine?: RoutineCall;
+  /**
+   * The names in the select list of the query the caret is in, lower-cased.
+   *
+   * `ORDER BY` and `GROUP BY` nearly always name something already selected,
+   * so the list there is ranked by it.
+   */
+  selected: string[];
+  /** The `INSERT` the caret is in, once its target has been named. */
+  insert?: InsertShape;
+  /** The function call the caret is inside, for signature help on built-ins. */
+  func?: FunctionCall;
 }
 
 /**
@@ -154,8 +197,53 @@ const NOT_ALIASES = new Set([
   'AS'
 ]);
 
+/**
+ * The last document's tokens, kept for the next question about it.
+ *
+ * Completion, hover and signature help each ask about the same text within the
+ * same second, and each keystroke asks again. Tokenising a long script once
+ * per version rather than once per question is what keeps a migration file
+ * from getting slower to type in as it grows.
+ */
+let cache: { text: string; tokens: Token[]; locals?: Map<string, LocalColumn[]> } | undefined;
+
+function cached(text: string): NonNullable<typeof cache> {
+  if (cache?.text !== text) {
+    cache = { text, tokens: tokenize(text) };
+  }
+  return cache;
+}
+
+/**
+ * The tokens before `offset`, with the one the caret splits cut at the caret.
+ *
+ * Cutting gives the same tokens as tokenising the text up to the caret would:
+ * the word being typed ends at the caret, and a string or comment the caret is
+ * inside is simply unterminated.
+ */
+function upTo(all: Token[], offset: number): Token[] {
+  let lo = 0;
+  let hi = all.length;
+  while (lo < hi) {
+    const mid = (lo + hi) >> 1;
+    if (all[mid].start < offset) {
+      lo = mid + 1;
+    } else {
+      hi = mid;
+    }
+  }
+  const tokens = all.slice(0, lo);
+  const last = tokens[tokens.length - 1];
+  if (last && last.end > offset) {
+    const text = last.text.slice(0, offset - last.start);
+    tokens[tokens.length - 1] = { ...last, text, upper: text.toUpperCase(), end: offset };
+  }
+  return tokens;
+}
+
 export function analyse(text: string, offset: number): SqlContext {
-  const tokens = tokenize(text.slice(0, offset));
+  const document = cached(text);
+  const tokens = upTo(document.tokens, offset);
   const context: SqlContext = {
     clause: 'none',
     relations: [],
@@ -163,36 +251,58 @@ export function analyse(text: string, offset: number): SqlContext {
     wantsObject: false,
     wantsDatabase: false,
     wantsRoutine: false,
-    inCase: false
+    inCase: false,
+    selected: []
   };
 
   // Everything before the caret in this statement. Statement boundaries are
   // unquoted semicolons; anything before the last one belongs to a statement
   // the caret is not in and would only add relations that are out of scope.
   let start = 0;
-  let statementStart = 0;
   for (let i = tokens.length - 1; i >= 0; i--) {
     if (tokens[i].kind === 'punct' && tokens[i].text === ';') {
       start = i + 1;
-      statementStart = tokens[i].end;
       break;
     }
   }
   // T-SQL does not need the semicolon, so a script of queries one after another
   // is ordinarily a script with none. The statement also ends where the next
   // one begins.
-  const begins = statementBegins(tokens, start);
-  if (begins > start) {
-    start = begins;
-    statementStart = tokens[begins].start;
-  }
-  const scope = tokens.slice(start);
+  const scope = tokens.slice(statementBegins(tokens, start));
   // `CASE` and `BEGIN` both close with `END`, so both go on the stack; only a
   // `CASE` on top means the caret is inside one.
   const blocks: string[] = [];
+  // Every `SELECT` still open at the caret's depth or above, and every `(`.
+  const selects: { index: number; depth: number }[] = [];
+  const calls: FunctionCall[] = [];
+  // The depth each relation was named at. A subquery that has closed took its
+  // tables with it: after `WHERE x.id IN (SELECT id FROM b y)`, `y` is gone.
+  const depths: number[] = [];
+  let depth = 0;
+  let insertAt = -1;
 
   for (let i = 0; i < scope.length; i++) {
     const token = scope[i];
+    if (token.kind === 'punct') {
+      if (token.text === '(') {
+        const opener = scope[i - 1];
+        calls.push({ name: opener?.kind === 'word' ? opener.upper : '', argument: 0 });
+        depth++;
+      } else if (token.text === ')') {
+        calls.pop();
+        depth = Math.max(0, depth - 1);
+        while (selects.length > 0 && selects[selects.length - 1].depth > depth) {
+          selects.pop();
+        }
+        while (depths.length > 0 && depths[depths.length - 1] > depth) {
+          depths.pop();
+          context.relations.pop();
+        }
+      } else if (token.text === ',' && calls.length > 0) {
+        calls[calls.length - 1].argument++;
+      }
+      continue;
+    }
     if (token.kind !== 'word') {
       continue;
     }
@@ -205,11 +315,19 @@ export function analyse(text: string, offset: number): SqlContext {
     if (clause) {
       context.clause = clause;
     }
+    if (token.upper === 'SELECT') {
+      selects.push({ index: i, depth });
+    } else if (token.upper === 'INSERT') {
+      insertAt = i;
+    }
     if (RELATION_ANCHORS.has(token.upper)) {
-      const relation = readRelation(scope, i + 1);
-      if (relation) {
-        context.relations.push(relation.relation);
-        i = relation.next - 1;
+      const read = readRelation(scope, i + 1);
+      if (read) {
+        if (read.relation) {
+          context.relations.push(read.relation);
+          depths.push(depth);
+        }
+        i = read.next - 1;
       }
     }
     if (CALL_WORDS.has(token.upper)) {
@@ -225,7 +343,16 @@ export function analyse(text: string, offset: number): SqlContext {
   }
 
   context.inCase = blocks[blocks.length - 1] === 'CASE';
-  context.relations.push(...relationsAfter(text, statementStart, offset));
+  context.relations.push(...relationsAfter(document.tokens, offset));
+
+  // A CTE, a temp table or a table variable named in `FROM` is the document's
+  // own relation, and the document is where its columns are.
+  document.locals ??= localsOf(document.tokens);
+  for (const relation of context.relations) {
+    if (!relation.columns && !relation.schema) {
+      relation.columns = document.locals.get(relation.name.toLowerCase());
+    }
+  }
 
   const last = scope[scope.length - 1];
   const penultimate = scope[scope.length - 2];
@@ -244,6 +371,29 @@ export function analyse(text: string, offset: number): SqlContext {
     if (qualifier?.kind === 'word') {
       context.qualifier = strip(qualifier.text);
     }
+  }
+
+  // `FROM Ord▏` has read `Ord` as a relation, but it is the word being typed,
+  // and a list that treats it as a table already in scope would step around
+  // its own alias and rank joins to a table nobody has finished naming.
+  if (context.prefixStart !== undefined) {
+    context.relations = context.relations.filter((relation) => relation.end !== offset);
+  }
+
+  const select = [...selects].reverse().find((candidate) => candidate.depth === depth);
+  if (select) {
+    context.selected = selectListNames(scope, select.index + 1, listEnd(scope, select.index + 1, scope.length)).map(
+      (column) => column.name.toLowerCase()
+    );
+  }
+
+  const call = calls[calls.length - 1];
+  if (call?.name) {
+    context.func = call;
+  }
+
+  if (insertAt >= 0 && (context.clause === 'insert' || context.clause === 'values')) {
+    context.insert = readInsertShape(scope, insertAt, context.prefixStart !== undefined);
   }
 
   context.wantsObject = context.clause === 'from' || context.clause === 'join' || context.clause === 'insert';
@@ -395,12 +545,10 @@ function opensCte(words: Token[], k: number): boolean {
  * names tables the caret cannot see, and a `)` that closes a parenthesis opened
  * before the caret is the end of the subquery the caret is inside.
  */
-function relationsAfter(text: string, statementStart: number, offset: number): Relation[] {
-  // From the start of the statement rather than the caret, so a word, string
-  // or bracketed name the caret sits inside is tokenised whole and skipped.
-  const tokens = tokenize(text.slice(statementStart)).filter(
-    (token) => token.kind !== 'comment' && token.start + statementStart >= offset
-  );
+function relationsAfter(all: Token[], offset: number): Relation[] {
+  // A word, string or bracketed name the caret sits inside starts before the
+  // caret, so it is skipped whole.
+  const tokens = all.filter((token) => token.kind !== 'comment' && token.start >= offset);
   const relations: Relation[] = [];
   let depth = 0;
   for (let i = 0; i < tokens.length; i++) {
@@ -424,20 +572,44 @@ function relationsAfter(text: string, statementStart: number, offset: number): R
       break;
     }
     if (RELATION_ANCHORS.has(token.upper)) {
-      const relation = readRelation(tokens, i + 1);
-      if (relation) {
-        relations.push(relation.relation);
-        i = relation.next - 1;
+      const read = readRelation(tokens, i + 1);
+      if (read) {
+        if (read.relation) {
+          relations.push(read.relation);
+        }
+        i = read.next - 1;
       }
     }
   }
   return relations;
 }
 
-/** `[schema.]name [AS] [alias]`, tolerating every part being missing. */
-function readRelation(tokens: Token[], from: number): { relation: Relation; next: number } | null {
+/**
+ * `[schema.]name [AS] [alias]`, tolerating every part being missing — or
+ * `(subquery) [AS] alias`, a derived table, whose columns are read from its
+ * select list.
+ *
+ * Nothing is read from a derived table the caret is inside: it is not closed
+ * yet, and the `FROM` inside it is the one that counts.
+ */
+function readRelation(tokens: Token[], from: number): { relation?: Relation; next: number } | null {
   let i = from;
-  if (i >= tokens.length || tokens[i].kind !== 'word') {
+  if (i >= tokens.length) {
+    return null;
+  }
+  if (punct(tokens[i], '(')) {
+    const close = closeOf(tokens, i);
+    if (close >= tokens.length) {
+      return null;
+    }
+    const columns = selectedColumns(tokens, i + 1, close);
+    const alias = readAlias(tokens, close + 1);
+    if (!alias) {
+      return { next: close + 1 };
+    }
+    return { relation: { name: alias.as, as: alias.as, columns, end: tokens[alias.next - 1].end }, next: alias.next };
+  }
+  if (tokens[i].kind !== 'word') {
     return null;
   }
   let schema: string | undefined;
@@ -457,22 +629,360 @@ function readRelation(tokens: Token[], from: number): { relation: Relation; next
     i += 2;
   }
 
-  let as = name;
-  if (tokens[i]?.kind === 'word' && tokens[i].upper === 'AS' && tokens[i + 1]?.kind === 'word') {
-    as = strip(tokens[i + 1].text);
-    i += 2;
-  } else if (
-    tokens[i]?.kind === 'word' &&
-    !NOT_ALIASES.has(tokens[i].upper) &&
-    // `FROM t` and then the next statement on the line below, with no semicolon.
-    !STARTS_STATEMENT.has(tokens[i].upper)
-  ) {
-    as = strip(tokens[i].text);
-    i += 1;
+  // `CROSS APPLY dbo.fn(x.Id) f`: the arguments come before the alias. Unclosed,
+  // the caret is inside them, and there is no alias yet to look for.
+  if (punct(tokens[i], '(')) {
+    const close = closeOf(tokens, i);
+    if (close >= tokens.length) {
+      return { relation: { schema, name, as: name, end: tokens[i - 1].end }, next: i };
+    }
+    i = close + 1;
   }
 
-  return { relation: { schema, name, as }, next: i };
+  const alias = readAlias(tokens, i);
+  const as = alias ? alias.as : name;
+  i = alias ? alias.next : i;
+  return { relation: { schema, name, as, end: tokens[i - 1].end }, next: i };
 }
+
+function readAlias(tokens: Token[], i: number): { as: string; next: number } | undefined {
+  if (tokens[i]?.kind !== 'word') {
+    return undefined;
+  }
+  if (tokens[i].upper === 'AS' && tokens[i + 1]?.kind === 'word') {
+    return { as: strip(tokens[i + 1].text), next: i + 2 };
+  }
+  // `FROM t` and then the next statement on the line below, with no semicolon.
+  if (NOT_ALIASES.has(tokens[i].upper) || STARTS_STATEMENT.has(tokens[i].upper)) {
+    return undefined;
+  }
+  return { as: strip(tokens[i].text), next: i + 1 };
+}
+
+/* ------------------------------------------------------------ select lists */
+
+/** The columns the first `SELECT` in `[from, to)` produces, by the names its list gives them. */
+function selectedColumns(tokens: Token[], from: number, to: number): LocalColumn[] {
+  let depth = 0;
+  for (let k = from; k < to; k++) {
+    const token = tokens[k];
+    if (token.kind === 'punct') {
+      if (token.text === '(') {
+        depth++;
+      } else if (token.text === ')') {
+        depth--;
+      }
+    } else if (token.kind === 'word' && token.upper === 'SELECT' && depth === 0) {
+      return selectListNames(tokens, k + 1, listEnd(tokens, k + 1, to));
+    }
+  }
+  return [];
+}
+
+/** Where a select list that starts at `from` ends: its `FROM` or `INTO`, the next statement, or `to`. */
+function listEnd(tokens: Token[], from: number, to: number): number {
+  let depth = 0;
+  for (let k = from; k < to; k++) {
+    const token = tokens[k];
+    if (token.kind === 'punct') {
+      if (token.text === '(') {
+        depth++;
+      } else if (token.text === ')' && --depth < 0) {
+        return k;
+      }
+    } else if (
+      token.kind === 'word' &&
+      depth === 0 &&
+      (token.upper === 'FROM' || token.upper === 'INTO' || STARTS_STATEMENT.has(token.upper))
+    ) {
+      return k;
+    }
+  }
+  return to;
+}
+
+/**
+ * The name each entry of a select list goes out under.
+ *
+ * `a.b` is `b`, `a.b AS c` and `a.b c` are `c`, `c = a.b` is `c`, `COUNT(*) n`
+ * is `n`. An entry with no name to read — `*`, or a bare `CAST(…)` — is left
+ * out rather than guessed.
+ */
+function selectListNames(tokens: Token[], from: number, to: number): LocalColumn[] {
+  let k = from;
+  // `DISTINCT`, `ALL`, `TOP 10`, `TOP (@n) PERCENT WITH TIES`: none of it is a column.
+  while (k < to && tokens[k].kind === 'word' && (tokens[k].upper === 'DISTINCT' || tokens[k].upper === 'ALL')) {
+    k++;
+  }
+  if (k < to && tokens[k].upper === 'TOP') {
+    k++;
+    if (punct(tokens[k], '(')) {
+      k = closeOf(tokens, k) + 1;
+    } else if (tokens[k]?.kind === 'number') {
+      k++;
+    }
+    if (tokens[k]?.upper === 'PERCENT') {
+      k++;
+    }
+    if (tokens[k]?.upper === 'WITH' && tokens[k + 1]?.upper === 'TIES') {
+      k += 2;
+    }
+  }
+
+  const names: LocalColumn[] = [];
+  for (const entry of splitTop(tokens, k, to)) {
+    const name = entryName(entry);
+    if (name) {
+      names.push({ name });
+    }
+  }
+  return names;
+}
+
+function entryName(entry: Token[]): string | undefined {
+  const last = entry[entry.length - 1];
+  const before = entry[entry.length - 2];
+  if (!last || last.kind !== 'word' || last.upper === 'AS') {
+    return undefined;
+  }
+  if (before?.kind === 'word' && before.upper === 'AS') {
+    return strip(last.text);
+  }
+  if (entry.length >= 3 && punct(entry[1], '=') && entry[0].kind === 'word') {
+    return strip(entry[0].text);
+  }
+  // `a.b` is `b`; `COUNT(*) n`, `a.b total` and `1 + x` all end in the word
+  // that names the entry, whether as its alias or as the column itself.
+  return strip(last.text);
+}
+
+/** The comma-separated entries of `[from, to)`, commas inside parentheses left alone. */
+function splitTop(tokens: Token[], from: number, to: number): Token[][] {
+  const entries: Token[][] = [];
+  let current: Token[] = [];
+  let depth = 0;
+  for (let k = from; k < to; k++) {
+    const token = tokens[k];
+    if (token.kind === 'comment') {
+      continue;
+    }
+    if (token.kind === 'punct') {
+      if (token.text === '(') {
+        depth++;
+      } else if (token.text === ')') {
+        depth--;
+      } else if (token.text === ',' && depth === 0) {
+        entries.push(current);
+        current = [];
+        continue;
+      }
+    }
+    current.push(token);
+  }
+  if (current.length > 0) {
+    entries.push(current);
+  }
+  return entries;
+}
+
+/* ------------------------------------------------------- local relations */
+
+/** Words that begin a constraint rather than a column in a `CREATE TABLE` list. */
+const NOT_COLUMNS = new Set(['CONSTRAINT', 'PRIMARY', 'UNIQUE', 'CHECK', 'FOREIGN', 'INDEX', 'KEY', 'PERIOD', 'WITH']);
+
+/**
+ * The relations the document declares itself, by lower-cased name.
+ *
+ * `CREATE TABLE #t (…)`, `DECLARE @t TABLE (…)`, `SELECT … INTO #t` and every
+ * CTE in a `WITH`. None of them is in the catalog, and a script that builds a
+ * temp table and then queries it is the ordinary shape of a T-SQL script.
+ */
+function localsOf(all: Token[]): Map<string, LocalColumn[]> {
+  const locals = new Map<string, LocalColumn[]>();
+  const tokens = all.filter((token) => token.kind !== 'comment');
+  const declare = (name: Token, columns: LocalColumn[]) => {
+    if (columns.length > 0) {
+      locals.set(strip(name.text).toLowerCase(), columns);
+    }
+  };
+
+  for (let i = 0; i < tokens.length; i++) {
+    const token = tokens[i];
+    if (token.kind !== 'word') {
+      continue;
+    }
+    if (token.upper === 'TABLE') {
+      const previous = tokens[i - 1];
+      if (previous?.kind === 'word' && previous.text.startsWith('@') && punct(tokens[i + 1], '(')) {
+        declare(previous, ddlColumns(tokens, i + 1));
+      } else if (previous?.kind === 'word' && (previous.upper === 'CREATE' || previous.upper === 'TEMP' || previous.upper === 'TEMPORARY')) {
+        let j = i + 1;
+        if (tokens[j]?.upper === 'IF' && tokens[j + 1]?.upper === 'NOT' && tokens[j + 2]?.upper === 'EXISTS') {
+          j += 3;
+        }
+        if (tokens[j]?.kind !== 'word') {
+          continue;
+        }
+        while (punct(tokens[j + 1], '.') && tokens[j + 2]?.kind === 'word') {
+          j += 2;
+        }
+        if (punct(tokens[j + 1], '(')) {
+          declare(tokens[j], ddlColumns(tokens, j + 1));
+        }
+      }
+    } else if (token.upper === 'INTO' && tokens[i - 1]?.upper !== 'INSERT' && tokens[i + 1]?.kind === 'word') {
+      const select = selectBefore(tokens, i);
+      if (select >= 0) {
+        declare(tokens[i + 1], selectListNames(tokens, select + 1, i));
+      }
+    } else if (token.upper === 'WITH' && opensCte(tokens, i)) {
+      readCtes(tokens, i, declare);
+    }
+  }
+  return locals;
+}
+
+/** The columns of a `CREATE TABLE` list, each with the type written after it. */
+function ddlColumns(tokens: Token[], open: number): LocalColumn[] {
+  const columns: LocalColumn[] = [];
+  for (const entry of splitTop(tokens, open + 1, closeOf(tokens, open))) {
+    const [name, type, next] = entry;
+    if (name?.kind !== 'word' || NOT_COLUMNS.has(name.upper)) {
+      continue;
+    }
+    let rendered: string | undefined;
+    if (type?.kind === 'word') {
+      rendered = type.text;
+      if (punct(next, '(')) {
+        // `decimal(18, 2)`, as one word.
+        const close = closeOf(entry, 2);
+        rendered += entry.slice(2, close + 1).map((token) => token.text).join('');
+      }
+    }
+    columns.push({ name: strip(name.text), type: rendered });
+  }
+  return columns;
+}
+
+/** The `SELECT` whose list ends at `into`, or -1 when `INTO` belongs to something else. */
+function selectBefore(tokens: Token[], into: number): number {
+  let depth = 0;
+  for (let k = into - 1; k >= 0; k--) {
+    const token = tokens[k];
+    if (token.kind === 'punct') {
+      if (token.text === ')') {
+        depth++;
+      } else if (token.text === '(') {
+        if (depth === 0) {
+          return -1;
+        }
+        depth--;
+      } else if (token.text === ';') {
+        return -1;
+      }
+      continue;
+    }
+    if (token.kind === 'word' && depth === 0) {
+      if (token.upper === 'SELECT') {
+        return k;
+      }
+      if (STARTS_STATEMENT.has(token.upper)) {
+        return -1;
+      }
+    }
+  }
+  return -1;
+}
+
+/** Every `name [(columns)] AS (body)` in one `WITH`. */
+function readCtes(tokens: Token[], at: number, declare: (name: Token, columns: LocalColumn[]) => void): void {
+  let j = at + 1;
+  if (tokens[j]?.upper === 'RECURSIVE') {
+    j++;
+  }
+  while (tokens[j]?.kind === 'word') {
+    const name = tokens[j];
+    j++;
+    let explicit: LocalColumn[] | undefined;
+    if (punct(tokens[j], '(')) {
+      const close = closeOf(tokens, j);
+      explicit = splitTop(tokens, j + 1, close)
+        .map((entry) => entry[0])
+        .filter((token) => token?.kind === 'word')
+        .map((token) => ({ name: strip(token.text) }));
+      j = close + 1;
+    }
+    if (tokens[j]?.upper !== 'AS') {
+      break;
+    }
+    j++;
+    if (tokens[j]?.upper === 'NOT') {
+      j++;
+    }
+    if (tokens[j]?.upper === 'MATERIALIZED') {
+      j++;
+    }
+    if (!punct(tokens[j], '(')) {
+      break;
+    }
+    const close = closeOf(tokens, j);
+    declare(name, explicit ?? selectedColumns(tokens, j + 1, close));
+    j = close + 1;
+    if (!punct(tokens[j], ',')) {
+      break;
+    }
+    j++;
+  }
+}
+
+/* ----------------------------------------------------------------- insert */
+
+/**
+ * The column list and values row of the `INSERT` at `insertAt`, as far as the
+ * caret has got. `typing` says the last token is the word being typed, which
+ * is neither a column already listed nor something in the values row.
+ */
+function readInsertShape(tokens: Token[], insertAt: number, typing: boolean): InsertShape | undefined {
+  let i = insertAt + 1;
+  if (tokens[i]?.upper === 'INTO') {
+    i++;
+  }
+  if (tokens[i]?.kind !== 'word') {
+    return undefined;
+  }
+  i++;
+  while (punct(tokens[i], '.') && tokens[i + 1]?.kind === 'word') {
+    i += 2;
+  }
+  if (tokens[i]?.upper === 'WITH' && punct(tokens[i + 1], '(')) {
+    i = closeOf(tokens, i + 1) + 1;
+  }
+
+  const shape: InsertShape = { columns: [], inColumns: false, atRow: false };
+  const end = tokens.length - (typing ? 1 : 0);
+  if (punct(tokens[i], '(')) {
+    const close = closeOf(tokens, i);
+    for (let k = i + 1; k < Math.min(close, end); k++) {
+      if (tokens[k].kind === 'word') {
+        shape.columns.push(strip(tokens[k].text));
+      }
+    }
+    if (close >= tokens.length) {
+      shape.inColumns = true;
+      return shape;
+    }
+    i = close + 1;
+  }
+
+  const tail = tokens[end - 1];
+  const before = tokens[end - 2];
+  if (punct(tail, '(') && (before?.upper === 'VALUES' || punct(before, ','))) {
+    shape.atRow = tokens.slice(i, end).some((token) => token.kind === 'word' && token.upper === 'VALUES');
+  }
+  return shape;
+}
+
+/* ------------------------------------------------------------------ calls */
 
 const CALL_WORDS = new Set(['EXEC', 'EXECUTE', 'CALL']);
 
@@ -492,6 +1002,26 @@ const ENDS_CALL = new Set([
 
 function punct(token: Token | undefined, text: string): boolean {
   return token?.kind === 'punct' && token.text === text;
+}
+
+/** The index of the parenthesis that closes the one at `open`, or one past the last token when it never closes. */
+export function closeOf(tokens: Token[], open: number): number {
+  let depth = 0;
+  for (let i = open; i < tokens.length; i++) {
+    const token = tokens[i];
+    if (token.kind !== 'punct') {
+      continue;
+    }
+    if (token.text === '(') {
+      depth++;
+    } else if (token.text === ')') {
+      depth--;
+      if (depth === 0) {
+        return i;
+      }
+    }
+  }
+  return tokens.length;
 }
 
 /**

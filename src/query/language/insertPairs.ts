@@ -1,4 +1,4 @@
-import { Token, tokenize } from './context';
+import { Token, closeOf, tokenize } from './context';
 
 /**
  * A column in an `INSERT` list and the value written for it, paired up.
@@ -154,26 +154,6 @@ function readInsert(tokens: Token[], from: number): InsertShape | undefined {
     return undefined;
   }
   return { columns, rows };
-}
-
-/** The index of the parenthesis that closes the one at `open`, or one past the last token when it never closes. */
-function closeOf(tokens: Token[], open: number): number {
-  let depth = 0;
-  for (let i = open; i < tokens.length; i++) {
-    const token = tokens[i];
-    if (token.kind !== 'punct') {
-      continue;
-    }
-    if (token.text === '(') {
-      depth++;
-    } else if (token.text === ')') {
-      depth--;
-      if (depth === 0) {
-        return i;
-      }
-    }
-  }
-  return tokens.length;
 }
 
 /**

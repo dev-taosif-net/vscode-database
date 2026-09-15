@@ -5,21 +5,33 @@ import { DbMember, DbObject, KINDS, ObjectKind } from '../../shared/catalog';
 import { fuzzy } from '../../shared/fuzzy';
 import { DriverKind, switchesDatabase } from '../../types';
 import { Indexed, MetadataIndex } from './index';
-import { Clause, RoutineCall, SqlContext, analyse, strip } from './context';
+import { Clause, FunctionCall, Relation, RoutineCall, SqlContext, analyse, strip } from './context';
 import { aliasFor } from './alias';
+import { builtinSignature } from './builtins';
 import { InsertHighlightProvider } from './insertHighlight';
 import {
   ArgumentMode,
   argumentText,
   callText,
   declaration,
+  declaredVariableTypes,
   declaredVariables,
   isOutput,
   parameterNote,
   parameterText,
   parametersOf,
+  placeholder,
   signatureText
 } from './routineCall';
+
+/**
+ * How long the first list in a fresh tab waits for the index.
+ *
+ * Past this the keywords go out on their own, marked incomplete so the editor
+ * asks again on the next keystroke, by which time the index is usually there.
+ * A list that appears and then fills in beats one that appears late.
+ */
+const BUILD_WAIT_MS = 250;
 
 /** Writes a procedure's arguments after its name has been accepted. */
 const EXPAND_CALL = 'databaseTools.completeRoutineCall';
@@ -152,7 +164,7 @@ export class SqlLanguageProviders implements vscode.Disposable {
       vscode.languages.registerCompletionItemProvider(
         selector,
         {
-          provideCompletionItems: (d, p, _t, c) => this.complete(d, p, c),
+          provideCompletionItems: (d, p, t, c) => this.complete(d, p, t, c),
           resolveCompletionItem: (item) => this.resolveItem(item)
         },
         // A dot is the main trigger character. Space was one too, which meant
@@ -190,8 +202,9 @@ export class SqlLanguageProviders implements vscode.Disposable {
   private async complete(
     document: vscode.TextDocument,
     position: vscode.Position,
+    token: vscode.CancellationToken,
     completion?: vscode.CompletionContext
-  ): Promise<vscode.CompletionItem[] | undefined> {
+  ): Promise<vscode.CompletionItem[] | vscode.CompletionList | undefined> {
     const profileId = this.bindings.get(document.uri);
     const profile = profileId ? this.store.get(profileId) : undefined;
     if (!profileId || !profile) {
@@ -207,25 +220,38 @@ export class SqlLanguageProviders implements vscode.Disposable {
     // read below is scoped by it, so a file that has run `USE Reporting` is
     // completed out of Reporting and the file beside it is not.
     const database = this.databaseOf(document);
+    const items: vscode.CompletionItem[] = [];
+    const prefs = prefsFor(document);
 
     if (completion?.triggerCharacter === '@' && context.routine?.slot !== 'argument') {
-      // An `@` outside a call is a variable being written, which this has no
-      // list for — and the editor's own words from the document are the
-      // better answer there.
-      return undefined;
+      // An `@` outside a call is a variable being written. The document's own
+      // `DECLARE`s are the list for that; when it has none, the editor's words
+      // from the document are the better answer.
+      this.variables(items, document, text, context, profile.driver);
+      return items.length > 0 ? items : undefined;
     }
 
     if (context.wantsDatabase && switchesDatabase(profile.driver)) {
       return this.databases(document, context, profileId, database);
     }
 
-    const index = await this.index.build(profileId, database);
-    if (!index) {
+    const index = await this.indexFor(profileId, database);
+    if (index === undefined) {
       return undefined;
     }
-
-    const items: vscode.CompletionItem[] = [];
-    const prefs = prefsFor(document);
+    if (index === 'building') {
+      // The first list in a fresh tab. Keywords now and the rest on the next
+      // keystroke — after a dot or an `EXEC` even the keywords are wrong, so
+      // that list is empty and only says to ask again.
+      if (!context.qualifier && !context.wantsRoutine && !context.routine) {
+        this.keywords(items, context, profile.driver, prefs);
+      }
+      return new vscode.CompletionList(items, true);
+    }
+    if (token.isCancellationRequested) {
+      return undefined;
+    }
+    this.index.warm(profileId, context.relations.filter((relation) => !relation.columns), database);
 
     if (context.wantsRoutine) {
       // Only procedures go after `EXEC` and `CALL`. Keywords, columns and
@@ -245,7 +271,17 @@ export class SqlLanguageProviders implements vscode.Disposable {
       await this.qualified(items, profileId, index, context, profile.driver, prefs, database);
       // A qualified name is unambiguous. Offering keywords after a dot would
       // put `SELECT` in a list where only a column or an object can go.
-      return items;
+      return token.isCancellationRequested ? undefined : items;
+    }
+
+    if (context.insert?.inColumns) {
+      // `INSERT INTO t (`: the target's columns, and nothing that cannot go
+      // in a column list.
+      await this.insertColumns(items, profileId, context, profile.driver, database);
+      return token.isCancellationRequested ? undefined : items;
+    }
+    if (context.insert?.atRow) {
+      await this.valuesRow(items, profileId, context, profile.driver, database);
     }
 
     if (context.clause === 'on') {
@@ -258,11 +294,38 @@ export class SqlLanguageProviders implements vscode.Disposable {
     } else {
       await this.columnsInScope(items, profileId, context, profile.driver, database);
       this.aliases(items, context);
+      this.variables(items, document, text, context, profile.driver);
       this.objects(items, index, context, profile.driver, prefs);
+    }
+    if (token.isCancellationRequested) {
+      return undefined;
     }
 
     this.keywords(items, context, profile.driver, prefs);
     return items;
+  }
+
+  /**
+   * The index, or `building` when it is not there yet and will not be soon.
+   *
+   * A build that lands within the wait is used as if it had been there all
+   * along, which is the common case for every list but the first.
+   */
+  private async indexFor(profileId: string, database: string | undefined): Promise<Indexed | 'building' | undefined> {
+    const ready = this.index.peek(profileId, database);
+    if (ready) {
+      return ready;
+    }
+    const later = new Promise<'building'>((resolve) => setTimeout(() => resolve('building'), BUILD_WAIT_MS));
+    return Promise.race([this.index.build(profileId, database), later]);
+  }
+
+  /** The columns of a relation: from the document when it declares them, else from the catalog. */
+  private membersOf(profileId: string, relation: Relation, database: string | undefined): Promise<DbMember[]> {
+    if (relation.columns) {
+      return Promise.resolve(relation.columns.map((column) => ({ name: column.name, type: column.type ?? '' })));
+    }
+    return this.index.columnsOf(profileId, relation.schema ?? '', relation.name, database);
   }
 
   /** The database a document is in, or undefined for the connection's own. */
@@ -296,7 +359,7 @@ export class SqlLanguageProviders implements vscode.Disposable {
     const typed = strip(context.prefix);
 
     return names
-      .filter((name) => !typed || fuzzy(name, typed))
+      .filter((name) => matches(name, typed))
       .map((name) => {
         const here = Boolean(current) && name.toLowerCase() === (current ?? '').toLowerCase();
         const item = new vscode.CompletionItem(name, vscode.CompletionItemKind.Folder);
@@ -344,7 +407,7 @@ export class SqlLanguageProviders implements vscode.Disposable {
       if (qualifier !== undefined && object.schema.toLowerCase() !== qualifier) {
         continue;
       }
-      if (context.prefix && !fuzzy(object.name, context.prefix)) {
+      if (!matches(object.name, context.prefix)) {
         continue;
       }
       // SQL Server resolves an unqualified procedure against the caller's
@@ -542,9 +605,9 @@ export class SqlLanguageProviders implements vscode.Disposable {
     const relation = context.relations.find((r) => r.as.toLowerCase() === qualifier.toLowerCase());
 
     if (relation) {
-      const columns = await this.index.columnsOf(profileId, relation.schema ?? '', relation.name, database);
+      const columns = await this.membersOf(profileId, relation, database);
       for (const column of columns) {
-        items.push(columnItem(column, BAND.column, context.prefix));
+        items.push(columnItem(column, BAND.column, context.prefix, undefined, columnTier(column, context)));
       }
       return;
     }
@@ -573,8 +636,92 @@ export class SqlLanguageProviders implements vscode.Disposable {
     // a table named without one. Its columns are still what was meant.
     const columns = await this.index.columnsOf(profileId, '', qualifier, database);
     for (const column of columns) {
-      items.push(columnItem(column, BAND.column, context.prefix));
+      items.push(columnItem(column, BAND.column, context.prefix, undefined, columnTier(column, context)));
     }
+  }
+
+  /**
+   * Inside an `INSERT`'s column list: the target's columns not yet named, and
+   * — while the list is still empty — all of them at once.
+   *
+   * The server-supplied ones rank last rather than being left out, because
+   * `SET IDENTITY_INSERT ON` exists and the person who has just written it
+   * means the identity column.
+   */
+  private async insertColumns(
+    items: vscode.CompletionItem[],
+    profileId: string,
+    context: SqlContext,
+    driver: DriverKind,
+    database: string | undefined
+  ): Promise<void> {
+    const target = context.relations[0];
+    if (!target || !context.insert) {
+      return;
+    }
+    const members = await this.membersOf(profileId, target, database);
+    const listed = new Set(context.insert.columns.map((name) => name.toLowerCase()));
+    const remaining = members.filter((member) => !listed.has(member.name.toLowerCase()));
+    if (listed.size === 0) {
+      const writable = remaining.filter((member) => !member.auto);
+      if (writable.length > 0) {
+        const item = new vscode.CompletionItem('all columns', vscode.CompletionItemKind.Snippet);
+        item.label = {
+          label: 'all columns',
+          description: `${writable.length} of ${target.name}${writable.length < members.length ? ', identity left out' : ''}`
+        };
+        item.detail = writable.map((member) => member.name).join(', ');
+        item.insertText = writable.map((member) => quote(driver, member.name)).join(', ');
+        item.filterText = 'all columns';
+        item.sortText = `${BAND.predicate}0`;
+        item.preselect = true;
+        items.push(item);
+      }
+    }
+    for (const column of remaining) {
+      items.push(columnItem(column, BAND.column, context.prefix, undefined, column.auto ? '2' : '1'));
+    }
+  }
+
+  /**
+   * At the start of a `VALUES` row: one placeholder per column, in the order
+   * the row has to be written.
+   *
+   * The order comes from the column list when the statement has one and from
+   * the table when it does not, and each placeholder is typed the way a
+   * procedure argument is — quotes around text, `NULL` selected elsewhere.
+   */
+  private async valuesRow(
+    items: vscode.CompletionItem[],
+    profileId: string,
+    context: SqlContext,
+    driver: DriverKind,
+    database: string | undefined
+  ): Promise<void> {
+    const target = context.relations[0];
+    if (!target || !context.insert) {
+      return;
+    }
+    const members = await this.membersOf(profileId, target, database);
+    const columns =
+      context.insert.columns.length > 0
+        ? context.insert.columns.map(
+            (name) => members.find((member) => member.name.toLowerCase() === name.toLowerCase()) ?? { name, type: '' }
+          )
+        : members.filter((member) => !member.auto);
+    if (columns.length === 0) {
+      return;
+    }
+    const names = columns.map((column) => column.name);
+    const shown = names.length > 4 ? `${names.slice(0, 4).join(', ')}, …` : names.join(', ');
+    const item = new vscode.CompletionItem(`values for ${shown}`, vscode.CompletionItemKind.Snippet);
+    item.label = { label: `values for ${shown}`, description: `${columns.length} ${columns.length === 1 ? 'value' : 'values'}` };
+    item.detail = names.join(', ');
+    item.insertText = new vscode.SnippetString(columns.map((column, i) => placeholder(driver, column, i + 1)).join(', '));
+    item.filterText = 'values';
+    item.sortText = `${BAND.predicate}0`;
+    item.preselect = true;
+    items.push(item);
   }
 
   /**
@@ -619,19 +766,69 @@ export class SqlLanguageProviders implements vscode.Disposable {
     // Only the relations actually named in this statement. Offering every
     // column in the database would be a list nobody can read, ranked by a
     // matcher that has no way to prefer the right one.
-    const qualify = context.relations.length > 1;
-    for (const relation of context.relations.slice(0, 8)) {
-      const columns = await this.index.columnsOf(profileId, relation.schema ?? '', relation.name, database);
-      for (const column of columns) {
+    const relations = context.relations.slice(0, 8);
+    const qualify = relations.length > 1;
+    // All at once: a four-table join is four reads, and the list waits for
+    // the slowest rather than the sum.
+    const columns = await Promise.all(relations.map((relation) => this.membersOf(profileId, relation, database)));
+    relations.forEach((relation, i) => {
+      for (const column of columns[i]) {
         // With more than one relation in scope the row has to say which table
         // it came from, because two of them will have an `id` and the name on
         // its own cannot tell you which one you are about to write.
-        const item = columnItem(column, BAND.column, context.prefix, qualify ? relation.as : undefined);
+        const item = columnItem(
+          column,
+          BAND.column,
+          context.prefix,
+          qualify ? relation.as : undefined,
+          columnTier(column, context)
+        );
         if (qualify) {
           item.insertText = `${relation.as}.${quote(driver, column.name)}`;
         }
         items.push(item);
       }
+    });
+  }
+
+  /**
+   * The variables the document declares, where a value can go.
+   *
+   * SQL Server only: a PostgreSQL script has no `DECLARE @x`, and the words
+   * the editor collects from the document already cover what it does have.
+   */
+  private variables(
+    items: vscode.CompletionItem[],
+    document: vscode.TextDocument,
+    text: string,
+    context: SqlContext,
+    driver: DriverKind
+  ): void {
+    if (driver !== 'mssql') {
+      return;
+    }
+    // `@` is not part of the editor's word, so the range is what lets `@Cu`
+    // be replaced rather than doubled — the same reason `parameters` has one.
+    const range =
+      context.prefixStart !== undefined
+        ? new vscode.Range(
+            document.positionAt(context.prefixStart),
+            document.positionAt(context.prefixStart + context.prefix.length)
+          )
+        : undefined;
+    for (const variable of declaredVariableTypes(text).values()) {
+      if (!matches(variable.name, context.prefix)) {
+        continue;
+      }
+      const item = new vscode.CompletionItem(variable.name, vscode.CompletionItemKind.Variable);
+      item.label = { label: variable.name, detail: variable.type ? `  ${variable.type}` : undefined, description: 'variable' };
+      item.detail = variable.type ? `variable · ${variable.type}` : 'variable';
+      item.filterText = variable.name;
+      item.sortText = `${BAND.alias}${rank(variable.name, context.prefix)}`;
+      if (range) {
+        item.range = range;
+      }
+      items.push(item);
     }
   }
 
@@ -680,24 +877,42 @@ export class SqlLanguageProviders implements vscode.Disposable {
     // fresh alias has to step around them — that is what makes a self-join
     // come out as `mas` and `mas2` rather than `mas` twice.
     const taken = aliasesInScope(context);
+    // After `JOIN`, the tables a foreign key ties to something already in
+    // scope come first, and each arrives with its `ON` written. This is the
+    // completion that wins people over: the join predicate is the most
+    // tedious thing in SQL to type and the one thing the database already
+    // knows.
+    const candidates =
+      context.clause === 'join' && context.relations.length > 0
+        ? this.index.joinCandidates(index, context.relations)
+        : undefined;
     for (const object of index.objects) {
       if (wanted && !wanted.has(object.kind)) {
         continue;
       }
-      if (context.prefix && !fuzzy(object.name, context.prefix)) {
+      if (!matches(object.name, context.prefix)) {
         continue;
       }
       const qualify = index.schemas.size > 1 && object.schema !== defaultSchema(driver);
-      const item = objectItem(
-        object.kind,
-        object.schema,
-        object.name,
-        object.detail,
-        driver,
-        qualify,
-        aliasWanted(object.kind, context, prefs) ? aliasFor(object.name, taken) : undefined
-      );
+      const alias = aliasWanted(object.kind, context, prefs) ? aliasFor(object.name, taken) : undefined;
+      const item = objectItem(object.kind, object.schema, object.name, object.detail, driver, qualify, alias);
       item.sortText = `${BAND.object}${rank(object.name, context.prefix)}`;
+
+      const related = candidates?.get(`${object.schema.toLowerCase()}.${object.name.toLowerCase()}`);
+      if (related && ALIASABLE.has(object.kind)) {
+        const as = alias ?? object.name;
+        const predicate = this.index.joinPredicate(index, related, { schema: object.schema, name: object.name, as });
+        if (predicate) {
+          item.insertText = `${String(item.insertText).trimEnd()} ON ${predicate} `;
+          item.label = {
+            label: object.name,
+            detail: `  ${as} ON ${predicate}`,
+            description: `${object.schema} · joins ${related.as}`
+          };
+          item.detail = `${KINDS[object.kind].singular} · ${object.schema} · foreign key to ${related.name}`;
+          item.sortText = `${BAND.predicate}${rank(object.name, context.prefix)}`;
+        }
+      }
       items.push(item);
     }
   }
@@ -712,7 +927,7 @@ export class SqlLanguageProviders implements vscode.Disposable {
     // list should not say so twice.
     const words = new Set([...COMMON, ...(driver === 'mssql' ? MSSQL_ONLY : POSTGRES_ONLY)]);
     for (const word of words) {
-      if (context.prefix && !fuzzy(word, context.prefix)) {
+      if (!matches(word, context.prefix)) {
         continue;
       }
       const item = new vscode.CompletionItem(word, vscode.CompletionItemKind.Keyword);
@@ -761,12 +976,14 @@ export class SqlLanguageProviders implements vscode.Disposable {
     }
 
     const context = analyse(document.getText(), document.offsetAt(position));
-    for (const relation of context.relations) {
-      const columns = await this.index.columnsOf(profileId, relation.schema ?? '', relation.name, database);
-      const column = columns.find((candidate) => candidate.name.toLowerCase() === word.toLowerCase());
+    const relations = context.relations.slice(0, 8);
+    const columns = await Promise.all(relations.map((relation) => this.membersOf(profileId, relation, database)));
+    for (let i = 0; i < relations.length; i++) {
+      const relation = relations[i];
+      const column = columns[i].find((candidate) => candidate.name.toLowerCase() === word.toLowerCase());
       if (column) {
         const markdown = new vscode.MarkdownString();
-        markdown.appendMarkdown(`**${column.name}** \`${column.type}\`\n\n`);
+        markdown.appendMarkdown(`**${column.name}**${column.type ? ` \`${column.type}\`` : ''}\n\n`);
         const notes = [
           column.key ? 'primary key' : undefined,
           column.ref ? 'foreign key' : undefined,
@@ -793,8 +1010,14 @@ export class SqlLanguageProviders implements vscode.Disposable {
     if (!profileId || !profile) {
       return undefined;
     }
-    const call = analyse(document.getText(), document.offsetAt(position)).routine;
-    if (!call || (profile.driver === 'postgres' && !call.parenthesised)) {
+    const context = analyse(document.getText(), document.offsetAt(position));
+    const call = context.routine;
+    if (!call) {
+      // Not in a procedure call, but perhaps in `DATEADD(`, whose parameters
+      // no catalog declares and everybody has to look up.
+      return context.func ? builtinHelp(profile.driver, context.func) : undefined;
+    }
+    if (profile.driver === 'postgres' && !call.parenthesised) {
       return undefined;
     }
     const database = this.databaseOf(document);
@@ -909,6 +1132,47 @@ function activeParameter(parameters: DbMember[], call: RoutineCall): number {
     }
   }
   return Math.max(0, Math.min(call.argument, parameters.length - 1));
+}
+
+/** Signature help for a built-in function, from the table in `builtins.ts`. */
+function builtinHelp(driver: DriverKind, call: FunctionCall): vscode.SignatureHelp | undefined {
+  const builtin = builtinSignature(driver, call.name);
+  if (!builtin) {
+    return undefined;
+  }
+  const signature = new vscode.SignatureInformation(builtin.label, builtin.doc);
+  signature.parameters = builtin.spans.map((span) => new vscode.ParameterInformation(span));
+  const help = new vscode.SignatureHelp();
+  help.signatures = [signature];
+  help.activeSignature = 0;
+  // A variadic function's last parameter is every argument from there on. A
+  // fixed one past its last argument highlights nothing, which is the truth.
+  help.activeParameter = builtin.variadic ? Math.min(call.argument, builtin.spans.length - 1) : call.argument;
+  return help;
+}
+
+/**
+ * Which columns come first in a clause, as a one-digit prefix inside the
+ * column band.
+ *
+ * A predicate is nearly always on a key, so `WHERE` and `ON` put the keys
+ * first. `ORDER BY` and `GROUP BY` nearly always name something already
+ * selected. `SET` cannot write an identity or a key without ceremony, so
+ * those go last there.
+ */
+function columnTier(column: DbMember, context: SqlContext): string {
+  switch (context.clause) {
+    case 'on':
+    case 'where':
+      return column.key || column.ref ? '0' : '1';
+    case 'order':
+    case 'group':
+      return context.selected.includes(column.name.toLowerCase()) ? '0' : '1';
+    case 'set':
+      return column.auto || column.key ? '2' : '1';
+    default:
+      return '1';
+  }
 }
 
 /**
@@ -1050,7 +1314,7 @@ function objectItem(
  * when more than one relation is in scope — the case where the bare name is
  * genuinely ambiguous.
  */
-function columnItem(column: DbMember, band: string, prefix: string, origin?: string): vscode.CompletionItem {
+function columnItem(column: DbMember, band: string, prefix: string, origin?: string, tier = '1'): vscode.CompletionItem {
   const item = new vscode.CompletionItem(column.name, vscode.CompletionItemKind.Field);
   const notes = [
     column.nullable === false ? 'NOT NULL' : column.nullable === true ? 'NULL' : undefined,
@@ -1061,10 +1325,12 @@ function columnItem(column: DbMember, band: string, prefix: string, origin?: str
   ]
     .filter(Boolean)
     .join(' · ');
-  item.label = { label: column.name, detail: `  ${column.type}`, description: notes || undefined };
-  item.detail = notes ? `${column.type} · ${notes}` : column.type;
+  // A column read from the document rather than the catalog may have no type
+  // to show, and a blank where the type goes reads as a bug.
+  item.label = { label: column.name, detail: column.type ? `  ${column.type}` : undefined, description: notes || undefined };
+  item.detail = [column.type, notes].filter(Boolean).join(' · ') || 'column';
   item.filterText = column.name;
-  item.sortText = `${band}${rank(column.name, prefix)}`;
+  item.sortText = `${band}${tier}${rank(column.name, prefix)}`;
   return item;
 }
 
@@ -1103,7 +1369,17 @@ function rank(candidate: string, prefix: string): string {
   if (!prefix) {
     return candidate.toLowerCase();
   }
-  const match = fuzzy(candidate, prefix);
+  const match = fuzzy(candidate, prefix.toLowerCase());
   const score = match ? Math.max(0, Math.min(99999, match.score)) : 0;
   return String(99999 - score).padStart(5, '0');
+}
+
+/**
+ * Whether what has been typed finds the candidate; nothing typed finds all.
+ *
+ * The matcher wants its needle lower-cased and does not lower it itself, so
+ * `Cust` and `SEL` typed with the shift key held would otherwise find nothing.
+ */
+function matches(candidate: string, prefix: string): boolean {
+  return !prefix || fuzzy(candidate, prefix.toLowerCase()) !== null;
 }
