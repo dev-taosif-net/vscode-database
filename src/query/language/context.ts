@@ -178,6 +178,14 @@ export function analyse(text: string, offset: number): SqlContext {
       break;
     }
   }
+  // T-SQL does not need the semicolon, so a script of queries one after another
+  // is ordinarily a script with none. The statement also ends where the next
+  // one begins.
+  const begins = statementBegins(tokens, start);
+  if (begins > start) {
+    start = begins;
+    statementStart = tokens[begins].start;
+  }
   const scope = tokens.slice(start);
   // `CASE` and `BEGIN` both close with `END`, so both go on the stack; only a
   // `CASE` on top means the caret is inside one.
@@ -270,6 +278,113 @@ const STARTS_STATEMENT = new Set([
 ]);
 
 /**
+ * Words that, written straight before a statement word, make it part of the
+ * statement already open: `UNION SELECT`, `MERGE … THEN UPDATE`, `ON DELETE
+ * CASCADE`, `CREATE VIEW … AS SELECT`, `FOR UPDATE`, `ON CONFLICT DO UPDATE`.
+ */
+const CONTINUES = new Set([
+  'UNION', 'ALL', 'EXCEPT', 'INTERSECT', 'THEN', 'AS', 'ON', 'OR', 'FOR', 'AFTER', 'OF', 'DO', 'GRANT', 'DENY',
+  'REVOKE'
+]);
+
+/** Statement words that follow a closing parenthesis inside one statement: a CTE, or `INSERT … (cols) SELECT`. */
+const CONTINUES_AFTER_GROUP = new Set(['SELECT', 'INSERT', 'UPDATE', 'DELETE', 'MERGE']);
+
+/**
+ * Where the statement the caret is in begins, as an index into `tokens`.
+ *
+ * A statement word opens a new statement unless something before it says it
+ * belongs to the current one. A statement opened inside a parenthesis that has
+ * since closed is a subquery the caret is past, and does not count.
+ */
+function statementBegins(tokens: Token[], from: number): number {
+  const words = tokens.slice(from).filter((token) => token.kind !== 'comment');
+  const opened: { token: Token; depth: number }[] = [];
+  let depth = 0;
+  let leader = '';
+  let values = false;
+
+  for (let k = 0; k < words.length; k++) {
+    const token = words[k];
+    if (token.kind === 'punct') {
+      if (token.text === '(') {
+        depth++;
+      } else if (token.text === ')') {
+        depth = Math.max(0, depth - 1);
+        while (opened.length > 0 && opened[opened.length - 1].depth > depth) {
+          opened.pop();
+        }
+      }
+      continue;
+    }
+    if (token.kind !== 'word') {
+      continue;
+    }
+    if (token.upper === 'VALUES') {
+      values = true;
+    }
+    const statement = token.upper === 'WITH' ? opensCte(words, k) : STARTS_STATEMENT.has(token.upper);
+    if (!statement || continuesStatement(token, words[k - 1], leader, values)) {
+      continue;
+    }
+    opened.push({ token, depth });
+    leader = token.upper;
+    values = false;
+  }
+
+  const last = opened[opened.length - 1];
+  return last ? tokens.indexOf(last.token) : from;
+}
+
+function continuesStatement(token: Token, previous: Token | undefined, leader: string, values: boolean): boolean {
+  if (!previous) {
+    return false;
+  }
+  // `INSERT INTO t SELECT …` and `INSERT INTO t (a, b) SELECT …`, but not the
+  // query written after an `INSERT … VALUES (…)` that has finished.
+  const insertSource = leader === 'INSERT' && !values;
+  if (previous.kind === 'punct') {
+    if (previous.text === '(' || previous.text === ',') {
+      return true;
+    }
+    return previous.text === ')' && CONTINUES_AFTER_GROUP.has(token.upper) && (leader !== 'INSERT' || insertSource);
+  }
+  if (previous.kind === 'word' && CONTINUES.has(previous.upper)) {
+    return true;
+  }
+  return insertSource && (token.upper === 'SELECT' || token.upper === 'EXEC' || token.upper === 'EXECUTE');
+}
+
+/**
+ * `WITH name AS (` or `WITH name (columns)` — a common table expression, as
+ * opposed to the table hint in `FROM t WITH (NOLOCK)` or `WITH ROLLUP`.
+ */
+function opensCte(words: Token[], k: number): boolean {
+  let j = k + 1;
+  if (words[j]?.upper === 'RECURSIVE') {
+    j++;
+  }
+  if (words[j]?.kind !== 'word') {
+    return false;
+  }
+  j++;
+  if (punct(words[j], '(')) {
+    return true;
+  }
+  if (words[j]?.upper !== 'AS') {
+    return false;
+  }
+  j++;
+  if (words[j]?.upper === 'NOT') {
+    j++;
+  }
+  if (words[j]?.upper === 'MATERIALIZED') {
+    j++;
+  }
+  return punct(words[j], '(');
+}
+
+/**
  * The relations the statement names after the caret.
  *
  * A select list is written before its `FROM`, so `SELECT lp.▏ FROM LeavePolicy lp`
@@ -346,7 +461,12 @@ function readRelation(tokens: Token[], from: number): { relation: Relation; next
   if (tokens[i]?.kind === 'word' && tokens[i].upper === 'AS' && tokens[i + 1]?.kind === 'word') {
     as = strip(tokens[i + 1].text);
     i += 2;
-  } else if (tokens[i]?.kind === 'word' && !NOT_ALIASES.has(tokens[i].upper)) {
+  } else if (
+    tokens[i]?.kind === 'word' &&
+    !NOT_ALIASES.has(tokens[i].upper) &&
+    // `FROM t` and then the next statement on the line below, with no semicolon.
+    !STARTS_STATEMENT.has(tokens[i].upper)
+  ) {
     as = strip(tokens[i].text);
     i += 1;
   }
