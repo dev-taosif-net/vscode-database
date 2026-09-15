@@ -14,6 +14,7 @@ import {
   isTagged
 } from '../shared/query';
 import { EnvironmentId } from '../types';
+import type { EditPlan } from '../edit/types';
 
 /**
  * Rows a result set keeps in memory before it starts spilling.
@@ -77,6 +78,12 @@ export interface ExecutionRecord {
   sql: string;
   /** Where in the document each batch started, so an error finds its line. */
   batchLines: number[];
+  /**
+   * Per set index, whether and how its cells can be written back. Filled on
+   * the first attempt to edit a set and never before: it is a catalog read
+   * that a result nobody edits should not pay for.
+   */
+  edits?: Map<number, EditPlan>;
 }
 
 /**
@@ -252,6 +259,33 @@ export class ResultStore implements vscode.Disposable {
     return set.view ? set.view.length : set.count;
   }
 
+  /* --------------------------------------------------------------- editing */
+
+  /**
+   * The in-memory row behind a grid row, or undefined when there is none.
+   *
+   * The grid counts in whatever order it is showing, so a sorted or filtered
+   * set goes through its view first. A row past the spill is not editable:
+   * it lives in a file, and rewriting one line of a file of forty million to
+   * keep a cell in step is not a thing worth doing for a row nobody can see
+   * without scrolling for an hour.
+   */
+  storedIndex(set: SetData, row: number): number | undefined {
+    const stored = set.view ? set.view[row] : row;
+    if (stored === undefined || stored < 0 || stored >= set.rows.length) {
+      return undefined;
+    }
+    return stored;
+  }
+
+  /** Records what the server now holds, so a re-projection draws it. */
+  setCell(set: SetData, stored: number, column: number, value: CellValue): void {
+    const row = set.rows[stored];
+    if (row && column >= 0 && column < set.columns.length) {
+      row[column] = value;
+    }
+  }
+
   /* --------------------------------------------------------- view controls */
 
   /**
@@ -326,7 +360,8 @@ export class ResultStore implements vscode.Disposable {
         rowCount: this.visibleCount(set),
         total: set.total,
         truncated: set.truncated,
-        sort: set.sort
+        sort: set.sort,
+        edit: record.edits?.get(index)?.info
       })),
       messages: record.messages,
       error: record.error,

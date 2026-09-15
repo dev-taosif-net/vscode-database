@@ -21,6 +21,7 @@ import { CurrentConnection } from './ui/currentConnection';
 import { DetailsView, HistoryView } from './ui/panelViews';
 import { ObjectCommands, contextOf } from './ui/objectCommands';
 import { QueryBridge } from './ui/queryBridge';
+import { EditService } from './edit/editService';
 import { QueryCommands } from './ui/queryCommands';
 import { ResultsView } from './ui/resultsView';
 import { ActiveConnectionContext } from './ui/activeConnectionContext';
@@ -106,7 +107,8 @@ export function activate(context: vscode.ExtensionContext): void {
   const saved = new SavedQueryStore(context, store);
   const index = new MetadataIndex(store, manager, catalog, details);
   const active = new ActiveTab(bindings);
-  const bridge = new QueryBridge(store, bindings, results, execution, details, output);
+  const edits = new EditService(store, manager, execution, results, output);
+  const bridge = new QueryBridge(store, bindings, results, execution, details, edits, output);
   const resultsView = new ResultsView(context, bridge, bindings, active, execution, results);
   const panels = new WorkspacePanels(context, store, catalog, details, execution, results, bridge, active, output);
   const workspaceStatus = new WorkspaceStatusBar(store, bindings, results, execution, active);

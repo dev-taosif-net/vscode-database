@@ -670,6 +670,52 @@ behind Enter. Numbers are right-aligned and tabular; text is left-aligned; dates
 are ISO-8601 in the server's own values, never localised, because a grid that
 localises a `datetime2` is a grid whose CSV does not round-trip.
 
+### Editing cells
+
+Enter or F2 on a cell opens it; so does typing. Enter writes the cell back and
+moves down, Tab writes and moves along, Escape puts the old value back, and a
+click elsewhere writes, the way a spreadsheet does. Delete opens the cell set
+to NULL — a button in the editor does the same — and Enter is still the moment
+the server hears anything. Nothing is sent when nothing changed.
+
+**Nothing on Run.** Whether a set can be edited is worked out on the first
+attempt and kept on the record (`src/edit/editService.ts`). PostgreSQL names
+each column's relation and attribute in every row description, so the driver
+tags the column (`ColumnMeta.origin`) and the answer is one catalog read. SQL
+Server says nothing about origin, so `sp_describe_first_result_set` is asked
+in browse mode — it compiles the statement without running it and names the
+source table and column behind every alias — followed by one read of the
+table's unique indexes and foreign keys. Both run on the control session, so
+they never queue behind the tab. The rules that turn those facts into "which
+cells" live in `src/edit/plan.ts` and are the same for both engines.
+
+**What is refused, and why in words.** A read-only connection. Columns from
+more than one table. A table with no primary key or unique index. A key column
+missing from the SELECT. A view, a materialized view, a foreign table. A row
+whose key holds NULL. A row past the in-memory window. A result set that is
+not the first of its statement, a run with a plan, a procedure's rows. Each
+comes back as a sentence in the toast, because "you cannot edit this" needs its
+second half.
+
+**What is locked.** Primary key columns, foreign key columns, identity,
+computed and generated columns, `rowversion`, expressions and binary. The
+header carries a lock and says which on hover.
+
+**The write.** One parameterised `UPDATE … WHERE key = @p` on the tab's own
+session (`src/edit/updateSql.ts`) — the tab's, not a fresh one, because the
+edit belongs in any transaction the tab has open and on a second connection
+would block behind the tab's own locks. It takes the tab's slot in the
+execution service the way a Run does, so Run and edit never share a socket
+mid-request. For integer, boolean and plain string columns the fetched value
+is added to the `WHERE`, so a row somebody else changed in between is not
+overwritten: zero rows affected is reported as "changed or deleted since it
+was fetched", never as success. The value the server now holds comes back in
+the same round trip — `RETURNING` on PostgreSQL, a `SELECT` in the same batch
+on SQL Server, where `OUTPUT` would refuse any table with a trigger — and the
+cell shows that, not what was typed: a trigger, a default or a rounding may
+have had the last word. Production asks the same question a written `UPDATE`
+does. The statement, with its values, goes to the Messages tab and to history.
+
 ## Table data view
 
 `Customer [Data]` — the answer to "I just want to look at the table", which is
@@ -713,11 +759,17 @@ empty grid on the table that most needs looking at.
 already in it and run it. `View Data` opens this instead, because it is not a
 statement — it is a table, with paging and sorting that a statement cannot have.
 
-Editing is explicitly **out of scope for phase 3**. An editable grid needs a
-unique key strategy, optimistic concurrency, a change set, a preview of the
-generated DML and a transaction model, and half of an editable grid against
-production is worse than none. The grid is read-only, says so in its footer, and
-`Generate CRUD` is how you get a statement you can read before you run it.
+While a data view or a runner is the active tab the Results panel steps aside:
+it projects nothing for the tab, since the tab draws its own grid, and it
+closes the panel it lives in, reopening it without taking focus when a query
+tab comes back. Only a panel it closed is reopened, and
+`databaseTools.hideResultsForDataTabs` turns the closing off for anyone who
+keeps the Results view somewhere other than the panel.
+
+Cells can be edited in place, in the data view and in the results panel alike,
+one at a time — see *Editing cells* under the grid architecture. There is no
+change set: each Enter is one `UPDATE`, written and answered before the next.
+`Generate CRUD` is still how you get a statement you can read before you run it.
 
 ## Object details panel
 
@@ -1280,6 +1332,14 @@ src/shared/
   query.ts                    host ↔ results/data/runner contract
   plan.ts                     the engine-neutral plan model
   details.ts                  object facts, tags, dependency shapes
+
+src/edit/
+  editService.ts              describe once per set, write one cell, audit
+  plan.ts                     provenance → editable set, locked columns
+  updateSql.ts                the UPDATE, its optimistic check, its readback
+  mssql.ts                    sp_describe_first_result_set, keys, foreign keys
+  postgres.ts                 origin oids → names, keys, foreign keys
+  types.ts                    Provenance and EditPlan
 
 src/exec/
   sessionPool.ts              control + exec leases, idle reaping, cancel

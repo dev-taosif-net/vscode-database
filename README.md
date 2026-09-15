@@ -38,6 +38,12 @@ See [docs/query-workspace.md](docs/query-workspace.md).
   with real dates in it.
 - Sorting a query you wrote sorts only the rows that were fetched, and the
   header says so. A table data view sorts on the server and is exact.
+- Cells can be edited in place. Enter or F2 opens one, Enter writes it back as
+  a single parameterised `UPDATE` seeking on the table's key, and the cell
+  then shows what the server actually stored. Key, foreign key, identity and
+  computed columns are locked; a result from more than one table, or from a
+  table with no key, stays read-only and says why. Working out which costs
+  nothing on Run and one catalog read on the first edit.
 - Cancel means cancel: SQL Server gets an attention signal on the request,
   PostgreSQL gets the protocol's own CancelRequest down a second socket, and
   the rows already fetched stay on screen.
@@ -232,11 +238,14 @@ the first connection, so activation loads neither one.
 
 ## Not in this release
 
-- **An editable grid.** The results grid is read-only and says so in its
-  footer. Editing needs a unique key strategy, optimistic concurrency, a
-  change set, a preview of the generated DML and a transaction model, and half
-  of an editable grid against production is worse than none. Generate CRUD is
-  how you get a statement you can read before you run it.
+- **A change set in the grid.** Cells are edited one at a time: Enter or F2
+  opens a cell, Enter writes it back as one parameterised `UPDATE` seeking on
+  the table's key, Escape cancels, and the Messages tab and history carry the
+  statement. There is no batch of pending changes to preview and commit
+  together, no inserting or deleting rows, and no editing through a join or
+  a result with no key. Primary key, foreign key, identity and computed
+  columns stay locked. Generate CRUD is still how you get a statement you can
+  read before you run it.
 - **Schema comparison.** Compare With opens two scripted definitions in the
   workbench's own diff editor, which is genuinely useful and is a diff of two
   scripts rather than a comparison of two schemas. It says so.

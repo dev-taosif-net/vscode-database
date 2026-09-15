@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import { ConnectionStore } from '../store/connectionStore';
 import { DetailsService } from '../details/detailsService';
+import { EditService } from '../edit/editService';
 import { ExecutionService } from '../exec/executionService';
 import { ExecutionRecord, ResultStore } from '../exec/resultStore';
 import { EXTENSIONS, exportSet, renderCopy } from '../export/exporters';
@@ -28,6 +29,7 @@ export class QueryBridge {
     private readonly results: ResultStore,
     private readonly execution: ExecutionService,
     private readonly details: DetailsService,
+    private readonly edits: EditService,
     private readonly output: vscode.LogOutputChannel
   ) {}
 
@@ -117,6 +119,20 @@ export class QueryBridge {
       case 'openConnection':
         await vscode.commands.executeCommand('databaseTools.editConnection', message.profileId);
         return;
+
+      case 'describeEdit': {
+        const plan = await this.edits.describe(message.executionId, message.setIndex, post);
+        // The record was re-announced with its answer; this is for a panel
+        // whose tab is not the active one and so did not hear it.
+        const record = plan ? this.results.peek(message.executionId) : undefined;
+        if (record) {
+          this.project(record.tab, post);
+        }
+        return;
+      }
+
+      case 'updateCell':
+        return this.edits.update(message, post);
 
       default:
         return;

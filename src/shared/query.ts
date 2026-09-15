@@ -33,6 +33,13 @@ export interface ColumnMeta {
    * Absent means unknown, which is drawn as neither.
    */
   nullable?: boolean;
+  /**
+   * The table column this was read straight from, where the engine says so at
+   * no cost. PostgreSQL names the relation and attribute in every row
+   * description; SQL Server says nothing until asked, and is asked lazily by
+   * the edit path. A computed value or an expression has no origin.
+   */
+  origin?: { relation: string; column: number };
 }
 
 /**
@@ -101,6 +108,46 @@ export interface ResultSetInfo {
    * the rows already fetched, and the header has to say so.
    */
   sort?: { column: number; direction: 'asc' | 'desc'; server: boolean };
+  /**
+   * Whether cells of this set can be written back, and which. Absent until
+   * somebody first tries to edit: working it out costs a catalog read, and a
+   * result nobody edits should cost nothing beyond its rows.
+   */
+  edit?: EditInfo;
+}
+
+/* ----------------------------------------------------------------- editing */
+
+/** Why one column of an editable set is not itself editable. */
+export type LockReason = 'key' | 'foreignKey' | 'identity' | 'computed' | 'rowversion' | 'expression' | 'binary';
+
+export const LOCK_LABELS: Record<LockReason, string> = {
+  key: 'Primary key columns are not edited in place',
+  foreignKey: 'Foreign key columns are not edited in place',
+  identity: 'Identity columns are assigned by the server',
+  computed: 'Computed columns are derived by the server',
+  rowversion: 'Row version columns are maintained by the server',
+  expression: 'This column is an expression, not a table column',
+  binary: 'Binary columns cannot be edited as text'
+};
+
+/**
+ * How a result set may be written back.
+ *
+ * `editable` false comes with the reason in words, because "you cannot edit
+ * this" is a sentence that needs a second half: the result joins two tables,
+ * or its table has no primary key, or the connection is read-only. `locks`
+ * is aligned with the set's columns and is null where a cell may be typed
+ * into.
+ */
+export interface EditInfo {
+  editable: boolean;
+  reason?: string;
+  /** The table the edits go to. */
+  target?: { schema: string; name: string };
+  /** The columns that identify a row, by name. Every one is in the set. */
+  keyColumns: string[];
+  locks: (LockReason | null)[];
 }
 
 /** Table data only: what paging is possible and where it has got to. */
@@ -254,6 +301,12 @@ export interface TabConnection {
 export interface TabContext {
   tab: string;
   connection: TabConnection | null;
+  /**
+   * True for a tab that draws its own rows — a table data view, a procedure
+   * runner. The results panel then shows nothing for it rather than the same
+   * grid a second time.
+   */
+  inline?: boolean;
 }
 
 export type QueryHostMessage =
@@ -270,7 +323,23 @@ export type QueryHostMessage =
   | { type: 'execute' }
   | { type: 'exported'; path: string; rows: number }
   | { type: 'copied'; cells: number }
-  | { type: 'notice'; text: string; level: 'info' | 'error' };
+  | { type: 'notice'; text: string; level: 'info' | 'error' }
+  /**
+   * One edit settled. On success `value` is what the server now holds for the
+   * cell, which is not always what was typed: a trigger, a default, a
+   * collation or a rounding may have had the last word. On failure the cell
+   * keeps what it had and `error` says what the server said.
+   */
+  | {
+      type: 'cell';
+      executionId: string;
+      setIndex: number;
+      row: number;
+      column: number;
+      ok: boolean;
+      value?: CellValue;
+      error?: string;
+    };
 
 export type QueryWebviewMessage =
   | { type: 'ready' }
@@ -286,4 +355,11 @@ export type QueryWebviewMessage =
   | { type: 'export'; executionId: string; setIndex: number; format: ExportFormat }
   | { type: 'copy'; executionId: string; setIndex: number; range: CellRange; shape: CopyShape }
   | { type: 'run'; values: Record<string, RunnerValue> }
-  | { type: 'openConnection'; profileId: string };
+  | { type: 'openConnection'; profileId: string }
+  /** The first attempt to edit a set: work out whether it can be, and re-project. */
+  | { type: 'describeEdit'; executionId: string; setIndex: number }
+  /**
+   * Write one cell back. `row` is the grid's row, which the host maps through
+   * its sort or filter view; `value` is the typed text, or null for NULL.
+   */
+  | { type: 'updateCell'; executionId: string; setIndex: number; row: number; column: number; value: string | null };

@@ -10,9 +10,27 @@ import {
   RunnerValue,
   TabContext
 } from '../../shared/query';
-import { forget, put } from '../grid/rows';
+import { forget, patch, put } from '../grid/rows';
 
 export type ResultTab = 'results' | 'messages' | 'plan';
+
+/**
+ * Where an edited cell is between Enter and the server's answer, and for a
+ * moment after. `pending` dims it; `saved` marks it briefly so the eye can
+ * confirm the write landed; `error` keeps the mark and the server's words
+ * until the cell is edited again.
+ */
+export interface CellStatus {
+  state: 'pending' | 'saved' | 'error';
+  text?: string;
+}
+
+export function cellKey(executionId: string, setIndex: number, row: number, column: number): string {
+  return `${executionId}:${setIndex}:${row}:${column}`;
+}
+
+/** How long a saved cell keeps its mark. Long enough to see, short enough not to clutter. */
+const SAVED_MS = 1500;
 
 export interface WorkspaceState {
   execution: ExecutionInfo | null;
@@ -41,6 +59,8 @@ export interface WorkspaceState {
   revision: number;
   notice: { text: string; level: 'info' | 'error' } | null;
   detail: { value: CellValue; column: ColumnMeta } | null;
+  /** Edited cells by `cellKey`, while they have something to show. */
+  cells: Record<string, CellStatus>;
 }
 
 export const store = createStore<WorkspaceState>({
@@ -57,7 +77,8 @@ export const store = createStore<WorkspaceState>({
   filterHydrated: false,
   revision: 0,
   notice: null,
-  detail: null
+  detail: null,
+  cells: {}
 });
 
 export function useWorkspace<T>(select: (state: WorkspaceState) => T): T {
@@ -87,6 +108,7 @@ export function applyHostMessage(message: QueryHostMessage): void {
           setIndex: changed ? 0 : Math.min(state.setIndex, Math.max(0, (message.execution?.sets.length ?? 1) - 1)),
           plan: changed ? null : state.plan,
           tab: changed && state.tab === 'plan' ? 'results' : state.tab,
+          cells: changed ? {} : state.cells,
           revision: state.revision + 1
         };
       });
@@ -128,9 +150,43 @@ export function applyHostMessage(message: QueryHostMessage): void {
       store.setState((state) => ({ ...state, notice: { level: message.level, text: message.text } }));
       return;
 
+    case 'cell': {
+      const key = cellKey(message.executionId, message.setIndex, message.row, message.column);
+      if (message.ok) {
+        patch(message.executionId, message.setIndex, message.row, message.column, message.value ?? null);
+        markCell(key, { state: 'saved' });
+        store.setState((state) => ({ ...state, revision: state.revision + 1 }));
+        setTimeout(() => {
+          if (store.getState().cells[key]?.state === 'saved') {
+            markCell(key, null);
+          }
+        }, SAVED_MS);
+        return;
+      }
+      // No error means the edit was withdrawn — a production confirmation
+      // declined — and the cell simply goes back to what it was.
+      markCell(key, message.error ? { state: 'error', text: message.error } : null);
+      if (message.error) {
+        store.setState((state) => ({ ...state, notice: { level: 'error', text: message.error ?? '' } }));
+      }
+      return;
+    }
+
     default:
       return;
   }
+}
+
+export function markCell(key: string, status: CellStatus | null): void {
+  store.setState((state) => {
+    const cells = { ...state.cells };
+    if (status) {
+      cells[key] = status;
+    } else {
+      delete cells[key];
+    }
+    return { ...state, cells };
+  });
 }
 
 export function setTab(tab: ResultTab): void {

@@ -451,6 +451,84 @@ body {
   background: var(--line);
 }
 
+/* ---------------------------------------------------------------- editing */
+
+/* A locked column says so in its header, and says why on hover. */
+.grid-lock {
+  flex-shrink: 0;
+  font-size: 11px;
+  color: var(--dim);
+}
+
+.grid-cell.is-editing {
+  padding: 0 3px;
+  gap: 3px;
+  overflow: visible;
+  background: var(--vscode-input-background);
+  outline: 1px solid var(--accent);
+  outline-offset: -1px;
+  z-index: 2;
+}
+
+.grid-editor {
+  flex: 1;
+  min-width: 0;
+  height: 18px;
+  padding: 0 5px;
+  font-family: inherit;
+  font-size: 12px;
+  color: var(--vscode-input-foreground);
+  background: transparent;
+  border: none;
+  outline: none;
+  font-variant-numeric: tabular-nums;
+}
+
+.grid-cell.kind-number .grid-editor,
+.grid-cell.kind-bool .grid-editor {
+  text-align: right;
+}
+
+.grid-editor::placeholder {
+  color: var(--warn-ink);
+  font-style: italic;
+}
+
+.grid-null-btn {
+  flex-shrink: 0;
+  height: 16px;
+  padding: 0 4px;
+  font-size: 9px;
+  line-height: 14px;
+  letter-spacing: 0.02em;
+  color: var(--warn-ink);
+  background: transparent;
+  border: 1px solid color-mix(in srgb, var(--warn-ink) 40%, transparent);
+  border-radius: 3px;
+  cursor: pointer;
+}
+
+.grid-null-btn:hover,
+.grid-null-btn.is-on {
+  background: color-mix(in srgb, var(--warn-ink) 15%, transparent);
+}
+
+/* Between Enter and the server's answer the cell is dim, not gone. */
+.grid-cell.is-pending {
+  opacity: 0.55;
+}
+
+.grid-cell.is-saved {
+  box-shadow: inset 3px 0 0 var(--env-dev-ink);
+  transition: box-shadow 0.15s;
+}
+
+.grid-cell.is-error {
+  box-shadow: inset 3px 0 0 var(--vscode-errorForeground);
+  outline: 1px solid var(--vscode-errorForeground);
+  outline-offset: -1px;
+}
+
 /* ----------------------------------------------------------------- strips */
 
 .strip {

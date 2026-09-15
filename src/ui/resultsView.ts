@@ -2,7 +2,7 @@ import * as vscode from 'vscode';
 import { ExecutionService } from '../exec/executionService';
 import { ResultStore } from '../exec/resultStore';
 import { QueryHostMessage, QueryWebviewMessage } from '../shared/query';
-import { BindingStore } from '../query/bindingStore';
+import { BindingStore, DATA_SCHEME, RUNNER_SCHEME } from '../query/bindingStore';
 import { ActiveTab } from './activeTab';
 import { QueryBridge } from './queryBridge';
 import { webviewHtml } from './webviewHtml';
@@ -28,6 +28,12 @@ export class ResultsView implements vscode.WebviewViewProvider, vscode.Disposabl
   private view: vscode.WebviewView | undefined;
   private readonly disposables: vscode.Disposable[] = [];
   private readonly viewDisposables: vscode.Disposable[] = [];
+  /**
+   * True while the panel is closed because a data tab came to the front.
+   * Only what this view hid is brought back: a panel the user closed
+   * themselves stays closed.
+   */
+  private hiddenForInline = false;
 
   constructor(
     private readonly context: vscode.ExtensionContext,
@@ -38,7 +44,10 @@ export class ResultsView implements vscode.WebviewViewProvider, vscode.Disposabl
     private readonly results: ResultStore
   ) {
     this.disposables.push(
-      this.active.onDidChange(() => this.project()),
+      this.active.onDidChange((tab) => {
+        this.project();
+        this.follow(tab);
+      }),
       // A rebind or a `USE` renames the strip without a run.
       this.bindings.onDidChange(() => this.project()),
       this.execution.onDidChange((change) => {
@@ -101,11 +110,43 @@ export class ResultsView implements vscode.WebviewViewProvider, vscode.Disposabl
     await vscode.commands.executeCommand(`${ResultsView.viewType}.focus`);
   }
 
+  /**
+   * Steps aside for a tab that draws its own grid.
+   *
+   * A table data view and a procedure runner hold their rows in the editor
+   * area. Showing the same execution here as well was two grids for one
+   * answer, and the second one had no paging controls. So the panel closes
+   * while such a tab is in front and comes back, without taking focus, when a
+   * query tab is. Only a panel this view closed is reopened.
+   */
+  private follow(tab: string | undefined): void {
+    const inline = tab !== undefined && drawsItself(tab);
+    if (inline) {
+      const configured = vscode.workspace.getConfiguration('databaseTools').get<boolean>('hideResultsForDataTabs', true);
+      if (configured && this.view?.visible) {
+        this.hiddenForInline = true;
+        void vscode.commands.executeCommand('workbench.action.closePanel');
+      }
+      return;
+    }
+    if (this.hiddenForInline) {
+      this.hiddenForInline = false;
+      this.view?.show(true);
+    }
+  }
+
   private project(): void {
     if (!this.view) {
       return;
     }
     const tab = this.active.value;
+    if (tab !== undefined && drawsItself(tab)) {
+      // Not the execution: the tab is drawing that itself. The page is told
+      // why it is empty rather than left saying "run something".
+      this.post({ type: 'project', execution: null, context: { tab, connection: null, inline: true } });
+      this.view.description = undefined;
+      return;
+    }
     this.bridge.project(tab, (message) => this.post(message));
     const record = tab ? this.results.latestFor(tab) : undefined;
     this.view.description = record
@@ -116,4 +157,10 @@ export class ResultsView implements vscode.WebviewViewProvider, vscode.Disposabl
   private post(message: QueryHostMessage): void {
     void this.view?.webview.postMessage(message);
   }
+}
+
+/** A tab whose rows live in the editor area, not in this panel. */
+function drawsItself(tab: string): boolean {
+  const scheme = vscode.Uri.parse(tab).scheme;
+  return scheme === DATA_SCHEME || scheme === RUNNER_SCHEME;
 }

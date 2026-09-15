@@ -446,6 +446,16 @@
           "default": true,
           "description": "Ask before running anything that writes against a connection marked as Production. This is separate from the confirmation before connecting: consenting to look at production is not consenting to change it."
         },
+        "databaseTools.hideResultsForDataTabs": {
+          "type": "boolean",
+          "default": true,
+          "description": "Close the panel holding the Results view while a table data view or a procedure runner is the active tab, since those draw their own grid, and bring it back when a query tab is active again. Only a panel this closed is reopened. Turn off if the Results view lives somewhere other than the panel."
+        },
+        "databaseTools.editResults": {
+          "type": "boolean",
+          "default": true,
+          "description": "Edit cells in the results grid in place. Enter or F2 on a cell opens it, Enter writes it back as one parameterised UPDATE that seeks on the table's key, Escape cancels. Primary key, foreign key, identity and computed columns stay locked, and a result from more than one table or with no key stays read-only. Off, the grid is read-only everywhere."
+        },
         "databaseTools.savedQueryFolder": {
           "type": "string",
           "default": ".database/queries",

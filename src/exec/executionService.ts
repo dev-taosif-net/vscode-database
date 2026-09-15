@@ -260,6 +260,57 @@ export class ExecutionService implements vscode.Disposable {
     }
   }
 
+  /** Whether the tab has a statement in flight. */
+  isRunning(tab: string): boolean {
+    return this.running.has(tab);
+  }
+
+  /**
+   * Runs a short piece of work on the tab's own session, with the same
+   * exclusivity a Run has.
+   *
+   * The tab's session and not another one, deliberately: an edit belongs in
+   * whatever transaction the tab has open, and on a second connection it
+   * would block behind the tab's own locks. And it takes the tab's slot in
+   * `running`, so a Run pressed while an edit is in flight waits for it the
+   * way it waits for a query rather than sending a second statement down a
+   * socket that is mid-request. A tab already running something is refused,
+   * not queued: an edit that lands a minute later, after a query somebody
+   * forgot about, is an edit nobody is watching.
+   */
+  async exclusive<T>(
+    tab: string,
+    profileId: string,
+    database: string,
+    work: (session: DriverSession) => Promise<T>
+  ): Promise<T> {
+    if (this.running.has(tab)) {
+      throw new Error('A statement is still running on this tab. Wait for it to finish, or stop it, and try again.');
+    }
+    let settle: () => void = () => undefined;
+    const entry = { id: 'edit', settled: new Promise<void>((resolve) => (settle = resolve)) };
+    this.running.set(tab, entry);
+    try {
+      const session = await this.pool.acquire(profileId, tab, database);
+      this.pool.setBusy(tab, true);
+      return await work(session);
+    } finally {
+      if (this.running.get(tab) === entry) {
+        this.pool.setBusy(tab, false);
+        this.running.delete(tab);
+      }
+      settle();
+    }
+  }
+
+  /**
+   * Files something that ran outside `run` — an edit written back from the
+   * grid — as a finished execution, so history has a line for it.
+   */
+  announce(record: ExecutionRecord): void {
+    this.onDidFinishEmitter.fire(record);
+  }
+
   /**
    * Re-announces a record whose shape was changed after it settled.
    *

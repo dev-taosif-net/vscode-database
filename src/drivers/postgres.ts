@@ -523,7 +523,14 @@ const FRIENDLY: Record<string, string> = {
 
 function toColumnMeta(field: FieldDef): ColumnMeta {
   const type = pgTypeName(field);
-  return { name: field.name, type, kind: kindOfSqlType(type) };
+  const meta: ColumnMeta = { name: field.name, type, kind: kindOfSqlType(type) };
+  if (field.tableID > 0 && field.columnID > 0) {
+    // Free: the row description already says which relation and attribute
+    // each column was read from. The edit path turns it into a table name and
+    // a key, once, and only if somebody tries to type into the grid.
+    meta.origin = { relation: String(field.tableID), column: field.columnID };
+  }
+  return meta;
 }
 
 interface Described {

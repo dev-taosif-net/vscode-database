@@ -82,6 +82,20 @@ export function put(executionId: string, setIndex: number, offset: number, rows:
   }
 }
 
+/**
+ * One cell, as the server now holds it after an edit.
+ *
+ * Only a row the grid is holding is touched; one that has been evicted will
+ * be asked for again and will arrive with the host's copy, which was patched
+ * the same way.
+ */
+export function patch(executionId: string, setIndex: number, index: number, column: number, value: CellValue): void {
+  const row = caches.get(keyOf(executionId, setIndex))?.rows.get(index);
+  if (row && column >= 0 && column < row.length) {
+    row[column] = value;
+  }
+}
+
 /** Everything for one execution, dropped when it is replaced. */
 export function forget(executionId?: string): void {
   if (!executionId) {

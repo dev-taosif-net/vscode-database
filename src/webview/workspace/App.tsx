@@ -1,10 +1,12 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { CellRange, ColumnMeta, CopyShape, ExportFormat, RunnerParameter, RunnerValue } from '../../shared/query';
 import { Codicon } from '../primitives/Codicon';
 import { Grid } from '../grid/Grid';
 import { post, viewName } from './vscode';
 import {
   ResultTab,
+  cellKey,
+  markCell,
   setDetail,
   setFilter,
   setFilterColumns,
@@ -43,7 +45,9 @@ export function App(): JSX.Element {
         connection then is a footer that answers "where will this go?" one
         step too late.
       */}
-      {!execution && VIEW === 'results' && context ? <StatusStrip execution={null} context={context} /> : null}
+      {!execution && VIEW === 'results' && context && !context.inline ? (
+        <StatusStrip execution={null} context={context} />
+      ) : null}
       {detail ? <Detail value={detail.value} column={detail.column} onClose={() => setDetail(null)} /> : null}
       {notice ? (
         <div className={`toast tone-${notice.level}`} role="status">
@@ -56,6 +60,16 @@ export function App(): JSX.Element {
 }
 
 function NoResults(): JSX.Element {
+  const inline = useWorkspace((state) => state.context?.inline === true);
+  if (VIEW === 'results' && inline) {
+    return (
+      <Empty
+        icon="table"
+        title="Shown in the editor"
+        body="This tab draws its own rows, with paging, in the editor area. Switch to a query tab to see its results here."
+      />
+    );
+  }
   if (VIEW === 'runner') {
     return <Empty icon="play" title="Nothing has run yet" body="Fill the form and press Execute." />;
   }
@@ -81,6 +95,21 @@ function ResultsArea(): JSX.Element {
   const plan = useWorkspace((state) => state.plan);
   const filter = useWorkspace((state) => state.filter);
   const revision = useWorkspace((state) => state.revision);
+  const cells = useWorkspace((state) => state.cells);
+
+  // The grid keys its marks by row and column alone; the execution and set
+  // are the ones on screen, so the prefix is dropped here rather than
+  // compared in every cell.
+  const marks = useMemo(() => {
+    const prefix = execution ? `${execution.id}:${setIndex}:` : '';
+    const out: Record<string, { state: 'pending' | 'saved' | 'error'; text?: string }> = {};
+    for (const [key, mark] of Object.entries(cells)) {
+      if (prefix && key.startsWith(prefix)) {
+        out[key.slice(prefix.length)] = mark;
+      }
+    }
+    return out;
+  }, [cells, execution?.id, setIndex]);
 
   const request = useCallback(
     (offset: number, size: number) => {
@@ -169,6 +198,14 @@ function ResultsArea(): JSX.Element {
             onCopy={onCopy}
             onOpenCell={(value, column) => setDetail({ value, column })}
             revision={revision}
+            edit={set.edit}
+            marks={marks}
+            onDescribeEdit={() => post({ type: 'describeEdit', executionId: execution.id, setIndex })}
+            onEdit={(row, column, value) => {
+              markCell(cellKey(execution.id, setIndex, row, column), { state: 'pending' });
+              post({ type: 'updateCell', executionId: execution.id, setIndex, row, column, value });
+            }}
+            onNotice={(text) => setNotice({ level: 'error', text })}
           />
           {set.truncated ? (
             <Truncated
@@ -571,10 +608,17 @@ function DataFooter(): JSX.Element {
         {table.estimate === undefined ? '' : ` of ~${count(table.estimate)}`}
       </span>
       <span className="num">{execution.elapsedMs} ms</span>
-      <span className="strip-lock">
-        <Codicon name="lock" />
-        Read-only · Generate CRUD to write
-      </span>
+      {execution.readOnly ? (
+        <span className="strip-lock">
+          <Codicon name="lock" />
+          Read-only connection
+        </span>
+      ) : (
+        <span className="strip-lock" title="Enter or F2 on a cell edits it; Enter writes it back, Escape cancels.">
+          <Codicon name="edit" />
+          Enter edits a cell
+        </span>
+      )}
       <span className={table.keyset ? 'strip-ok' : 'strip-warn'}>
         {table.keyset
           ? `Keyset paged on ${table.ref.name} key — constant time at any depth`
