@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 import { ExecutionService } from '../exec/executionService';
 import { ResultStore } from '../exec/resultStore';
 import { QueryHostMessage, QueryWebviewMessage } from '../shared/query';
+import { BindingStore } from '../query/bindingStore';
 import { ActiveTab } from './activeTab';
 import { QueryBridge } from './queryBridge';
 import { webviewHtml } from './webviewHtml';
@@ -31,12 +32,15 @@ export class ResultsView implements vscode.WebviewViewProvider, vscode.Disposabl
   constructor(
     private readonly context: vscode.ExtensionContext,
     private readonly bridge: QueryBridge,
+    private readonly bindings: BindingStore,
     private readonly active: ActiveTab,
     private readonly execution: ExecutionService,
     private readonly results: ResultStore
   ) {
     this.disposables.push(
       this.active.onDidChange(() => this.project()),
+      // A rebind or a `USE` renames the strip without a run.
+      this.bindings.onDidChange(() => this.project()),
       this.execution.onDidChange((change) => {
         if (change.tab === this.active.value) {
           this.project();

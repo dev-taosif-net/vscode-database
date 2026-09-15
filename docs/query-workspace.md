@@ -286,18 +286,22 @@ no binding, so nothing degrades a SQL file belonging to another extension.
 
 ### Status bar
 
-The existing entry keeps its job — the riskiest open connection — and a second,
-right-aligned entry appears only while a bound SQL editor or a data tab is
-active:
+Three right-aligned entries, present whenever a bound SQL editor or a data tab
+is active, and there whether or not the Results panel is open — which is the
+point: the panel's own status strip needs the panel, and this does not.
 
 ```
-███ Dev-Matador · 10.209.99.244 ███   $(database) PeopleDeskMatador   $(error) Failed
+███ Dev-Matador · 10.209.99.244 · sa ███   $(database) PeopleDeskMatador   $(check) 1,000 rows · 478 ms
 ```
 
-Connection and server in the environment hue, then the database, then the last
-execution — but only in the two states you can still act on, running and
-failed. While a query runs the third entry becomes `$(sync~spin) Executing…`
-and is clickable to cancel.
+Connection, server and login in the environment hue, then the database, then
+the last execution. The login is the SQL login or PostgreSQL role, `DOMAIN\user`
+for NTLM, and the signed-in account for Entra. The third entry has a line for
+every state: `$(circle-large-outline) Ready` before the tab has run anything,
+`$(sync~spin) Executing…` while it goes and clickable to cancel,
+`$(check) 1,000 rows · 478 ms` when it finishes and clickable to open the
+results, `$(error) Failed` or `$(circle-slash) Cancelled` otherwise. A run that
+returned no grid but reported a count says `12 rows affected`.
 
 The database is its own entry rather than a third part of the chip, because it
 is the one of the three that changes without anybody deciding to change it —
@@ -585,7 +589,20 @@ grid is about six hundred lines.
   │   └── ColumnResizer     a drag handle per visible boundary
   ├── MessagesPane
   └── PlanPane
+  StatusStrip              Ready · rows · elapsed · Stop  |  connection · server · login · database
 ```
+
+**The status strip is permanent on a query tab.** It used to be part of the
+results area, so it appeared with the first grid and named the connection the
+last run had used. Now the host sends a tab context beside the execution —
+connection name, short server name, login, effective database, environment,
+read-only — for any active tab that is not a data view or a runner, and sends
+it again when a binding changes. The strip therefore stands the moment a query
+tab is active: `Ready` on the left before anything has run, then the row
+count and elapsed time; the connection on the right comes from the tab, so it
+is right before the first run and follows a rebind or a `USE`. An unbound
+`.sql` file gets the strip too, reading `Not connected` where the connection
+would be.
 
 **Virtualisation is two-dimensional.** Rows, obviously. Columns too, because a
 `SELECT *` on a wide fact table is two hundred columns and rendering two hundred

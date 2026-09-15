@@ -417,6 +417,15 @@ export class QueryCommands implements vscode.Disposable {
     if (database) {
       await this.files.placeIn(uri, profile.id, database);
     }
+    /*
+     * The results panel first, then the editor, so the editor ends up with
+     * the focus. The panel is where the status strip lives, and the strip is
+     * meant to name the connection before anything has run; a panel that
+     * only opens on the first Run would leave a fresh tab with no strip at
+     * all. The webview behind the panel is not created until the panel is
+     * visible, so this is the only way the strip can be there from the start.
+     */
+    await this.resultsView.reveal();
     const document = await vscode.workspace.openTextDocument(uri);
     await vscode.window.showTextDocument(document, { preview: false });
 

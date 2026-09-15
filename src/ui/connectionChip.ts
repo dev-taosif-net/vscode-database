@@ -3,7 +3,7 @@ import { ConnectionProfile, EnvironmentId } from '../types';
 
 /**
  * How a connection is drawn in the status bar: a block of the environment's own
- * colour, then the connection, the server and the database.
+ * colour, then the connection, the server, the login and the database.
  *
  * The hues are the four in `webview/styles/tokens.css`, contributed under
  * `databaseTools.statusBarItem.*` so a connection keeps one colour across the
@@ -112,9 +112,37 @@ export function shortServer(host: string): string {
  * own is named by its server already, and repeating it would spend half the
  * entry on one word.
  */
+/**
+ * Who the connection signs in as, in the words the login dialog would use.
+ *
+ * A SQL login or a PostgreSQL role is its name. NTLM is `DOMAIN\\user` when a
+ * domain is set, because the same account name exists in two domains often
+ * enough that the bare name is ambiguous. Entra is the signed-in account, and
+ * a profile that has not picked one yet says so rather than showing nothing;
+ * the same goes for a PostgreSQL certificate profile with no role.
+ */
+export function loginLabel(profile: ConnectionProfile): string {
+  const user = profile.user.trim();
+  if (profile.driver === 'mssql') {
+    if (profile.mssqlAuth === 'entra-mfa') {
+      return profile.account.trim() || user || 'Microsoft Entra';
+    }
+    if (profile.mssqlAuth === 'ntlm') {
+      const domain = profile.domain.trim();
+      return domain && user ? `${domain}\\${user}` : user || 'Windows';
+    }
+    return user;
+  }
+  if (user) {
+    return user;
+  }
+  return profile.pgAuth === 'certificate' ? 'certificate' : '';
+}
+
 export function chipLabel(profile: ConnectionProfile): string {
   const server = shortServer(profile.host);
   const name = profile.name.trim();
   const parts = name && name !== server ? [name, server] : [server || profile.host];
+  parts.push(loginLabel(profile));
   return parts.filter(Boolean).join(' · ');
 }

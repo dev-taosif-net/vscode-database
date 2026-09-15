@@ -19,6 +19,7 @@ const VIEW = viewName();
 
 export function App(): JSX.Element {
   const execution = useWorkspace((state) => state.execution);
+  const context = useWorkspace((state) => state.context);
   const notice = useWorkspace((state) => state.notice);
   const detail = useWorkspace((state) => state.detail);
 
@@ -35,6 +36,13 @@ export function App(): JSX.Element {
       {VIEW === 'runner' ? <Runner /> : null}
       {VIEW === 'data' ? <DataToolbar /> : null}
       {execution ? <ResultsArea /> : <NoResults />}
+      {/*
+        The strip stands the moment a query tab is active, not the moment it
+        first runs. A footer that appears on the first Run and names the
+        connection then is a footer that answers "where will this go?" one
+        step too late.
+      */}
+      {!execution && VIEW === 'results' && context ? <StatusStrip execution={null} context={context} /> : null}
       {detail ? <Detail value={detail.value} column={detail.column} onClose={() => setDetail(null)} /> : null}
       {notice ? (
         <div className={`toast tone-${notice.level}`} role="status">
@@ -66,6 +74,7 @@ function NoResults(): JSX.Element {
 
 function ResultsArea(): JSX.Element {
   const execution = useWorkspace((state) => state.execution);
+  const context = useWorkspace((state) => state.context);
   const tab = useWorkspace((state) => state.tab);
   const setIndex = useWorkspace((state) => state.setIndex);
   const plan = useWorkspace((state) => state.plan);
@@ -188,7 +197,7 @@ function ResultsArea(): JSX.Element {
 
       {tab === 'plan' && plan ? <Plan plan={plan} /> : null}
 
-      {VIEW === 'data' ? <DataFooter /> : <StatusStrip execution={execution}>{
+      {VIEW === 'data' ? <DataFooter /> : <StatusStrip execution={execution} context={context}>{
         execution.status === 'running' ? (
           <button type="button" className="btn btn-stop" onClick={() => post({ type: 'cancel', executionId: execution.id })}>
             <Codicon name="debug-stop" />

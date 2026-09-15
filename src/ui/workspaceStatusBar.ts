@@ -1,15 +1,15 @@
 import * as vscode from 'vscode';
 import { ConnectionStore } from '../store/connectionStore';
 import { ExecutionService } from '../exec/executionService';
-import { ResultStore } from '../exec/resultStore';
+import { ExecutionRecord, ResultStore } from '../exec/resultStore';
 import { BindingStore } from '../query/bindingStore';
 import { effectiveDatabase, environmentLabel, switchesDatabase } from '../types';
 import { ActiveTab } from './activeTab';
-import { paintChip, paintDatabase } from './connectionChip';
+import { loginLabel, paintChip, paintDatabase } from './connectionChip';
 
 /**
- * The status bar: which connection this tab runs on, and whether the last thing
- * it ran is still going.
+ * The status bar: which connection this tab runs on, as whom, in which
+ * database, and what the last thing it ran came to.
  *
  * There used to be a second entry on the left naming the riskiest open
  * connection window-wide. With one connection and one editor open, which is the
@@ -39,7 +39,6 @@ export class WorkspaceStatusBar implements vscode.Disposable {
     this.database = vscode.window.createStatusBarItem('databaseTools.tabDatabase', vscode.StatusBarAlignment.Right, 99.5);
     this.database.command = 'databaseTools.selectDatabase';
     this.result = vscode.window.createStatusBarItem('databaseTools.tabResult', vscode.StatusBarAlignment.Right, 99);
-    this.result.command = 'databaseTools.cancelQuery';
 
     this.disposables.push(
       this.connection,
@@ -125,7 +124,7 @@ export class WorkspaceStatusBar implements vscode.Disposable {
     }
 
     /*
-     * Connection, server, database, in the environment's own colour.
+     * Connection, server, login, database, in the environment's own colour.
      *
      * The colour is the carrier here, not the label: an entry you have to read
      * before you know you are on production is an entry you read once and then
@@ -135,12 +134,15 @@ export class WorkspaceStatusBar implements vscode.Disposable {
      */
     const moved = this.bindings.database(uri);
     const database = effectiveDatabase(profile, moved);
+    const login = loginLabel(profile);
 
     paintChip(this.connection, profile);
     this.connection.tooltip = new vscode.MarkdownString(
-      `**${environmentLabel(profile.environment)}**\n\n${profile.host}${
+      `**${environmentLabel(profile.environment)}** · ${profile.name.trim() || profile.host}\n\n${profile.host}${
         profile.port ? `:${profile.port}` : ''
-      }${database ? ` · ${database}` : ''}${profile.readOnly ? '\n\nRead-only' : ''}` +
+      }${database ? ` · ${database}` : ''}` +
+        (login ? `\n\nSigned in as ${login}` : '') +
+        (profile.readOnly ? '\n\nRead-only' : '') +
         '\n\nClick to change the connection for this tab.'
     );
     this.connection.show();
@@ -169,32 +171,86 @@ export class WorkspaceStatusBar implements vscode.Disposable {
     );
     this.database.show();
 
+    this.paintResult(record);
+  }
+
+  /**
+   * What the tab last did, in one glance.
+   *
+   * Every state has a line. It used to show only running and failed, on the
+   * grounds that a finished query's numbers are the results panel's own
+   * headline restated. But the panel is a click away and often closed, and an
+   * entry that vanishes on success reads as an entry that broke. `Ready`
+   * before the first run, the row count and the time after it, the spinner
+   * while it goes, and the failure when it does not come back.
+   */
+  private paintResult(record: ExecutionRecord | undefined): void {
     if (!record) {
-      this.result.hide();
-      return;
-    }
-    if (record.status === 'running') {
-      this.result.text = '$(sync~spin) Executing…';
-      this.result.tooltip = 'Click to cancel.';
+      this.result.text = '$(circle-large-outline) Ready';
+      this.result.tooltip = 'Nothing has run on this tab yet. F5 or Ctrl+Enter runs the file or the selection.';
+      this.result.command = 'databaseTools.run';
       this.result.show();
       return;
     }
 
-    /*
-     * Only the two states you can still act on.
-     *
-     * A finished query used to leave its row count and its elapsed time in the
-     * strip until the next one replaced them, which is the results panel's own
-     * headline restated a screen away from the panel. What is left is the pair
-     * the panel cannot answer from the corner of the eye: something is still
-     * running, or the last thing did not finish.
-     */
-    if (record.status === 'done') {
-      this.result.hide();
+    if (record.status === 'running') {
+      this.result.text = `$(sync~spin) Executing… ${elapsed(record)}`;
+      this.result.tooltip = 'Click to cancel.';
+      this.result.command = 'databaseTools.cancelQuery';
+      this.result.show();
       return;
     }
+
+    if (record.status === 'done') {
+      this.result.text = `$(check) ${rowSummary(record)} · ${elapsed(record)}`;
+      this.result.tooltip = new vscode.MarkdownString(
+        `**Finished** at ${new Date(record.finishedAt ?? record.startedAt).toLocaleTimeString()}\n\n` +
+          `${rowSummary(record)} in ${elapsed(record)} across ${record.sets.length} result set${
+            record.sets.length === 1 ? '' : 's'
+          }.\n\nClick to open the results.`
+      );
+      this.result.command = 'databaseTools.results.focus';
+      this.result.show();
+      return;
+    }
+
     this.result.text = record.status === 'error' ? '$(error) Failed' : '$(circle-slash) Cancelled';
     this.result.tooltip = record.error?.text ?? 'The last statement run on this tab.';
+    this.result.command = 'databaseTools.results.focus';
     this.result.show();
   }
+}
+
+/**
+ * The rows a run produced, as the strip has room to say it.
+ *
+ * Rows fetched wins when there are any; a statement that returned no grid but
+ * reported a count says how many it affected instead, and one that did neither
+ * says `0 rows` — an empty answer, which is what it was.
+ */
+function rowSummary(record: ExecutionRecord): string {
+  const fetched = record.sets.reduce((sum, set) => sum + set.count, 0);
+  const affected = record.sets.reduce<number | undefined>(
+    (sum, set) => (set.columns.length === 0 && set.total !== undefined ? (sum ?? 0) + set.total : sum),
+    undefined
+  );
+  if (fetched > 0 || affected === undefined) {
+    const truncated = record.sets.some((set) => set.truncated);
+    return `${fetched.toLocaleString('en-US')}${truncated ? '+' : ''} row${fetched === 1 ? '' : 's'}`;
+  }
+  return `${affected.toLocaleString('en-US')} row${affected === 1 ? '' : 's'} affected`;
+}
+
+/** Milliseconds under a second, seconds to one decimal under a minute, then minutes. */
+function elapsed(record: ExecutionRecord): string {
+  const ms = Math.max(0, (record.finishedAt ?? Date.now()) - record.startedAt);
+  if (ms < 1000) {
+    return `${Math.round(ms)} ms`;
+  }
+  if (ms < 60_000) {
+    return `${(ms / 1000).toFixed(1)} s`;
+  }
+  const minutes = Math.floor(ms / 60_000);
+  const seconds = Math.round((ms % 60_000) / 1000);
+  return `${minutes}m ${String(seconds).padStart(2, '0')}s`;
 }

@@ -7,7 +7,8 @@ import {
   PlanPayload,
   QueryHostMessage,
   RunnerForm,
-  RunnerValue
+  RunnerValue,
+  TabContext
 } from '../../shared/query';
 import { forget, put } from '../grid/rows';
 
@@ -15,6 +16,8 @@ export type ResultTab = 'results' | 'messages' | 'plan';
 
 export interface WorkspaceState {
   execution: ExecutionInfo | null;
+  /** The query tab in front of the user, so the strip stands before any run. */
+  context: TabContext | null;
   plan: PlanPayload | null;
   form: RunnerForm | null;
   values: Record<string, RunnerValue>;
@@ -31,6 +34,7 @@ export interface WorkspaceState {
 
 export const store = createStore<WorkspaceState>({
   execution: null,
+  context: null,
   plan: null,
   form: null,
   values: {},
@@ -61,6 +65,7 @@ export function applyHostMessage(message: QueryHostMessage): void {
         return {
           ...state,
           execution: message.execution,
+          context: message.context,
           setIndex: changed ? 0 : Math.min(state.setIndex, Math.max(0, (message.execution?.sets.length ?? 1) - 1)),
           plan: changed ? null : state.plan,
           tab: changed && state.tab === 'plan' ? 'results' : state.tab,

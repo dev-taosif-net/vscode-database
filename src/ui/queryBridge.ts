@@ -4,8 +4,10 @@ import { DetailsService } from '../details/detailsService';
 import { ExecutionService } from '../exec/executionService';
 import { ExecutionRecord, ResultStore } from '../exec/resultStore';
 import { EXTENSIONS, exportSet, renderCopy } from '../export/exporters';
-import { CellValue, QueryHostMessage, QueryWebviewMessage } from '../shared/query';
-import { errorMessage } from '../types';
+import { BindingStore, DATA_SCHEME, RUNNER_SCHEME } from '../query/bindingStore';
+import { CellValue, QueryHostMessage, QueryWebviewMessage, TabContext } from '../shared/query';
+import { effectiveDatabase, errorMessage } from '../types';
+import { loginLabel, shortServer } from './connectionChip';
 import { keyValuesOf, selectPage } from './tableSql';
 
 export type Post = (message: QueryHostMessage) => void;
@@ -22,19 +24,57 @@ export type Post = (message: QueryHostMessage) => void;
 export class QueryBridge {
   constructor(
     private readonly store: ConnectionStore,
+    private readonly bindings: BindingStore,
     private readonly results: ResultStore,
     private readonly execution: ExecutionService,
     private readonly details: DetailsService,
     private readonly output: vscode.LogOutputChannel
   ) {}
 
-  /** Sends a tab's current execution, or null when it has none. */
+  /** Sends a tab's current execution, or null when it has none, and the tab itself. */
   project(tab: string | undefined, post: Post): void {
     const record = tab ? this.results.latestFor(tab) : undefined;
-    post({ type: 'project', execution: record ? this.results.project(record) : null });
+    post({
+      type: 'project',
+      execution: record ? this.results.project(record) : null,
+      context: tab ? this.contextOf(tab) : null
+    });
     if (record?.plan) {
       post({ type: 'plan', executionId: record.id, plan: record.plan });
     }
+  }
+
+  /**
+   * The strip's half of the projection.
+   *
+   * A query tab is any tab that is not a table data view or a procedure
+   * runner: those two draw their own footer and name their connection from
+   * the execution. The binding is read live rather than off the last record,
+   * so a tab that has never run still has a connection to show, and one that
+   * moved with `USE` since its last run shows where the next one will land.
+   */
+  private contextOf(tab: string): TabContext | null {
+    const uri = vscode.Uri.parse(tab);
+    if (uri.scheme === DATA_SCHEME || uri.scheme === RUNNER_SCHEME) {
+      return null;
+    }
+    const profileId = this.bindings.get(uri);
+    const profile = profileId ? this.store.get(profileId) : undefined;
+    if (!profile) {
+      return { tab, connection: null };
+    }
+    return {
+      tab,
+      connection: {
+        profileId: profile.id,
+        name: profile.name.trim() || shortServer(profile.host),
+        server: shortServer(profile.host),
+        login: loginLabel(profile),
+        database: effectiveDatabase(profile, this.bindings.database(uri)),
+        environment: profile.environment,
+        readOnly: profile.readOnly
+      }
+    };
   }
 
   async handle(message: QueryWebviewMessage, post: Post): Promise<void> {

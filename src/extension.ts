@@ -106,8 +106,8 @@ export function activate(context: vscode.ExtensionContext): void {
   const saved = new SavedQueryStore(context, store);
   const index = new MetadataIndex(store, manager, catalog, details);
   const active = new ActiveTab(bindings);
-  const bridge = new QueryBridge(store, results, execution, details, output);
-  const resultsView = new ResultsView(context, bridge, active, execution, results);
+  const bridge = new QueryBridge(store, bindings, results, execution, details, output);
+  const resultsView = new ResultsView(context, bridge, bindings, active, execution, results);
   const panels = new WorkspacePanels(context, store, catalog, details, execution, results, bridge, active, output);
   const workspaceStatus = new WorkspaceStatusBar(store, bindings, results, execution, active);
   const language = new SqlLanguageProviders(store, bindings, index);

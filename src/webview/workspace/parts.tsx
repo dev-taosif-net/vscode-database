@@ -1,4 +1,4 @@
-import { CellValue, ColumnMeta, ExecutionInfo, ExportFormat, PlanNode, PlanPayload } from '../../shared/query';
+import { CellValue, ColumnMeta, ExecutionInfo, ExportFormat, PlanNode, PlanPayload, TabContext } from '../../shared/query';
 import { Codicon } from '../primitives/Codicon';
 import { cellText } from '../../shared/query';
 
@@ -17,47 +17,90 @@ export function count(value: number): string {
   return value.toLocaleString('en-US');
 }
 
+/**
+ * The footer under the grid: what the tab did, and where it is pointed.
+ *
+ * It is permanent on a query tab. Before the first run it says `Ready` and
+ * names the connection; after it, the row count and the time; while it goes,
+ * the spinner and Stop. The connection on the right is read from the tab, not
+ * from the execution, so it is there before anything has run and it follows a
+ * rebind or a `USE`; the execution's own connection is the fallback for the
+ * data and runner views, which have no tab context of their own.
+ */
 export function StatusStrip({
   execution,
+  context,
   children
 }: {
-  execution: ExecutionInfo;
+  execution: ExecutionInfo | null;
+  context?: TabContext | null;
   children?: React.ReactNode;
 }): JSX.Element {
-  const rows = execution.rowsFetched;
+  const rows = execution?.rowsFetched ?? 0;
+  const connection = context?.connection;
+  const sep = ' \u00b7 ';
   return (
     <div className="strip" role="status">
-      {execution.status === 'running' ? (
+      {!execution ? (
+        <span className="strip-ready">
+          <Codicon name="circle-large-outline" />
+          Ready
+        </span>
+      ) : null}
+      {execution?.status === 'running' ? (
         <span className="strip-live">
           <Codicon name="sync" spin />
           Streaming
         </span>
       ) : null}
-      {execution.status === 'cancelled' ? (
+      {execution?.status === 'cancelled' ? (
         <span className="strip-warn">
           <Codicon name="circle-slash" />
-          Cancelled after {count(rows)} rows — what was fetched is kept
+          Cancelled after {count(rows)} rows {'\u2014'} what was fetched is kept
         </span>
       ) : null}
-      {execution.status === 'error' ? (
+      {execution?.status === 'error' ? (
         <span className="strip-error">
           <Codicon name="error" />
           Failed
         </span>
       ) : null}
-      <span className="num">{count(rows)} rows</span>
-      <span className="num">{duration(execution.elapsedMs)}</span>
-      {execution.rowsAffected !== undefined ? (
+      {execution ? <span className="num">{count(rows)} rows</span> : null}
+      {execution ? <span className="num">{duration(execution.elapsedMs)}</span> : null}
+      {execution?.rowsAffected !== undefined ? (
         <span className="num">{count(execution.rowsAffected)} affected</span>
       ) : null}
       {children}
       <span className="strip-spacer" />
-      <span className="strip-connection">
-        <span className={`dot env-${execution.environment}`} aria-hidden="true" />
-        {execution.connectionName}
-        {execution.database ? ` · ${execution.database}` : ''}
-        {execution.readOnly ? ' · read-only' : ''}
-      </span>
+      {connection ? (
+        <span
+          className="strip-connection"
+          title={`${connection.name} on ${connection.server}${connection.login ? ` as ${connection.login}` : ''}`}
+        >
+          <span className={`dot env-${connection.environment}`} aria-hidden="true" />
+          {[
+            connection.name,
+            connection.server !== connection.name ? connection.server : '',
+            connection.login,
+            connection.database
+          ]
+            .filter(Boolean)
+            .join(sep)}
+          {connection.readOnly ? `${sep}read-only` : ''}
+        </span>
+      ) : context ? (
+        <span className="strip-connection strip-unbound">
+          <Codicon name="plug" />
+          Not connected
+        </span>
+      ) : execution ? (
+        <span className="strip-connection">
+          <span className={`dot env-${execution.environment}`} aria-hidden="true" />
+          {execution.connectionName}
+          {execution.database ? `${sep}${execution.database}` : ''}
+          {execution.readOnly ? `${sep}read-only` : ''}
+        </span>
+      ) : null}
     </div>
   );
 }

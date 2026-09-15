@@ -466,6 +466,13 @@ body {
   color: var(--dim);
 }
 
+.strip-ready,
+.strip-unbound {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
 .strip-live {
   display: flex;
   align-items: center;

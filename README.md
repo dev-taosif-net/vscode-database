@@ -146,7 +146,8 @@ A connected connection expands in place, in the same single-column sidebar. See
   fix as the first button.
 - Read the database list from a live server.
 - Environment guards for DEV, QA, UAT and PROD.
-- Status bar showing the riskiest open connection.
+- Status bar showing the current tab's connection, server, login and database
+  in the environment's colour, and what the tab last ran.
 
 ## Trademarks
 

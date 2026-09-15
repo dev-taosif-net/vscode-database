@@ -222,9 +222,40 @@ export type ExportFormat = 'csv' | 'tsv' | 'json' | 'sql' | 'markdown' | 'xlsx';
 
 /* ------------------------------------------------------------------ wire */
 
+/**
+ * The connection a query tab is bound to, as the status strip prints it.
+ *
+ * Sent beside the execution rather than read off it, so the strip has a
+ * connection to name before the first Run and keeps the right one when the
+ * tab is rebound or a `USE` moves it after the last record was written.
+ */
+export interface TabConnection {
+  profileId: string;
+  name: string;
+  /** The first label of the host, as the strip has room for. */
+  server: string;
+  /** Login, role or signed-in account; blank when the method has none. */
+  login: string;
+  database: string;
+  environment: EnvironmentId;
+  readOnly: boolean;
+}
+
+/**
+ * The query tab the results panel is showing for, whether or not it has run
+ * anything. `connection` is null for a `.sql` file nobody has bound yet.
+ */
+export interface TabContext {
+  tab: string;
+  connection: TabConnection | null;
+}
+
 export type QueryHostMessage =
-  /** The active tab changed, or its execution did. `null` means show nothing. */
-  | { type: 'project'; execution: ExecutionInfo | null }
+  /**
+   * The active tab changed, or its execution did. A null execution means no
+   * grid; a null context means the tab is not a query tab, so no strip either.
+   */
+  | { type: 'project'; execution: ExecutionInfo | null; context: TabContext | null }
   /** A window of rows. Never the whole result: the grid asks for what it draws. */
   | { type: 'rows'; executionId: string; setIndex: number; offset: number; rows: CellValue[][] }
   | { type: 'plan'; executionId: string; plan: PlanPayload }
