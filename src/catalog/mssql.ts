@@ -2,8 +2,10 @@ import { DriverSession } from '../drivers/types';
 import { CatalogSummary, DbMember, FavouriteRef, ObjectKind } from '../shared/catalog';
 import { CatalogQueries, PageArgs, PageResult, SearchResult } from './types';
 import { escapeLike, foldSummary } from './fold';
-import { plural, qualified, tableScript } from './script';
+import { plural, qualified, createTableScript, TableDefinition, tableScript } from './script';
 import { parameterDefaults } from './routineHeader';
+import { renderType, TypeRow } from './mssqlType';
+import { readMssqlTable } from './mssqlTable';
 
 /**
  * SQL Server's catalog, read through `sys.*` rather than
@@ -246,9 +248,13 @@ export class MssqlCatalog implements CatalogQueries {
     };
   }
 
+  table(session: DriverSession, ref: FavouriteRef): Promise<TableDefinition> {
+    return readMssqlTable(session, ref);
+  }
+
   async definition(session: DriverSession, ref: FavouriteRef): Promise<string> {
     if (ref.kind === 'table') {
-      return tableScript('mssql', ref, await this.columns(session, ref));
+      return createTableScript('mssql', await this.table(session, ref));
     }
 
     const rows = await session.query<{ src: string | null }>(
@@ -517,13 +523,6 @@ function functionShape(code: string, parameters: number): string {
 
 /* ------------------------------------------------------------------ types */
 
-interface TypeRow {
-  ty: string;
-  len: number;
-  prec: number;
-  scl: number;
-}
-
 interface ColumnRow extends TypeRow {
   nm: string;
   nullable: boolean | number;
@@ -547,32 +546,3 @@ interface SequenceRow {
   cyc: boolean | number;
 }
 
-/**
- * `nvarchar(200)` rather than `nvarchar` and a `max_length` of 400.
- *
- * The halving is not a rounding: `max_length` is bytes, and every `n` type
- * stores two bytes per character, so a column declared `nvarchar(200)` reports
- * 400 and rendering it verbatim would double every string length in the tree.
- * A length of -1 is `(max)`, which is the one value that is not a number.
- */
-function renderType(row: TypeRow): string {
-  const name = String(row.ty ?? '').toLowerCase();
-  const length = Number(row.len);
-
-  if (name === 'nvarchar' || name === 'nchar') {
-    return `${name}(${length === -1 ? 'max' : length / 2})`;
-  }
-  if (name === 'varchar' || name === 'char' || name === 'varbinary' || name === 'binary') {
-    return `${name}(${length === -1 ? 'max' : length})`;
-  }
-  if (name === 'decimal' || name === 'numeric') {
-    return `${name}(${row.prec},${row.scl})`;
-  }
-  if (name === 'datetime2' || name === 'time' || name === 'datetimeoffset') {
-    return `${name}(${row.scl})`;
-  }
-  if (name === 'float') {
-    return Number(row.prec) === 53 ? name : `${name}(${row.prec})`;
-  }
-  return name;
-}

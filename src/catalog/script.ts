@@ -197,14 +197,12 @@ export function executeScript(driver: DriverKind, ref: FavouriteRef, parameters:
 }
 
 /**
- * `CREATE TABLE` composed from the column list.
+ * `CREATE TABLE` composed from the column list alone.
  *
- * Neither engine stores a table's source, so Open Definition on a table has
- * one of two answers: compose the statement, or report that this kind cannot
- * be scripted. Composing it is the useful one, and it is honest as long as it
- * says what it leaves out — indexes, constraints, defaults and computed
- * expressions are not here, and the header says so rather than the reader
- * discovering it by running the script.
+ * This is the thin form, kept for the kinds that are table-shaped but are not
+ * tables: a SQL Server table type and a PostgreSQL composite type, neither of
+ * which carries indexes or foreign keys. A real table is scripted by
+ * `createTableScript` from a `TableDefinition`, which has everything.
  */
 export function tableScript(
   driver: DriverKind,
@@ -228,12 +226,130 @@ export function tableScript(
     body.push(`    PRIMARY KEY (${keys.map((c) => quote(driver, c.name)).join(', ')})`);
   }
 
-  return [
-    `-- Columns and the primary key only. Indexes, foreign keys, defaults,`,
-    `-- constraints and computed expressions are not included.`,
-    `${verb} ${target}${suffix} (`,
+  return [`${verb} ${target}${suffix} (`, body.join(',\n'), ');', ''].join('\n');
+}
+
+/* ------------------------------------------------------------ full table */
+
+/**
+ * One column of a table, as the engine would write it.
+ *
+ * `definition` is everything after the name — the type, collation, identity
+ * or generated clause, nullability and default — already in the engine's own
+ * dialect. The two engines disagree about the order of those words and about
+ * whether a default has a name, so the reader that knows the dialect writes
+ * the clause and the renderer only lines it up.
+ */
+export interface TableColumn {
+  name: string;
+  definition: string;
+}
+
+/**
+ * A table constraint: primary key, unique, check, foreign key, exclusion.
+ *
+ * `definition` is the clause after `CONSTRAINT name`. `inline` says whether it
+ * may sit inside the `CREATE TABLE` body: a SQL Server constraint that is
+ * disabled or untrusted and a PostgreSQL one marked `NOT VALID` cannot be
+ * written there, so those are added afterwards with `ALTER TABLE`, exactly
+ * as SSMS and pg_dump do. That keeps the script faithful — an untrusted
+ * foreign key re-created inline would be checked against existing rows and
+ * fail on the very data that made it untrusted.
+ */
+export interface TableConstraint {
+  name: string;
+  definition: string;
+  inline: boolean;
+  /** `WITH NOCHECK` before `ADD CONSTRAINT`, for SQL Server. */
+  noCheck?: boolean;
+  /** Statements after the constraint has been added, such as `NOCHECK CONSTRAINT`. */
+  after?: string[];
+}
+
+export interface TableIndex {
+  name: string;
+  /** The complete `CREATE INDEX` statement, without its semicolon. */
+  statement: string;
+  /** Statements after the index exists: `ALTER INDEX ... DISABLE`, `CLUSTER ON`. */
+  after?: string[];
+}
+
+/** Everything that is needed to write a table back out. */
+export interface TableDefinition {
+  ref: FavouriteRef;
+  columns: TableColumn[];
+  constraints: TableConstraint[];
+  indexes: TableIndex[];
+  /** Words between `CREATE` and `TABLE`: `UNLOGGED`. */
+  modifiers?: string[];
+  /** Clauses after the closing parenthesis: `PARTITION BY RANGE (...)`. */
+  trailing?: string[];
+  /** Comment lines for things the reader saw but this script cannot carry. */
+  notes?: string[];
+}
+
+/**
+ * `CREATE TABLE` with everything the catalog knows about the table.
+ *
+ * Columns with their defaults, identity and computed expressions; primary key,
+ * unique, check and foreign key constraints under their own names; and every
+ * index as its own statement afterwards. What the script still cannot carry —
+ * storage and filegroups, triggers, permissions, extended properties — is
+ * listed in the header, because a person about to run this on another server
+ * needs to know what to add, not discover it when something is missing.
+ */
+export function createTableScript(driver: DriverKind, table: TableDefinition): string {
+  const { ref } = table;
+  const target = qualified(driver, ref);
+  const width = table.columns.reduce((n, c) => Math.max(n, quote(driver, c.name).length), 0);
+
+  const body = table.columns.map((c) => `    ${quote(driver, c.name).padEnd(width)}  ${c.definition}`);
+  const inline = table.constraints.filter((c) => c.inline);
+  const later = table.constraints.filter((c) => !c.inline);
+  for (const constraint of inline) {
+    body.push(`    CONSTRAINT ${quote(driver, constraint.name)} ${constraint.definition}`);
+  }
+
+  const verb = ['CREATE', ...(table.modifiers ?? []), 'TABLE'].join(' ');
+  const trailing = (table.trailing ?? []).map((clause) => `${clause}`);
+  const out: string[] = [
+    `-- ${KINDS[ref.kind].singular} ${ref.schema}.${ref.name}`,
+    '-- Columns, defaults, identity and computed columns, primary key, unique,',
+    '-- check and foreign key constraints, and indexes.',
+    driver === 'mssql'
+      ? '-- Not included: filegroups and partition schemes, triggers, extended properties,'
+      : '-- Not included: tablespaces, triggers, row-level security policies, comments,',
+    driver === 'mssql'
+      ? '-- permissions, system-versioning and memory-optimised settings.'
+      : '-- permissions and ownership.',
+    ...(table.notes ?? []).map((note) => `-- ${note}`),
+    '',
+    `${verb} ${target} (`,
     body.join(',\n'),
-    ');',
+    trailing.length > 0 ? `)\n${trailing.join('\n')};` : ');',
     ''
-  ].join('\n');
+  ];
+
+  for (const constraint of later) {
+    out.push(
+      `ALTER TABLE ${target}${constraint.noCheck ? ' WITH NOCHECK' : ''} ADD CONSTRAINT ${quote(
+        driver,
+        constraint.name
+      )} ${constraint.definition};`
+    );
+    for (const statement of constraint.after ?? []) {
+      out.push(`${statement};`);
+    }
+    out.push('');
+  }
+
+  for (const index of table.indexes) {
+    out.push(`${index.statement};`);
+    for (const statement of index.after ?? []) {
+      out.push(`${statement};`);
+    }
+    out.push('');
+  }
+
+  return out.join('\n');
 }

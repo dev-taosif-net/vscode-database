@@ -4,7 +4,7 @@ import { ConnectionManager } from '../connections/connectionManager';
 import { ConnectionStore } from '../store/connectionStore';
 import { DetailsService } from '../details/detailsService';
 import { ExecutionService } from '../exec/executionService';
-import { qualified, selectTop, tableScript } from '../catalog/script';
+import { createTableScript, qualified, selectTop } from '../catalog/script';
 import { statementAt } from '../exec/splitter';
 import { BindingStore, isOwnScheme } from '../query/bindingStore';
 import { DefinitionProvider, QueryFileSystem } from '../query/queryFs';
@@ -618,11 +618,11 @@ export class QueryCommands implements vscode.Disposable {
     }
 
     if (target.ref.kind === 'table') {
-      const columns = await this.catalog.members(target.profileId, target.ref, target.ref.database);
+      const table = await this.catalog.table(target.profileId, target.ref, target.ref.database);
       await this.openScratch(
         profile.id,
         `${target.ref.name} CREATE`,
-        tableScript(profile.driver, target.ref, columns),
+        createTableScript(profile.driver, table),
         target.ref.database
       );
       return;

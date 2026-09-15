@@ -17,6 +17,7 @@ import { errorMessage, showsAllDatabases } from '../types';
 import { MssqlCatalog } from './mssql';
 import { PostgresCatalog } from './postgres';
 import { CatalogQueries } from './types';
+import { TableDefinition } from './script';
 
 /**
  * How long an answer is reused before the server is asked again.
@@ -319,6 +320,12 @@ export class CatalogService implements vscode.Disposable {
   browsedDatabases(profileId: string): string[] {
     const prefix = `${profileId}|`;
     return [...this.scopeNames].filter(([scope]) => scope.startsWith(prefix)).map(([, name]) => name);
+  }
+
+  /** A table in full, for Script As CREATE. Not cached: it is asked for once, on purpose. */
+  async table(profileId: string, ref: FavouriteRef, database?: string): Promise<TableDefinition> {
+    const { session, engine } = await this.resolve(profileId, database);
+    return engine.table(session, ref);
   }
 
   /** The object's source, for Open Definition and Script As ALTER. */

@@ -3,7 +3,8 @@ import { CatalogSummary, DbMember, FavouriteRef, ObjectKind } from '../shared/ca
 import { CatalogQueries, PageArgs, PageResult, SearchResult } from './types';
 import { escapeLike, foldSummary } from './fold';
 import { serverVersion } from './pgVersion';
-import { plural, qualified, tableScript } from './script';
+import { plural, qualified, createTableScript, TableDefinition, tableScript } from './script';
+import { readPostgresTable } from './postgresTable';
 
 /**
  * PostgreSQL's catalog, read through `pg_catalog` rather than
@@ -268,9 +269,13 @@ export class PostgresCatalog implements CatalogQueries {
     };
   }
 
+  table(session: DriverSession, ref: FavouriteRef): Promise<TableDefinition> {
+    return readPostgresTable(session, ref);
+  }
+
   async definition(session: DriverSession, ref: FavouriteRef): Promise<string> {
     if (ref.kind === 'table') {
-      return tableScript('postgres', ref, await this.columns(session, ref));
+      return createTableScript('postgres', await this.table(session, ref));
     }
 
     const name = qualified('postgres', ref);

@@ -6,6 +6,7 @@ import {
   ObjectKind
 } from '../shared/catalog';
 import { DriverSession } from '../drivers/types';
+import { TableDefinition } from './script';
 
 export interface PageArgs {
   kind: ObjectKind;
@@ -67,6 +68,13 @@ export interface CatalogQueries {
    * places is a ranking that disagrees with itself.
    */
   search(session: DriverSession, needle: string, limit: number): Promise<SearchResult>;
+
+  /**
+   * A table in full: columns with their defaults and expressions, every
+   * constraint, every index. What Script As CREATE and Open Definition on a
+   * table are written from.
+   */
+  table(session: DriverSession, ref: FavouriteRef): Promise<TableDefinition>;
 
   /**
    * The object's source, for Open Definition and Script As ALTER.
