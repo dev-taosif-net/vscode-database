@@ -170,9 +170,11 @@ export function analyse(text: string, offset: number): SqlContext {
   // unquoted semicolons; anything before the last one belongs to a statement
   // the caret is not in and would only add relations that are out of scope.
   let start = 0;
+  let statementStart = 0;
   for (let i = tokens.length - 1; i >= 0; i--) {
     if (tokens[i].kind === 'punct' && tokens[i].text === ';') {
       start = i + 1;
+      statementStart = tokens[i].end;
       break;
     }
   }
@@ -215,6 +217,7 @@ export function analyse(text: string, offset: number): SqlContext {
   }
 
   context.inCase = blocks[blocks.length - 1] === 'CASE';
+  context.relations.push(...relationsAfter(text, statementStart, offset));
 
   const last = scope[scope.length - 1];
   const penultimate = scope[scope.length - 2];
@@ -251,6 +254,69 @@ export function analyse(text: string, offset: number): SqlContext {
   context.wantsDatabase = preceding?.kind === 'word' && preceding.upper === 'USE';
 
   return context;
+}
+
+/**
+ * Words that begin a statement of their own, and so end the one the caret is
+ * in when there is no semicolon between them.
+ *
+ * `SET`, `WITH`, `ELSE` and `END` are missing on purpose: each is also part of
+ * the statement it follows — `UPDATE … SET`, `WITH (NOLOCK)`, and the tail of a
+ * `CASE` in a select list.
+ */
+const STARTS_STATEMENT = new Set([
+  'SELECT', 'INSERT', 'UPDATE', 'DELETE', 'MERGE', 'TRUNCATE', 'EXEC', 'EXECUTE', 'CALL', 'USE', 'GO',
+  'DECLARE', 'IF', 'WHILE', 'BEGIN', 'PRINT', 'RETURN', 'RAISERROR', 'THROW', 'CREATE', 'ALTER', 'DROP'
+]);
+
+/**
+ * The relations the statement names after the caret.
+ *
+ * A select list is written before its `FROM`, so `SELECT lp.▏ FROM LeavePolicy lp`
+ * has its only alias on the far side of the caret. Reading forward to the end
+ * of the statement is what puts it in scope.
+ *
+ * Only relations at the caret's own depth count. A subquery further along
+ * names tables the caret cannot see, and a `)` that closes a parenthesis opened
+ * before the caret is the end of the subquery the caret is inside.
+ */
+function relationsAfter(text: string, statementStart: number, offset: number): Relation[] {
+  // From the start of the statement rather than the caret, so a word, string
+  // or bracketed name the caret sits inside is tokenised whole and skipped.
+  const tokens = tokenize(text.slice(statementStart)).filter(
+    (token) => token.kind !== 'comment' && token.start + statementStart >= offset
+  );
+  const relations: Relation[] = [];
+  let depth = 0;
+  for (let i = 0; i < tokens.length; i++) {
+    const token = tokens[i];
+    if (token.kind === 'punct') {
+      if (token.text === '(') {
+        depth++;
+      } else if (token.text === ')') {
+        if (--depth < 0) {
+          break;
+        }
+      } else if (token.text === ';' && depth === 0) {
+        break;
+      }
+      continue;
+    }
+    if (token.kind !== 'word' || depth !== 0) {
+      continue;
+    }
+    if (STARTS_STATEMENT.has(token.upper)) {
+      break;
+    }
+    if (RELATION_ANCHORS.has(token.upper)) {
+      const relation = readRelation(tokens, i + 1);
+      if (relation) {
+        relations.push(relation.relation);
+        i = relation.next - 1;
+      }
+    }
+  }
+  return relations;
 }
 
 /** `[schema.]name [AS] [alias]`, tolerating every part being missing. */
