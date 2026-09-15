@@ -939,3 +939,118 @@ textarea.input {
   font-size: 12px;
   line-height: 1.6;
 }
+
+/* --------------------------------------------------------- column filter */
+
+.col-filter .menu-list {
+  left: 0;
+  right: auto;
+  min-width: 220px;
+  max-width: min(360px, calc(100vw - 24px));
+  padding: 4px 0;
+}
+
+.col-filter-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 22px;
+  max-width: 200px;
+  padding: 0 6px;
+  border-radius: 2px;
+  border: 1px solid var(--vscode-input-border, var(--bd));
+  background: var(--vscode-input-background);
+  color: var(--fg);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.col-filter-btn:hover {
+  background: var(--vscode-toolbar-hoverBackground, var(--hover));
+}
+
+.col-filter-btn.is-narrowed {
+  border-color: var(--vscode-focusBorder);
+}
+
+.col-filter-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.col-filter-find {
+  display: block;
+  width: calc(100% - 12px);
+  margin: 2px 6px 4px;
+  height: 22px;
+  padding: 0 6px;
+  border-radius: 2px;
+  border: 1px solid var(--vscode-input-border, var(--bd));
+  background: var(--vscode-input-background);
+  color: var(--vscode-input-foreground);
+  font: inherit;
+  font-size: 12px;
+  outline: none;
+  box-sizing: border-box;
+}
+
+.col-filter-find:focus {
+  border-color: var(--vscode-focusBorder);
+}
+
+.col-filter-list {
+  max-height: 280px;
+  overflow-y: auto;
+}
+
+.col-filter-sep {
+  height: 1px;
+  margin: 4px 0;
+  background: var(--vscode-menu-separatorBackground, var(--bd));
+}
+
+.col-filter-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 3px 10px;
+  font-size: 12px;
+  color: var(--vscode-menu-foreground, var(--fg));
+  cursor: pointer;
+  user-select: none;
+}
+
+.col-filter-item:hover,
+.col-filter-item:focus-within {
+  background: var(--vscode-menu-selectionBackground, var(--hover));
+  color: var(--vscode-menu-selectionForeground, inherit);
+}
+
+.col-filter-item input {
+  margin: 0;
+  flex-shrink: 0;
+  accent-color: var(--vscode-checkbox-selectBackground, var(--vscode-focusBorder));
+}
+
+.col-filter-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.col-filter-type {
+  flex-shrink: 0;
+  font-size: 11px;
+  color: var(--dim);
+}
+
+.col-filter-empty {
+  padding: 4px 10px;
+  font-size: 12px;
+  color: var(--dim);
+}

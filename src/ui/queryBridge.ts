@@ -86,7 +86,7 @@ export class QueryBridge {
         return this.sort(message.executionId, message.setIndex, message.column, message.direction, post);
 
       case 'filter':
-        return this.filter(message.executionId, message.text, message.server, post);
+        return this.filter(message.executionId, message.text, message.server, post, message.columns);
 
       case 'cancel':
         this.execution.cancel(message.executionId);
@@ -172,13 +172,19 @@ export class QueryBridge {
     this.project(record.tab, post);
   }
 
-  private async filter(executionId: string, text: string, server: boolean, post: Post): Promise<void> {
+  private async filter(
+    executionId: string,
+    text: string,
+    server: boolean,
+    post: Post,
+    columns?: string[]
+  ): Promise<void> {
     const record = this.results.get(executionId);
     if (!record) {
       return;
     }
     if (server && record.source === 'data' && record.table) {
-      await this.runTablePage(record, { page: 0, filter: text });
+      await this.runTablePage(record, { page: 0, filter: text, filterColumns: columns ?? [] });
       return;
     }
     for (const set of record.sets) {
@@ -237,6 +243,7 @@ export class QueryBridge {
       page: number;
       pageSize?: number;
       filter?: string;
+      filterColumns?: string[];
       sort?: { column: number; direction: 'asc' | 'desc' } | null;
     }
   ): Promise<void> {
@@ -257,6 +264,7 @@ export class QueryBridge {
             ? { column: table.sortColumn, direction: table.sortDirection ?? 'asc' }
             : undefined;
     const filter = change.filter ?? table.filter;
+    const filterColumns = change.filterColumns ?? table.filterColumns;
     const keys = await this.details.keyColumns(record.profileId, table.ref);
 
     // Keyset only works when this page follows the one before it. A jump has
@@ -268,6 +276,7 @@ export class QueryBridge {
       keyColumns: keys.columns,
       sort: sort && sort.column ? sort : undefined,
       filter,
+      filterColumns,
       page: change.page,
       pageSize,
       after: stepping ? table.after : undefined
@@ -287,6 +296,7 @@ export class QueryBridge {
         page: change.page,
         keyset: keys.usable && !sort,
         filter,
+        filterColumns,
         sortColumn: sort?.column,
         sortDirection: sort?.direction,
         hasMore: true,

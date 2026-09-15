@@ -10,6 +10,8 @@ export interface PageArgs {
   keyColumns: string[];
   sort?: { column: string; direction: 'asc' | 'desc' };
   filter?: string;
+  /** Match the filter against these columns only. Empty or absent means all. */
+  filterColumns?: string[];
   page: number;
   pageSize: number;
   /** The last row's key values from the page before this one. */
@@ -50,8 +52,7 @@ export function selectPage(driver: DriverKind, args: PageArgs): PageSql {
 
   if (args.filter?.trim()) {
     const needle = `%${args.filter.trim()}%`;
-    const searchable = args.columns.filter((column) => column.kind === 'text' || column.kind === 'other');
-    const clauses = (searchable.length ? searchable : args.columns).map((column) => {
+    const clauses = searchColumns(args).map((column) => {
       params.push(needle);
       // Cast rather than assume: a filter that only ever matched `varchar`
       // would silently skip the numeric and date columns a person can see.
@@ -127,6 +128,32 @@ export function selectPage(driver: DriverKind, args: PageArgs): PageSql {
 
   const sql = `SELECT *\nFROM ${target}${clause}${orderBy}\nLIMIT ${args.pageSize}${offset ? ` OFFSET ${offset}` : ''};`;
   return { sql, params, keyset: false };
+}
+
+/**
+ * The columns a filter is matched against.
+ *
+ * A person who picked columns gets exactly those, whatever their type: they
+ * can see a number in the grid and are asking for it, and the cast below
+ * makes the comparison legal. A name the table no longer has is dropped,
+ * because quoting a vanished column is a page that fails to load. Only when
+ * nothing was picked, or nothing picked still exists, does it fall back to
+ * every text column, which is what the filter has always meant.
+ */
+function searchColumns(args: PageArgs): { name: string }[] {
+  const picked = (args.filterColumns ?? []).filter(Boolean);
+  if (picked.length > 0) {
+    if (args.columns.length === 0) {
+      return picked.map((name) => ({ name }));
+    }
+    const wanted = new Set(picked);
+    const present = args.columns.filter((column) => wanted.has(column.name));
+    if (present.length > 0) {
+      return present;
+    }
+  }
+  const searchable = args.columns.filter((column) => column.kind === 'text' || column.kind === 'other');
+  return searchable.length ? searchable : args.columns;
 }
 
 /** The key values of the last row of a page, for the next page to seek from. */

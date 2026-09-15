@@ -117,6 +117,12 @@ export interface TableCursor {
   hasMore: boolean;
   filter?: string;
   /**
+   * The columns the filter is matched against, by name. Absent or empty means
+   * every searchable column, which is what the filter did before it could be
+   * narrowed and is still what a person means when they have not said.
+   */
+  filterColumns?: string[];
+  /**
    * The key values the last page ended on, so the next one can seek rather
    * than skip. Absent on the first page, and on any page reached by a jump
    * rather than by walking forward.
@@ -270,7 +276,7 @@ export type QueryWebviewMessage =
   | { type: 'ready' }
   | { type: 'getRows'; executionId: string; setIndex: number; offset: number; count: number }
   | { type: 'sort'; executionId: string; setIndex: number; column: number; direction: 'asc' | 'desc' | null }
-  | { type: 'filter'; executionId: string; text: string; server: boolean }
+  | { type: 'filter'; executionId: string; text: string; server: boolean; columns?: string[] }
   | { type: 'cancel'; executionId: string }
   | { type: 'fetchMore'; executionId: string; all: boolean }
   | { type: 'page'; executionId: string; delta: number }

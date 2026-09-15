@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { CellRange, CopyShape, ExportFormat, RunnerParameter, RunnerValue } from '../../shared/query';
+import { CellRange, ColumnMeta, CopyShape, ExportFormat, RunnerParameter, RunnerValue } from '../../shared/query';
 import { Codicon } from '../primitives/Codicon';
 import { Grid } from '../grid/Grid';
 import { post, viewName } from './vscode';
@@ -7,6 +7,7 @@ import {
   ResultTab,
   setDetail,
   setFilter,
+  setFilterColumns,
   setNotice,
   setSetIndex,
   setTab,
@@ -316,28 +317,58 @@ function ExportMenu({ executionId, setIndex }: { executionId: string; setIndex: 
 function DataToolbar(): JSX.Element {
   const execution = useWorkspace((state) => state.execution);
   const filter = useWorkspace((state) => state.filter);
+  const filterColumns = useWorkspace((state) => state.filterColumns);
+
+  // A page that matched nothing can arrive before its column list does, and a
+  // picker that emptied itself at that moment would take away the very control
+  // needed to widen the search again. The last list seen stands in until then.
+  const known = useRef<ColumnMeta[]>([]);
+  const current = execution?.sets[0]?.columns ?? [];
+  if (current.length > 0) {
+    known.current = current;
+  }
+
   if (!execution?.table) {
     return <div className="data-toolbar" />;
   }
   const table = execution.table;
+  const columns = known.current;
+  const active = activeColumns(columns, filterColumns);
+
   return (
     <div className="data-toolbar">
       <span className="obj-mark" aria-hidden="true" />
       <span className="obj-name">
         {table.ref.schema}.{table.ref.name}
       </span>
+      <ColumnFilter
+        columns={columns}
+        selected={active}
+        onClosed={(changed, next) => {
+          // Re-run only when there is a filter for the new columns to change.
+          // With an empty box nothing is filtered, and re-reading page one to
+          // show the same rows would lose the user's place for nothing.
+          if (changed && (filter.trim() || table.filter?.trim())) {
+            post({ type: 'filter', executionId: execution.id, text: filter, server: true, columns: next });
+          }
+        }}
+      />
       <label className="search">
         <Codicon name="search" />
         <input
           type="search"
           value={filter}
-          placeholder="Filter on the server, then press Enter"
-          aria-label="Filter rows on the server. Press Enter to apply."
-          title="Matched against every text column as a WHERE clause"
+          placeholder={searchPlaceholder(active)}
+          aria-label={`${searchPlaceholder(active)}.`}
+          title={
+            active.length === 0
+              ? 'Matched against every text column as a WHERE clause'
+              : `Matched against ${active.join(', ')} as a WHERE clause`
+          }
           onChange={(event) => setFilter(event.target.value)}
           onKeyDown={(event) => {
             if (event.key === 'Enter') {
-              post({ type: 'filter', executionId: execution.id, text: filter, server: true });
+              post({ type: 'filter', executionId: execution.id, text: filter, server: true, columns: active });
             }
           }}
         />
@@ -355,6 +386,172 @@ function DataToolbar(): JSX.Element {
       <span className="num dim">
         {table.estimate === undefined ? '—' : `~${count(table.estimate)} rows`}
       </span>
+    </div>
+  );
+}
+
+/**
+ * The chosen columns that the table still has, in the table's own order.
+ *
+ * Ordered by the table rather than by click, so the label never depends on
+ * the order somebody ticked the boxes in. A name that is gone after a refresh
+ * drops out here, before it can reach a WHERE clause.
+ */
+function activeColumns(columns: ColumnMeta[], selected: string[]): string[] {
+  if (columns.length === 0) {
+    return selected;
+  }
+  const wanted = new Set(selected);
+  return columns.map((column) => column.name).filter((name) => wanted.has(name));
+}
+
+function searchPlaceholder(active: string[]): string {
+  if (active.length === 0) {
+    return 'Search all columns, then press Enter';
+  }
+  if (active.length === 1) {
+    return `Search ${active[0]}, then press Enter`;
+  }
+  return `Search ${active.length} columns, then press Enter`;
+}
+
+function sameColumns(a: string[], b: string[]): boolean {
+  return a.length === b.length && a.every((name, i) => name === b[i]);
+}
+
+/** Past this many columns the list gets a box to find one by name. */
+const FIND_THRESHOLD = 8;
+
+/**
+ * Which columns the search box searches: all of them, one, or several.
+ *
+ * The selection changes as boxes are ticked, but the filter is re-run only
+ * once, when the list closes. Ticking three columns is one decision, and
+ * reading page one three times on the way to it would be three queries
+ * against a table that may be large.
+ */
+function ColumnFilter({
+  columns,
+  selected,
+  onClosed
+}: {
+  columns: ColumnMeta[];
+  selected: string[];
+  onClosed: (changed: boolean, next: string[]) => void;
+}): JSX.Element {
+  const [open, setOpen] = useState(false);
+  const [find, setFind] = useState('');
+  const root = useRef<HTMLDivElement>(null);
+  const findBox = useRef<HTMLInputElement>(null);
+  const openedWith = useRef<string[]>(selected);
+  const wasOpen = useRef(false);
+
+  useEffect(() => {
+    if (open && !wasOpen.current) {
+      openedWith.current = selected;
+      findBox.current?.focus();
+    }
+    if (!open && wasOpen.current) {
+      setFind('');
+      onClosed(!sameColumns(openedWith.current, selected), selected);
+    }
+    wasOpen.current = open;
+  }, [open]);
+
+  useEffect(() => {
+    if (!open) {
+      return undefined;
+    }
+    const onPointer = (event: MouseEvent) => {
+      if (!root.current?.contains(event.target as Node)) {
+        setOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', onPointer);
+    return () => document.removeEventListener('mousedown', onPointer);
+  }, [open]);
+
+  const all = selected.length === 0;
+  const label = all ? 'All columns' : selected.length === 1 ? selected[0] : `${selected.length} columns`;
+  const needle = find.trim().toLowerCase();
+  const visible = needle ? columns.filter((column) => column.name.toLowerCase().includes(needle)) : columns;
+
+  const toggle = (name: string) => {
+    const next = selected.includes(name) ? selected.filter((n) => n !== name) : [...selected, name];
+    setFilterColumns(activeColumns(columns, next));
+  };
+
+  return (
+    <div
+      className={open ? 'menu col-filter is-open' : 'menu col-filter'}
+      ref={root}
+      onKeyDown={(event) => {
+        if (event.key === 'Escape' && open) {
+          event.stopPropagation();
+          setOpen(false);
+        }
+      }}
+    >
+      <button
+        type="button"
+        className={all ? 'col-filter-btn' : 'col-filter-btn is-narrowed'}
+        title={all ? 'Search every column' : `Search only: ${selected.join(', ')}`}
+        aria-label={`Columns to search: ${label}`}
+        aria-haspopup="true"
+        aria-expanded={open}
+        onClick={() => setOpen((current) => !current)}
+      >
+        <Codicon name={all ? 'filter' : 'filter-filled'} />
+        <span className="col-filter-label">{label}</span>
+        <Codicon name="chevron-down" />
+      </button>
+      {open ? (
+        <div className="menu-list" role="group" aria-label="Columns to search">
+          {columns.length > FIND_THRESHOLD ? (
+            <input
+              ref={findBox}
+              className="col-filter-find"
+              type="text"
+              value={find}
+              placeholder="Find a column"
+              aria-label="Find a column"
+              onChange={(event) => setFind(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter') {
+                  event.preventDefault();
+                  if (visible.length === 1) {
+                    toggle(visible[0].name);
+                  }
+                }
+              }}
+            />
+          ) : null}
+          <label className="col-filter-item">
+            <input type="checkbox" checked={all} onChange={() => setFilterColumns([])} />
+            <span className="col-filter-name">All columns</span>
+          </label>
+          <div className="col-filter-sep" role="separator" />
+          <div className="col-filter-list">
+            {columns.length === 0 ? (
+              <div className="col-filter-empty">Columns appear once a page has loaded.</div>
+            ) : null}
+            {columns.length > 0 && visible.length === 0 ? (
+              <div className="col-filter-empty">No column matches.</div>
+            ) : null}
+            {visible.map((column) => (
+              <label key={column.name} className="col-filter-item" title={`${column.name} ${column.type}`}>
+                <input
+                  type="checkbox"
+                  checked={selected.includes(column.name)}
+                  onChange={() => toggle(column.name)}
+                />
+                <span className="col-filter-name">{column.name}</span>
+                <span className="col-filter-type">{column.type}</span>
+              </label>
+            ))}
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

@@ -26,6 +26,17 @@ export interface WorkspaceState {
   tab: ResultTab;
   setIndex: number;
   filter: string;
+  /** Table data only: the columns the filter searches. Empty means all of them. */
+  filterColumns: string[];
+  /**
+   * Whether the filter controls have been filled from the host's cursor yet.
+   *
+   * A data tab keeps no webview state while hidden, so revealing it again
+   * starts this store from nothing while the host is still filtering. Reading
+   * the cursor once on the first projection is what stops the box saying
+   * "All columns" over rows filtered on one.
+   */
+  filterHydrated: boolean;
   /** Bumped on every batch of rows, so the grid repaints without re-fetching. */
   revision: number;
   notice: { text: string; level: 'info' | 'error' } | null;
@@ -42,6 +53,8 @@ export const store = createStore<WorkspaceState>({
   tab: 'results',
   setIndex: 0,
   filter: '',
+  filterColumns: [],
+  filterHydrated: false,
   revision: 0,
   notice: null,
   detail: null
@@ -62,8 +75,13 @@ export function applyHostMessage(message: QueryHostMessage): void {
           // holding it would be a leak with no reader.
           forget(state.execution?.id);
         }
+        const table = message.execution?.table;
+        const hydrate = !state.filterHydrated && table !== undefined;
         return {
           ...state,
+          ...(hydrate
+            ? { filter: table.filter ?? '', filterColumns: table.filterColumns ?? [], filterHydrated: true }
+            : {}),
           execution: message.execution,
           context: message.context,
           setIndex: changed ? 0 : Math.min(state.setIndex, Math.max(0, (message.execution?.sets.length ?? 1) - 1)),
@@ -125,6 +143,10 @@ export function setSetIndex(setIndex: number): void {
 
 export function setFilter(filter: string): void {
   store.setState((state) => ({ ...state, filter }));
+}
+
+export function setFilterColumns(filterColumns: string[]): void {
+  store.setState((state) => ({ ...state, filterColumns }));
 }
 
 export function setNotice(notice: WorkspaceState['notice']): void {
